@@ -1,6 +1,7 @@
 import numpy as np
 
 from . import region
+from . import util
 
 
 def error_by_rmse(forecast_series, actual_series):
@@ -17,7 +18,17 @@ class ErrorRegion(region.SpatialRegion):
         (which has an outer square root).
         '''
         errors = self.as_array
-        return np.mean(errors**2)**.5
+        return np.sum(errors**2)**.5
+
+    def point_with_least_error(self):
+        '''
+        Searches the errors in the region for the smallest. Returns the (x, y) coordinates as
+        region.Point (2d)
+        '''
+        (minimum, index) = util.minimum_value_and_index(self.numpy_dataset)
+        p = region.Point(index[0], index[1])
+        print('Found minimum error %s at %s' % (minimum, p))
+        return p
 
     @classmethod
     def create_from_forecasts(cls, forecast_region, test_region, error_func=error_by_rmse):
@@ -32,9 +43,9 @@ class ErrorRegion(region.SpatialRegion):
         forecast_2d = forecast_region.as_list
         test_2d = test_region.as_list
 
-        # use list comprehension and zip to iterate over the teo lists at the same time
-        # this will combine the forecast and test series of the same point, for each point
-        # returns a list of errors
+        # Use list comprehension and zip to iterate over the two lists at the same time.
+        # This will combine the forecast and test series of the same point, for each point.
+        # We have a list of errors
         error_1d = [
             error_by_rmse(forecast_series, test_series)
             for (forecast_series, test_series)

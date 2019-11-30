@@ -26,6 +26,23 @@ def spatio_temporal_to_list_of_time_series(numpy_dataset):
     return np.split(elements_1d, x_len * y_len)
 
 
+def minimum_value_and_index(numpy_dataset):
+    '''
+    Given a n-dimensional array, finds the overall minimum value.
+    Returns the value and the index in the dataset. The index is expressed as a n-tuple
+    (n dimensions)
+    '''
+    # overall min
+    minimum = np.amin(numpy_dataset)
+    index_as_tuple_of_arrays = np.where(numpy_dataset == minimum)
+    index = [
+        index_coord[0]
+        for index_coord
+        in index_as_tuple_of_arrays
+    ]
+    return (minimum, tuple(index))
+
+
 if __name__ == '__main__':
 
     x = [0, 1, 2, 3, 4]
@@ -38,3 +55,15 @@ if __name__ == '__main__':
     msg = 'spatio_temporal_to_list_of_time_series: %s lists of array with %s elems'
     print(msg % (len(xx_2d), xx_2d[0].shape,))
     print(xx_2d)
+
+    print('minimum_value_and_index 1d')
+    r1d = np.random.rand(5)
+    print(r1d)
+    (m, i) = minimum_value_and_index(r1d)
+    print(m, i)
+
+    print('minimum_value_and_index 2d')
+    r2d = np.random.rand(3, 4)
+    print(r2d)
+    (m, i) = minimum_value_and_index(r2d)
+    print(m, i)

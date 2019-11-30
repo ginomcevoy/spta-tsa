@@ -46,6 +46,9 @@ class SpatialRegion:
 
     @property
     def as_array(self):
+        '''
+        Goes from 2d to 1d
+        '''
         (x_len, y_len) = self.numpy_dataset.shape
         return self.numpy_dataset.reshape(x_len * y_len)
 
@@ -56,6 +59,9 @@ class SpatialRegion:
         '''
         numpy_dataset = reshape_1d_to_2d(list_1d, x, y)
         return SpatialRegion(numpy_dataset)
+
+    def __str__(self):
+        return str(self.numpy_dataset)
 
 
 class SpatioTemporalRegion(SpatialRegion):

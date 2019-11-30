@@ -201,9 +201,9 @@ if __name__ == '__main__':
     for pvalues in arima_region.pvalues_by_point():
         print(pvalues)
 
-    plot_one_arima(training_region, forecast_region, test_region)
+    # plot_one_arima(training_region, forecast_region, test_region)
 
     error_region = validate.ErrorRegion.create_from_forecasts(forecast_region, test_region)
-    print(error_region.shape)
+    print(error_region)
     print(error_region.combined_rmse)
 
