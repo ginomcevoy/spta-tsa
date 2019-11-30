@@ -6,7 +6,8 @@ import time
 
 DATASET = 'raw/TEMPERATURE_1979-2015.hdf'
 REDUCED_FORMAT = 'raw/dataset_%s.npy'
-POINTS_PER_YEAR = 365 * 4
+POINTS_PER_DAY = 4
+POINTS_PER_YEAR = 365 * POINTS_PER_DAY
 
 
 def load_dataset(filename, series_len):

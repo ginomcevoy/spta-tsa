@@ -1,17 +1,23 @@
 # import h5py
-# import numpy as np
+import numpy as np
 # import os
 from collections import namedtuple
 import time
 
 from . import dataset as ds
+from . import util
 
-
+Point = namedtuple('Point', 'x y')
 Region = namedtuple('Region', 'x1, x2, y1, y2')
 TimeInterval = namedtuple('TimeInterval', 't1 t2')
 
 
-SMALL_REGION = Region(55, 58, 50, 53)
+SMALL_REGION = Region(55, 58, 50, 54)
+
+# model + test + forecast -> error
+
+# arimitas -> error de cada arima en su entrenamiento
+# 1 model + test/region + forecast/region -> error en cada punto
 
 
 class SpatioTemporalRegion:
@@ -27,15 +33,18 @@ class SpatioTemporalRegion:
     def shape(self):
         return self.numpy_dataset.shape
 
+    def series_at(self, point):
+        return self.numpy_dataset[point.x, point.y, :]
+
+    def series_len(self):
+        return self.numpy_dataset.shape[2]
+
     def region_subset(self, region):
         '''
         region: Region namedtuple
         '''
         numpy_region_subset = self.numpy_dataset[region.x1:region.x2, region.y1:region.y2, :]
         return SpatioTemporalRegion(numpy_region_subset)
-
-    def series_len(self):
-        return self.numpy_dataset.shape[2]
 
     def interval_subset(self, ti):
         '''
@@ -60,6 +69,15 @@ class SpatioTemporalRegion:
         small_interval = TimeInterval(0, 10)
         return self.subset(SMALL_REGION, small_interval)
 
+    def as_list(self):
+        '''
+        Returns a list of arrays, where the size of the list is the number of points in the region
+        (Region.x * Region.y). Each array is a temporal series.
+
+        Useful when required to iterate each temporal series.
+        '''
+        return util.spatio_temporal_to_list_of_time_series(self.numpy_dataset)
+
     # def get_dummy_region(self):
     #     dummy = Region)
 
@@ -73,6 +91,18 @@ class SpatioTemporalRegion:
         # use [x, y, time_series]
         transposed_dataset = transpose_region(numpy_dataset)
         return SpatioTemporalRegion(transposed_dataset)
+
+    @classmethod
+    def load_sao_paulo(cls):
+        sptr = cls.load_4years()
+        sp_region = Region(55, 75, 50, 70)
+        return sptr.region_subset(sp_region)
+
+    @classmethod
+    def copy_series_over_region(cls, series, region):
+        m, n = region.shape
+        numpy_dataset = util.copy_array_as_matrix_elements(series, m, n)
+        return SpatioTemporalRegion(numpy_dataset)
 
 
 def transpose_region(numpy_region_dataset):
