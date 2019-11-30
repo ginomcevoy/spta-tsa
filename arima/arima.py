@@ -78,7 +78,7 @@ class ArimaForEachPoint:
     @classmethod
     def train(cls, training_region, arima_params, arima_func=apply_arima):
 
-        training_2d = training_region.as_list()
+        training_2d = training_region.as_list
 
         # run arima for each point
         arima_models_1d = [
@@ -146,6 +146,34 @@ def plot_one_arima(training_region, forecast_region, test_region):
     plt.show()
 
 
+def example():
+
+    sptr = region.SpatioTemporalRegion.load_4years()
+    small_region = sptr.get_small()
+
+    # arima_params = ArimaParams(1, 1, 1)
+    arima_params = ArimaParams(3, 2, 1)
+
+    (training_region, test_region) = split_region_in_train_test(small_region)
+    arimasEachPoint = ArimaForEachPoint.train(training_region, arima_params)
+
+    print('train %s:' % (arimasEachPoint.training_region.shape,))
+    print('arimas1d: %s' % arimasEachPoint.arima_models_1d)
+
+    # mse = mean_squared_error(A, B)
+
+    # forecast for each point
+    forecast_region = arimasEachPoint.create_forecast_region()
+    print(forecast_region)
+    print(forecast_region.shape)
+
+    arima_region = arimasEachPoint.create_spatial_region()
+    for pvalues in arima_region.pvalues_by_point():
+        print(pvalues)
+
+    return (training_region, test_region, forecast_region, arima_region)
+
+
 if __name__ == '__main__':
 
     t_start = time.time()
@@ -175,7 +203,7 @@ if __name__ == '__main__':
 
     plot_one_arima(training_region, forecast_region, test_region)
 
-    # error_region = validate.ErrorRegion.create_from_forecasts(forecast_region, test_region)
-    # print(error_region.shape)
-    # print(error_region)
+    error_region = validate.ErrorRegion.create_from_forecasts(forecast_region, test_region)
+    print(error_region.shape)
+    print(error_region.combined_rmse)
 

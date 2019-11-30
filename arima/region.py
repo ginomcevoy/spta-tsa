@@ -20,7 +20,11 @@ SMALL_REGION = Region(55, 58, 50, 54)
 # 1 model + test/region + forecast/region -> error en cada punto
 
 
-class SpatioTemporalRegion:
+def reshape_1d_to_2d(list_1d, x, y):
+    return np.array(list_1d).reshape(x, y)
+
+
+class SpatialRegion:
 
     def __init__(self, numpy_dataset):
         self.numpy_dataset = numpy_dataset
@@ -32,6 +36,40 @@ class SpatioTemporalRegion:
     @property
     def shape(self):
         return self.numpy_dataset.shape
+
+    def region_subset(self, region):
+        '''
+        region: Region namedtuple
+        '''
+        numpy_region_subset = self.numpy_dataset[region.x1:region.x2, region.y1:region.y2]
+        return SpatialRegion(numpy_region_subset)
+
+    @property
+    def as_array(self):
+        (x_len, y_len) = self.numpy_dataset.shape
+        return self.numpy_dataset.reshape(x_len * y_len)
+
+    @classmethod
+    def create_from_1d(cls, list_1d, x, y):
+        '''
+        Given a list, reshapes the elements to form a 2d region with (x, y) shape.
+        '''
+        numpy_dataset = reshape_1d_to_2d(list_1d, x, y)
+        return SpatialRegion(numpy_dataset)
+
+
+class SpatioTemporalRegion(SpatialRegion):
+
+    # def __init__(self, numpy_dataset):
+    #     self.numpy_dataset = numpy_dataset
+
+    # @property
+    # def as_numpy(self):
+    #     return self.numpy_dataset
+
+    # @property
+    # def shape(self):
+    #     return self.numpy_dataset.shape
 
     def series_at(self, point):
         return self.numpy_dataset[point.x, point.y, :]
@@ -69,6 +107,7 @@ class SpatioTemporalRegion:
         small_interval = TimeInterval(0, 10)
         return self.subset(SMALL_REGION, small_interval)
 
+    @property
     def as_list(self):
         '''
         Returns a list of arrays, where the size of the list is the number of points in the region

@@ -7,16 +7,17 @@ def error_by_rmse(forecast_series, actual_series):
     return np.mean((forecast_series - actual_series)**2)**.5
 
 
-class ErrorRegion(region.SpatioTemporalRegion):
+class ErrorRegion(region.SpatialRegion):
 
     @property
     def combined_rmse(self):
         '''
         Uses the errors from each point to calculate a single RMSE.
-        Note that the errors of each series can be added after squaring the square root.
+        Note that the errors of each series can be added after squaring the RMSE
+        (which has an outer square root).
         '''
-        
-
+        errors = self.as_array
+        return np.mean(errors**2)**.5
 
     @classmethod
     def create_from_forecasts(cls, forecast_region, test_region, error_func=error_by_rmse):
@@ -34,12 +35,12 @@ class ErrorRegion(region.SpatioTemporalRegion):
         # use list comprehension and zip to iterate over the teo lists at the same time
         # this will combine the forecast and test series of the same point, for each point
         # returns a list of errors
-        error_2d = [
+        error_1d = [
             error_by_rmse(forecast_series, test_series)
             for (forecast_series, test_series)
             in zip(forecast_2d, test_2d)
         ]
 
         # recreate the region
-        error_numpy_dataset = np.ndarray(error_2d).reshape(x1_len, y1_len, 13)
+        error_numpy_dataset = region.reshape_1d_to_2d(error_1d, x1_len, y1_len)
         return ErrorRegion(error_numpy_dataset)
