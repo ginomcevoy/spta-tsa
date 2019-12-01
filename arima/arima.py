@@ -79,7 +79,7 @@ class ArimaForEachPoint:
         series_len.
         '''
         # forecast for each point, missing models get NaN forecast
-        self.log.debug(self.arima_models_1d)
+        # self.log.debug(self.arima_models_1d)
         forecast_1d = [
             arima_model.forecast(series_len)[0]
             if arima_model is not None
@@ -238,8 +238,8 @@ def evaluate_forecast_errors_arima(spatio_temp_region, arima_params, centroid=No
     # use the ARIMA with min error to forecast the entire region
     min_error_arima = arima_region.value_at(point_min_error)
     forecast_using_best = create_forecast_region_one_model(min_error_arima, spatio_temp_region)
-    log.debug('forecast_using_best')
-    log.debug(forecast_using_best)
+    # log.debug('forecast_using_best')
+    # log.debug(forecast_using_best)
 
     error_region_best = validate.ErrorRegion.create_from_forecasts(forecast_using_best,
                                                                    test_region)
@@ -252,7 +252,7 @@ def evaluate_forecast_errors_arima(spatio_temp_region, arima_params, centroid=No
         centroid = spatio_temp_region.centroid
 
     centroid_arima = arima_region.value_at(centroid)
-    log.debug('centroid_arima: %s' % centroid_arima)
+    # log.debug('centroid_arima: %s' % centroid_arima)
 
     forecast_using_centroid = create_forecast_region_one_model(centroid_arima, spatio_temp_region)
     error_region_centroid = validate.ErrorRegion.create_from_forecasts(forecast_using_centroid,
@@ -266,7 +266,7 @@ if __name__ == '__main__':
 
     t_start = time.time()
 
-    log_level = logging.INFO
+    log_level = logging.DEBUG
     logging.basicConfig(format='%(asctime)s - %(levelname)6s | %(message)s',
                         level=log_level, datefmt='%d-%b-%y %H:%M:%S')
 
@@ -279,7 +279,9 @@ if __name__ == '__main__':
     # arima_params = ArimaParams(3, 2, 1)
     # arima_params = ArimaParams(7, 1, 7)
     # arima_params = ArimaParams(3, 2, 1)
-    arima_params = ArimaParams(1, 1, 1)
+    # arima_params = ArimaParams(1, 1, 1)
+    # arima_params = ArimaParams(2, 0, 2)
+    arima_params = ArimaParams(6, 1, 0)
 
     # arima_params = ArimaParams(3, 2, 1)
 

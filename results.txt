@@ -28,9 +28,28 @@ TEST_SAMPLES = 7
 01-Dec-19 15:20:41 -   INFO | Error from best ARIMA: 22.729813501890586
 01-Dec-19 15:20:41 -   INFO | Error from centroid ARIMA: 18.81910034889157
 
+(2, 0, 2)
+
+01-Dec-19 19:32:02 - WARNING | Missing ARIMA models: 123
+01-Dec-19 19:32:03 -   INFO | Combined error from all ARIMAs: 3.8870874551097585
+01-Dec-19 19:32:03 -   INFO | Point with best ARIMA: Point(x=13, y=0)
+01-Dec-19 19:32:03 -   INFO | Error from best ARIMA: 24.487121257027816
+01-Dec-19 19:32:03 -   INFO | Using pre-established centroid: Point(x=5, y=15)
+01-Dec-19 19:32:03 -   INFO | Error from centroid ARIMA: 18.794020049777213
+
+(6, 1, 0)
+
+01-Dec-19 19:36:49 - WARNING | Missing ARIMA models: 0
+01-Dec-19 19:36:51 -   INFO | Combined error from all ARIMAs: 4.54200943252099
+01-Dec-19 19:36:51 -   INFO | Point with best ARIMA: Point(x=11, y=2)
+01-Dec-19 19:36:51 -   INFO | Error from best ARIMA: 53.06782872957945
+01-Dec-19 19:36:51 -   INFO | Using pre-established centroid: Point(x=5, y=15)
+01-Dec-19 19:36:51 -   INFO | Error from centroid ARIMA: 18.788003488408588
+
+Idea: use missing ARIMA models (chance of failure) as a cost factor
 
 
-Best ARIMA models:
+Best ARIMA models (Pareto optimal, minimize both time and error):
 
 (p, d, q, time, prediction_error)
 
