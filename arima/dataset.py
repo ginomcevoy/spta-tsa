@@ -53,10 +53,15 @@ def load_with_len(series_len):
 if __name__ == '__main__':
     t_start = time.time()
 
-    # 4 years of data
-    pts_4y = POINTS_PER_YEAR * 4
-    filename_4y = REDUCED_FORMAT % pts_4y
-    save_reduced_dataset(filename_4y, pts_4y)
+    # # 4 years of data
+    # pts_4y = POINTS_PER_YEAR * 4
+    # filename_4y = REDUCED_FORMAT % pts_4y
+    # save_reduced_dataset(filename_4y, pts_4y)
+
+    # 1 year of data
+    pts_1y = POINTS_PER_YEAR
+    filename_1y = REDUCED_FORMAT % pts_1y
+    save_reduced_dataset(filename_1y, pts_1y)
 
     # load_saved('dataset_4000.npy')
     # load_with_len(4000)

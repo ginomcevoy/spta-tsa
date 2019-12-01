@@ -14,13 +14,12 @@ class ErrorRegion(region.SpatialRegion):
     def combined_rmse(self):
         '''
         Uses the errors from each point to calculate a single RMSE.
-        Note that the errors of each series can be added after squaring the RMSE
-        (which has an outer square root).
+        Note that the errors of each series can be added using Root Sum Squared.
         '''
         errors = self.as_array
-        return np.sum(errors**2)**.5
+        return util.root_sum_squared(errors)
 
-    def point_with_least_error(self):
+    def point_with_min_error(self):
         '''
         Searches the errors in the region for the smallest. Returns the (x, y) coordinates as
         region.Point (2d)

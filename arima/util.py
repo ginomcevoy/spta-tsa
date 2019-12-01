@@ -32,8 +32,8 @@ def minimum_value_and_index(numpy_dataset):
     Returns the value and the index in the dataset. The index is expressed as a n-tuple
     (n dimensions)
     '''
-    # overall min
-    minimum = np.amin(numpy_dataset)
+    # overall min, ignore NaN
+    minimum = np.nanmin(numpy_dataset)
     index_as_tuple_of_arrays = np.where(numpy_dataset == minimum)
     index = [
         index_coord[0]
@@ -43,9 +43,14 @@ def minimum_value_and_index(numpy_dataset):
     return (minimum, tuple(index))
 
 
+def root_sum_squared(array):
+    return np.sum(np.array(array)**2)**.5
+
+
 if __name__ == '__main__':
 
-    x = [0, 1, 2, 3, 4]
+    x = (0, 1, 2, 3, 4)
+    print('WTF')
     xx = copy_array_as_matrix_elements(x, 3, 4)
     print('xx: %s' % (xx.shape,))
     print(xx)
