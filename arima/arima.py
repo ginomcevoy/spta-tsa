@@ -125,11 +125,11 @@ def create_forecast_region_one_model(arima_model, region_3d, series_len=TEST_SAM
     return region.SpatioTemporalRegion.copy_series_over_region(forecast_one, region_3d)
 
 
-def split_region_in_train_test(spatio_temp_region):
+def split_region_in_train_test(spatio_temp_region, test_len=TEST_SAMPLES):
     series_len = spatio_temp_region.series_len()
 
     # divide series in training and test, training come first in the series
-    training_size = series_len - TEST_SAMPLES
+    training_size = series_len - test_len
     training_interval = region.TimeInterval(0, training_size)
     test_interval = region.TimeInterval(training_size, series_len)
 
