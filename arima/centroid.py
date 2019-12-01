@@ -1,33 +1,18 @@
 import numpy as np
 import logging
 
-from tslearn.metrics import dtw
-
+from . import distance
 from . import region
 from . import util
 
 
-class DistanceWithDTW:
-
-    def apply(self, first_series, second_series):
-        return dtw(first_series, second_series)
-
-    def combine_distances(self, distances_for_point):
-        '''
-        Given many distances, combine them to provide a single metric for the distance between
-        one series and a list of series.
-        For DTW, we use the Root Sum Squared.
-        '''
-        return util.root_sum_squared(distances_for_point)
-
-
 class CalculateCentroid:
 
-    def __init__(self, distance_class=DistanceWithDTW):
+    def __init__(self, distance_measure=distance.DistanceByDTW()):
         '''
         Use DistanceWithDTW as means of calculating distances between series, by default.
         '''
-        self.distance_obj = distance_class()
+        self.distance_measure = distance_measure
         self.log = logging.getLogger()
 
     def distances_from_point_series(self, spatio_temporal_region, point):
@@ -52,7 +37,7 @@ class CalculateCentroid:
         # find the distance between the point series and every other series in the region
         # use the distance function provided
         distances_for_point = [
-            self.distance_obj.apply(point_series, other_series)
+            self.distance_measure.measure(point_series, other_series)
             for other_series
             in spatio_temporal_region_as_list
         ]
@@ -89,20 +74,21 @@ class CalculateCentroid:
         for x in range(0, x_len):
             for y in range(0, y_len):
                 point = region.Point(x, y)
+                self.log.info('Calculating centroid using point %s' % str(point))
                 point_series = spatio_temporal_region.series_at(point)
                 distances_for_point = self.distances_from_point_series_internal(
                     spatio_temporal_region, spatio_temporal_region_as_list,
                     point, point_series)
 
                 self.log.debug('x %s y %s distances: %s' % (x, y, distances_for_point))
-                combined_distances[x, y] = self.distance_obj.combine_distances(distances_for_point)
+                combined_distances[x, y] = self.distance_measure.combine(distances_for_point)
 
         # print(combined_distances)
 
-        # just find the smallest value now
+        # now find the smallest combined distance
         minimum, index_2d = util.minimum_value_and_index(combined_distances)
         point = region.Point(index_2d[0], index_2d[1])
-        print('%s %s' % (minimum, point))
+        self.log.info('Centroid found at %s with minimum distance %s' % str(point), minimum)
         return point
 
 

@@ -1,0 +1,30 @@
+(3, 2, 1) 
+TEST_SAMPLES = 1
+153 arimas missing! 
+
+01-Dec-19 11:06:32 -   INFO | Combined error from all ARIMAs: 1.349516969967616
+Found minimum error 0.017944222363212248 at Point(x=3, y=16)
+01-Dec-19 11:06:32 -   INFO | Point with best ARIMA: Point(x=3, y=16)
+01-Dec-19 11:06:32 -   INFO | Error from best ARIMA: 7.8205424412682545
+01-Dec-19 11:06:32 -   INFO | Calculating centroid of region: (20, 20, 365)
+112.28452460212804 Point(x=5, y=15)
+01-Dec-19 11:16:33 -   INFO | Error from centroid ARIMA: 7.9428797046872495
+
+(1, 1, 1) 
+TEST_SAMPLES = 10
+10 missing 
+
+01-Dec-19 15:18:15 -   INFO | Combined error from all ARIMAs: 1.5798190622578738
+Found minimum error 0.0034535088159373117 at Point(x=10, y=5)
+01-Dec-19 15:18:15 -   INFO | Point with best ARIMA: Point(x=10, y=5)
+01-Dec-19 15:18:15 -   INFO | Error from best ARIMA: 17.85115789828052
+01-Dec-19 15:18:15 -   INFO | Error from centroid ARIMA: 7.793810739161415
+
+(1, 1, 1)
+TEST_SAMPLES = 7
+01-Dec-19 15:20:40 - WARNING | Missing ARIMA models: 10
+01-Dec-19 15:20:41 -   INFO | Combined error from all ARIMAs: 4.80351553429609
+01-Dec-19 15:20:41 -   INFO | Point with best ARIMA: Point(x=11, y=4)
+01-Dec-19 15:20:41 -   INFO | Error from best ARIMA: 22.729813501890586
+01-Dec-19 15:20:41 -   INFO | Error from centroid ARIMA: 18.81910034889157
+
