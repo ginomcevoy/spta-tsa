@@ -2,10 +2,12 @@ import h5py
 import numpy as np
 import os
 import time
+import sys
 
 
 DATASET = 'raw/TEMPERATURE_1979-2015.hdf'
-REDUCED_FORMAT = 'raw/dataset_%s.npy'
+# REDUCED_FORMAT = 'raw/dataset_%s.npy'
+REDUCED_FORMAT = 'raw/brazil_{}y_{}ppd.npy'
 POINTS_PER_DAY = 4
 POINTS_PER_YEAR = 365 * POINTS_PER_DAY
 
@@ -31,7 +33,10 @@ def save(filename, data):
 
 
 def save_reduced_dataset(output, series_len):
+    print('Reading dataset: {}'.format(DATASET))
     data = load_dataset(DATASET, series_len)
+
+    print('Saving reduced dataset to: {}'.format(output))
     np.save(output, data)
 
 
@@ -45,26 +50,49 @@ def load_saved(filename):
     return data
 
 
+def load_brazil_temps(years, ppd=4):
+    filename = REDUCED_FORMAT.format(years, ppd)
+    return load_saved(filename)
+
+
 def load_with_len(series_len):
     filename = REDUCED_FORMAT % str(series_len)
     return load_saved(filename)
 
 
 if __name__ == '__main__':
+
+    if len(sys.argv) < 2:
+        print('Usage: {} <years> [points_per_day]'.format(sys.argv[0]))
+        sys.exit(1)
+
     t_start = time.time()
+
+    years = int(sys.argv[1])
+    series_len = POINTS_PER_YEAR * years
+
+    # fixed for now
+    ppd = 4
+
+    filename = REDUCED_FORMAT.format(years, ppd)
+    save_reduced_dataset(filename, series_len)
 
     # # 4 years of data
     # pts_4y = POINTS_PER_YEAR * 4
     # filename_4y = REDUCED_FORMAT % pts_4y
     # save_reduced_dataset(filename_4y, pts_4y)
 
-    # 1 year of data
-    pts_1y = POINTS_PER_YEAR
-    filename_1y = REDUCED_FORMAT % pts_1y
-    save_reduced_dataset(filename_1y, pts_1y)
+    # # 1 year of data
+    # pts_1y = POINTS_PER_YEAR
+    # filename_1y = REDUCED_FORMAT % pts_1y
+    # save_reduced_dataset(filename_1y, pts_1y)
 
     # load_saved('dataset_4000.npy')
     # load_with_len(4000)
+
+    # test opening the file and reading the shape
+    brazil_data = load_brazil_temps(years, ppd)
+
     t_end = time.time()
     elapsed = t_end - t_start
-    print('Elapsed: %s' % str(elapsed))
+    print('Elapsed: %s seconds' % str(elapsed))

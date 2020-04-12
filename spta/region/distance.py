@@ -1,7 +1,7 @@
 import numpy as np
 from tslearn.metrics import dtw
 
-from . import util
+from spta.util import arrays as arrays_util
 
 
 class DistanceBetweenSeries:
@@ -37,7 +37,7 @@ class DistanceByDTW(DistanceBetweenSeries):
         one series and a list of series.
         For DTW, we use the Root Mean Squared.
         '''
-        return util.root_mean_squared(distances_for_point)
+        return arrays_util.root_mean_squared(distances_for_point)
 
 
 class DistanceByRMSE(DistanceBetweenSeries):
@@ -60,4 +60,4 @@ class DistanceByRMSE(DistanceBetweenSeries):
         Uses the errors from each point to calculate a single RMSE.
         Note that the errors of each series can be added using Root Mean Squared.
         '''
-        return util.root_mean_squared(distances_for_point)
+        return arrays_util.root_mean_squared(distances_for_point)

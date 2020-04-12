@@ -123,6 +123,11 @@ if __name__ == '__main__':
     logging.basicConfig(format='%(asctime)s - %(levelname)6s | %(message)s',
                         level=log_level, datefmt='%d-%b-%y %H:%M:%S')
 
+    import sys
+    show = False
+    if len(sys.argv) > 1:
+        show = True
+
     results_data = np.load(RESULTS_INPUT)
-    optimal_results = find_best_models(results_data, False)
+    optimal_results = find_best_models(results_data, show)
     sweep_cost_factors(optimal_results)

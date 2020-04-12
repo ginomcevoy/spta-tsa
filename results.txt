@@ -126,6 +126,7 @@ Weight costs:
 
 
 
+
 Summary:
 
 cost = alpha * time + (1 - alpha) * prediction_error
@@ -137,3 +138,65 @@ Then:
 alpha = 0 (best prediction_error)               -> use ARIMA (6, 1, 0)
 alpha = 0.2 (high weight on prediction_error)   -> use ARIMA (2, 0, 2)
 alpha = 0.8 (high weight on time)               -> use ARIMA (2, 0, 0)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+giacomo@giacomo:arima$ python3 -m arima.arima
+Shape of raw/dataset_1460.npy with: (1460, 141, 153)
+23-Feb-20 16:15:21 -   INFO | sao paulo: (20, 20, 365)
+23-Feb-20 16:15:21 -   INFO | Using (p, d, q) = ArimaParams(p=1, d=0, q=0)
+23-Feb-20 16:15:26 - WARNING | Missing ARIMA models: 0
+23-Feb-20 16:15:27 -   INFO | Combined error from all ARIMAs: 5.1062893739345165
+23-Feb-20 16:15:27 -   INFO | Point with best ARIMA: Point(x=12, y=11)
+23-Feb-20 16:15:27 -   INFO | Error from best ARIMA: 24.322660526567176
+23-Feb-20 16:15:27 -   INFO | Using pre-established centroid: Point(x=5, y=15)
+23-Feb-20 16:15:27 -   INFO | Error from centroid ARIMA: 19.32215510315867
+23-Feb-20 16:15:27 -   INFO | Using (p, d, q) = ArimaParams(p=2, d=0, q=0)
+23-Feb-20 16:15:36 - WARNING | Missing ARIMA models: 0
+23-Feb-20 16:15:37 -   INFO | Combined error from all ARIMAs: 5.090445652517888
+23-Feb-20 16:15:37 -   INFO | Point with best ARIMA: Point(x=12, y=11)
+23-Feb-20 16:15:37 -   INFO | Error from best ARIMA: 24.32033079949191
+23-Feb-20 16:15:37 -   INFO | Using pre-established centroid: Point(x=5, y=15)
+23-Feb-20 16:15:37 -   INFO | Error from centroid ARIMA: 19.387791829144778
+23-Feb-20 16:15:37 -   INFO | Using (p, d, q) = ArimaParams(p=2, d=0, q=2)
+23-Feb-20 16:16:18 - WARNING | Missing ARIMA models: 123
+23-Feb-20 16:16:19 -   INFO | Combined error from all ARIMAs: 3.8870874551097585
+23-Feb-20 16:16:19 -   INFO | Point with best ARIMA: Point(x=13, y=0)
+23-Feb-20 16:16:19 -   INFO | Error from best ARIMA: 24.487121257027816
+23-Feb-20 16:16:19 -   INFO | Using pre-established centroid: Point(x=5, y=15)
+23-Feb-20 16:16:19 -   INFO | Error from centroid ARIMA: 18.794020049777213
+23-Feb-20 16:16:19 -   INFO | Using (p, d, q) = ArimaParams(p=4, d=0, q=0)
+23-Feb-20 16:16:46 - WARNING | Missing ARIMA models: 0
+23-Feb-20 16:16:46 -   INFO | Combined error from all ARIMAs: 4.777408127313296
+23-Feb-20 16:16:46 -   INFO | Point with best ARIMA: Point(x=12, y=12)
+23-Feb-20 16:16:46 -   INFO | Error from best ARIMA: 24.612573311204333
+23-Feb-20 16:16:46 -   INFO | Using pre-established centroid: Point(x=5, y=15)
+23-Feb-20 16:16:46 -   INFO | Error from centroid ARIMA: 19.00455224089934
+23-Feb-20 16:16:46 -   INFO | Using (p, d, q) = ArimaParams(p=6, d=1, q=0)
+    23-Feb-20 16:18:32 - WARNING | Missing ARIMA models: 0
+23-Feb-20 16:18:33 -   INFO | Combined error from all ARIMAs: 4.54200943252099
+23-Feb-20 16:18:33 -   INFO | Point with best ARIMA: Point(x=11, y=2)
+23-Feb-20 16:18:33 -   INFO | Error from best ARIMA: 53.06782872957945
+23-Feb-20 16:18:33 -   INFO | Using pre-established centroid: Point(x=5, y=15)
+23-Feb-20 16:18:33 -   INFO | Error from centroid ARIMA: 18.788003488408588
+

@@ -2,12 +2,14 @@ import logging
 import time
 import numpy as np
 
+from spta.region import Point
+from spta.region.temporal import SpatioTemporalRegion
+from spta.region.error import ErrorRegion
+
 from . import arima
-from . import region
-from . import validate
 
 TEST_SAMPLES = 7
-CENTROID = region.Point(5, 15)
+CENTROID = Point(5, 15)
 ITERATIONS = 1000
 RESULT_OUTPUT = 'raw/performance.npy'
 
@@ -36,8 +38,7 @@ def evaluate_arima_performance(arima_params, training_region, test_region, forec
     # find the forecast error
     forecast_using_centroid = arima.create_forecast_region_one_model(centroid_arima,
                                                                      training_region)
-    error_region_centroid = validate.ErrorRegion.create_from_forecasts(forecast_using_centroid,
-                                                                       test_region)
+    error_region_centroid = ErrorRegion.create_from_forecasts(forecast_using_centroid, test_region)
     prediction_error = error_region_centroid.combined_error
 
     msg = 'Forecast took %s for %s iterations, error %s'
@@ -72,7 +73,7 @@ if __name__ == '__main__':
     logging.basicConfig(format='%(asctime)s - %(levelname)6s | %(message)s',
                         level=log_level, datefmt='%d-%b-%y %H:%M:%S')
 
-    sptr = region.SpatioTemporalRegion.load_sao_paulo()
+    sptr = SpatioTemporalRegion.load_sao_paulo()
     # region_interest = sptr.get_small()
     region_interest = sptr
 

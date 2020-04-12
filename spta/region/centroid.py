@@ -1,14 +1,17 @@
 import numpy as np
 import logging
 
-from . import distance
-from . import region
-from . import util
+from spta.util import arrays as arrays_util
+
+from .distance import DistanceByDTW
+from .temporal import SpatioTemporalRegion
+
+from . import Point
 
 
 class CalculateCentroid:
 
-    def __init__(self, distance_measure=distance.DistanceByDTW()):
+    def __init__(self, distance_measure=DistanceByDTW()):
         '''
         Use DistanceWithDTW as means of calculating distances between series, by default.
         '''
@@ -73,7 +76,7 @@ class CalculateCentroid:
         # iterate over all points
         for x in range(0, x_len):
             for y in range(0, y_len):
-                point = region.Point(x, y)
+                point = Point(x, y)
                 self.log.info('Calculating centroid using point %s' % str(point))
                 point_series = spatio_temporal_region.series_at(point)
                 distances_for_point = self.distances_from_point_series_internal(
@@ -86,16 +89,19 @@ class CalculateCentroid:
         # print(combined_distances)
 
         # now find the smallest combined distance
-        minimum, index_2d = util.minimum_value_and_index(combined_distances)
-        point = region.Point(index_2d[0], index_2d[1])
-        self.log.info('Centroid found at %s with minimum distance %s' % str(point), minimum)
+        minimum, index_2d = arrays_util.minimum_value_and_index(combined_distances)
+        point = Point(index_2d[0], index_2d[1])
+        self.log.info('Centroid found at {} with minimum distance {}'.format(point, minimum))
         return point
 
 
 if __name__ == '__main__':
-    sptr = region.SpatioTemporalRegion.load_4years()
-    small_region = sptr.get_small()
+    log_level = logging.INFO
+    logging.basicConfig(format='%(asctime)s - %(levelname)6s | %(message)s',
+                        level=log_level, datefmt='%d-%b-%y %H:%M:%S')
+
+    # region_of_interest = SpatioTemporalRegion.load_4years().get_small()
+    region_of_interest = SpatioTemporalRegion.load_sao_paulo()
 
     centroid_calc = CalculateCentroid()
-    point = centroid_calc.find_point_with_least_distance(small_region)
-    print('centroid %s' % str(point))
+    centroid_point = centroid_calc.find_point_with_least_distance(region_of_interest)

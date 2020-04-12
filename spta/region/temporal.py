@@ -1,73 +1,16 @@
 import logging
 import numpy as np
-# import os
-from collections import namedtuple
-import time
 
-from . import dataset as ds
-from . import util
+from spta.dataset import temp_brazil
+from spta.util import arrays as arrays_util
 
-Point = namedtuple('Point', 'x y')
-Region = namedtuple('Region', 'x1, x2, y1, y2')
-TimeInterval = namedtuple('TimeInterval', 't1 t2')
-
+from .spatial import SpatialRegion
+from . import Point, Region, TimeInterval, transpose_region
 
 # SMALL_REGION = Region(55, 58, 50, 54)
 # SMALL_REGION = Region(0, 1, 0, 1)
+SAO_PAULO = Region(55, 75, 50, 70)
 SMALL_REGION = Region(0, 3, 0, 4)
-
-# model + test + forecast -> error
-
-# arimitas -> error de cada arima en su entrenamiento
-# 1 model + test/region + forecast/region -> error en cada punto
-
-
-def reshape_1d_to_2d(list_1d, x, y):
-    return np.array(list_1d).reshape(x, y)
-
-
-class SpatialRegion:
-
-    def __init__(self, numpy_dataset):
-        self.numpy_dataset = numpy_dataset
-        self.log = logging.getLogger()
-
-    @property
-    def as_numpy(self):
-        return self.numpy_dataset
-
-    @property
-    def shape(self):
-        return self.numpy_dataset.shape
-
-    def region_subset(self, region):
-        '''
-        region: Region namedtuple
-        '''
-        numpy_region_subset = self.numpy_dataset[region.x1:region.x2, region.y1:region.y2]
-        return SpatialRegion(numpy_region_subset)
-
-    def value_at(self, point):
-        return self.numpy_dataset[point.x, point.y]
-
-    @property
-    def as_array(self):
-        '''
-        Goes from 2d to 1d
-        '''
-        (x_len, y_len) = self.numpy_dataset.shape
-        return self.numpy_dataset.reshape(x_len * y_len)
-
-    @classmethod
-    def create_from_1d(cls, list_1d, x, y):
-        '''
-        Given a list, reshapes the elements to form a 2d region with (x, y) shape.
-        '''
-        numpy_dataset = reshape_1d_to_2d(list_1d, x, y)
-        return SpatialRegion(numpy_dataset)
-
-    def __str__(self):
-        return str(self.numpy_dataset)
 
 
 class SpatioTemporalRegion(SpatialRegion):
@@ -122,7 +65,7 @@ class SpatioTemporalRegion(SpatialRegion):
 
         Useful when required to iterate each temporal series.
         '''
-        return util.spatio_temporal_to_list_of_time_series(self.numpy_dataset)
+        return arrays_util.spatio_temporal_to_list_of_time_series(self.numpy_dataset)
 
     # def get_dummy_region(self):
     #     dummy = Region)
@@ -131,8 +74,9 @@ class SpatioTemporalRegion(SpatialRegion):
     def load_4years(cls):
 
         # load raw data
-        pts_4y = ds.POINTS_PER_YEAR * 4
-        numpy_dataset = ds.load_with_len(pts_4y)
+        numpy_dataset = temp_brazil.load_brazil_temps(4)
+        # pts_4y = ds.POINTS_PER_YEAR * 4
+        # numpy_dataset = ds.load_with_len(pts_4y)
 
         # use [x, y, time_series]
         transposed_dataset = transpose_region(numpy_dataset)
@@ -142,8 +86,9 @@ class SpatioTemporalRegion(SpatialRegion):
     def load_1year(cls):
 
         # load raw data
-        pts_1y = ds.POINTS_PER_YEAR
-        numpy_dataset = ds.load_with_len(pts_1y)
+        # pts_1y = ds.POINTS_PER_YEAR
+        # numpy_dataset = ds.load_with_len(pts_1y)
+        numpy_dataset = temp_brazil.load_brazil_temps(1)
 
         # use [x, y, time_series]
         transposed_dataset = transpose_region(numpy_dataset)
@@ -152,12 +97,11 @@ class SpatioTemporalRegion(SpatialRegion):
     @classmethod
     def load_sao_paulo(cls):
         sptr = cls.load_1year()
-        sp_region = Region(55, 75, 50, 70)
-        sptr_sp = sptr.region_subset(sp_region)
+        sptr_sp = sptr.region_subset(SAO_PAULO)
 
         # we have 4 points per day
         # average these four points to get a smoother curve
-        (x_len, y_len) = (sp_region.x2 - sp_region.x1, sp_region.y2 - sp_region.y1)
+        (x_len, y_len) = (SAO_PAULO.x2 - SAO_PAULO.x1, SAO_PAULO.y2 - SAO_PAULO.y1)
         new_series_len = int(sptr_sp.series_len() / 4)
         single_point_per_day = np.empty((x_len, y_len, new_series_len))
 
@@ -176,22 +120,13 @@ class SpatioTemporalRegion(SpatialRegion):
     @classmethod
     def copy_series_over_region(cls, series, region_3d):
         (m, n, _) = region_3d.shape
-        numpy_dataset = util.copy_array_as_matrix_elements(series, m, n)
+        numpy_dataset = arrays_util.copy_array_as_matrix_elements(series, m, n)
         return SpatioTemporalRegion(numpy_dataset)
 
 
-def transpose_region(numpy_region_dataset):
-    '''
-    Instead of [time_series, x, y], work with [x, y, time_series]
-    '''
-    (series_len, x_len, y_len) = numpy_region_dataset.shape
-
-    # 'Fortran-style' will gather time_series points when flattening ('transpose')
-    flattened = numpy_region_dataset.ravel('F')
-    return flattened.reshape(x_len, y_len, series_len)
-
-
 if __name__ == '__main__':
+    import time
+
     t_start = time.time()
 
     log_level = logging.DEBUG
@@ -199,12 +134,12 @@ if __name__ == '__main__':
                         level=log_level, datefmt='%d-%b-%y %H:%M:%S')
 
     sptr = SpatioTemporalRegion.load_4years()
-    print(sptr.shape)
+    print('brazil: ', sptr.shape)
 
     small = sptr.get_small()
-    print(small.shape)
+    print('small: ', small.shape)
 
-    print('centroid %s' % str(small.centroid))
+    # print('centroid %s' % str(small.centroid))
 
     t_end = time.time()
     elapsed = t_end - t_start

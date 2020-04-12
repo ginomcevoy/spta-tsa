@@ -1,9 +1,12 @@
+from spta.util import arrays as arrays_util
+
+from .spatial import SpatialRegion
+
+from . import Point, reshape_1d_to_2d
 from . import distance
-from . import region
-from . import util
 
 
-class ErrorRegion(region.SpatialRegion):
+class ErrorRegion(SpatialRegion):
 
     def __init__(self, numpy_dataset, distance_error):
         super(ErrorRegion, self).__init__(numpy_dataset)
@@ -19,8 +22,8 @@ class ErrorRegion(region.SpatialRegion):
         Searches the errors in the region for the smallest. Returns the (x, y) coordinates as
         region.Point (2d)
         '''
-        (minimum, index) = util.minimum_value_and_index(self.numpy_dataset)
-        p = region.Point(index[0], index[1])
+        (minimum, index) = arrays_util.minimum_value_and_index(self.numpy_dataset)
+        p = Point(index[0], index[1])
         #  print('Found minimum error %s at %s' % (minimum, p))
         return p
 
@@ -47,5 +50,5 @@ class ErrorRegion(region.SpatialRegion):
         ]
 
         # recreate the region
-        error_numpy_dataset = region.reshape_1d_to_2d(error_list, x1_len, y1_len)
+        error_numpy_dataset = reshape_1d_to_2d(error_list, x1_len, y1_len)
         return ErrorRegion(error_numpy_dataset, distance_error)
