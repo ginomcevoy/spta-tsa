@@ -3,6 +3,7 @@ Example for k-medoids with synthetic data
 '''
 import logging
 import numpy as np
+import matplotlib.pyplot as plt
 
 from spta.dataset import synthetic_temporal as synth
 
@@ -80,33 +81,53 @@ def main():
     # plot the mask
     plot_util.plot_discrete_spatial_region(mask_region, 'Input mask')
 
-    # plot the first and last points in the spatio temporal region for sanity check
-    first = Point(0, 0)
-    last = Point(x_len - 1, y_len - 1)
-    first_and_last = (spt_region.series_at(first), spt_region.series_at(last))
-    plot_util.plot_series_group(first_and_last, series_len)
-
-    # convert to an array based on a list of series, so that kmedoids can see 2d shape
-    series_group = np.array(spt_region.as_list)
-
-    # apply k-medoids on the data using DTW
-    k = len(function_options)
+    # pre-calculate all distances using DTW
     distance_measure = DistanceByDTW()
-    kmedoids_result = kmedoids.run_kmedoids(series_group, k, distance_measure, seed=1,
-                                            max_iter=1000, tol=0.001, verbose=True)
-    (medoids, labels, costs, _, _) = kmedoids_result
+    distance_matrix = distance_measure.compute_distance_matrix(spt_region)
 
-    logger.info('Medoids: {}'.format(str(get_medoid_indices(medoids))))
-    logger.info('Labels: {}'.format(str(labels)))
-    plot_util.plot_series_group_by_color(series_group, series_len, labels)
+    # convert to an array based on a list of series, so that kmedoids can see 2d shape, and plot it
+    series_group = np.array(spt_region.as_list)
+    plot_util.plot_series_group(series_group, series_len)
 
-    label_region = SpatialRegion.create_from_1d(labels, x_len, y_len)
-    plot_util.plot_discrete_spatial_region(label_region, 'Output mask')
+    # iterate k to analyze performance
+    ks = [2, 3, 4]
+    best_silhouette_avg = -1
+    best_k = 0
+    best_medoids = None
+    best_labels = None
 
-    # build the silhouette graph
-    # we need to precompute the distance matrix using DTW
-    distance_matrix = distance_measure.distance_matrix(spt_region)
-    plot_util.plot_clustering_silhouette(distance_matrix, labels)
+    for k in ks:
+
+        # Create a subplot with 1 row and 2 columns
+        _, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 7))
+        plt.suptitle(("Silhouette analysis for KMeans clustering on sample data "
+                      "with n_clusters = %d" % k), fontsize=14, fontweight='bold')
+
+        # apply k-medoids on the data using DTW
+        kmedoids_result = kmedoids.run_kmedoids(series_group, k, distance_measure, seed=1,
+                                                max_iter=1000, tol=0.001, verbose=True)
+        (medoids, labels, costs, _, _) = kmedoids_result
+
+        # plot the labels in 2d
+        label_region = SpatialRegion.create_from_1d(labels, x_len, y_len)
+        plot_util.plot_discrete_spatial_region(label_region, 'Output mask', subplot=ax1)
+
+        # build the silhouette graph, requires all distances
+        silhouette_avg = plot_util.plot_clustering_silhouette(distance_matrix, labels, subplot=ax2)
+        plt.show()
+
+        # save best results
+        if silhouette_avg > best_silhouette_avg:
+            best_silhouette_avg = silhouette_avg
+            best_k = k
+            best_medoids = medoids
+            best_labels = labels
+
+    # Show best results
+    logger.info('Best k: {}'.format(best_k))
+    logger.info('Best medoids: {}'.format(str(get_medoid_indices(best_medoids))))
+    logger.info('Best labels: {}'.format(str(best_labels)))
+    plot_util.plot_series_group_by_color(series_group, series_len, best_labels)
 
 
 if __name__ == '__main__':

@@ -23,6 +23,10 @@ class SpatialRegion:
     def shape(self):
         return self.numpy_dataset.shape
 
+    @property
+    def ndim(self):
+        return self.numpy_dataset.ndim
+
     def region_subset(self, region):
         '''
         region: Region namedtuple

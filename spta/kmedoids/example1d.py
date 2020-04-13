@@ -38,8 +38,8 @@ def alternating_functions_1d(series_n, series_len, function_options):
 
 
 def main():
-    # log_level = logging.DEBUG
-    log_level = logging.INFO
+    log_level = logging.DEBUG
+    # log_level = logging.INFO
     logging.basicConfig(format='%(asctime)s - %(levelname)6s | %(message)s',
                         level=log_level, datefmt='%d-%b-%y %H:%M:%S')
     logger = logging.getLogger()
@@ -49,13 +49,20 @@ def main():
     function_options = (synth.sine_function, synth.square_function,
                         synth.gaussian_function)
 
+    precompute_distance_matrix = True
+
     # create the sequence group to be clustered, plot it
     series_group = alternating_functions_1d(series_n, series_len, function_options)
     plot_util.plot_series_group(series_group, series_len)
 
+    distance_measure = DistanceByDTW()
+    if precompute_distance_matrix:
+
+        # pre-calculate all distances using DTW
+        distance_measure.compute_distance_matrix(series_group)
+
     # apply k-medoids on the data using DTW
     k = len(function_options)
-    distance_measure = DistanceByDTW()
     kmedoids_result = kmedoids.run_kmedoids(series_group, k, distance_measure, seed=1,
                                             max_iter=1000, tol=0.001, verbose=True)
     (medoids, labels, costs, _, _) = kmedoids_result

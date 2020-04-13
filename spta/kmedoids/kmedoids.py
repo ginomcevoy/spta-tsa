@@ -36,15 +36,29 @@ def _get_cost(X, medoids, distance_measure):
     k = len(medoids)
     dist_mat = np.zeros((len(X), k))
 
-    # compute distance matrix
-    for j in range(0, k):
+    # check if the distance matrix has been precomputed
+    if hasattr(distance_measure, 'distance_matrix') \
+            and distance_measure.distance_matrix is not None:
 
-        medoid_j = medoids[j]
-        for i in range(len(X)):
-            if i == medoid_j.index:
-                dist_mat[i, j] = 0.
-            else:
-                dist_mat[i, j] = distance_measure.measure(X[i, :], medoid_j.series)
+        # reuse data from the complete distance matrix
+        # we need the distances between each point in the region and each medoid
+        # easiest way to get this is to get the distances at the medoids and transpose it
+        medoid_indices = get_medoid_indices(medoids)
+        dist_mat_tr = distance_measure.distance_matrix[medoid_indices, :]
+        dist_mat = dist_mat_tr.transpose()
+
+    else:
+        # compute distance matrix for the medoids
+        dist_mat = np.zeros((len(X), k))
+
+        for j in range(0, k):
+
+            medoid_j = medoids[j]
+            for i in range(len(X)):
+                if i == medoid_j.index:
+                    dist_mat[i, j] = 0.
+                else:
+                    dist_mat[i, j] = distance_measure.measure(X[i, :], medoid_j.series)
 
     mask = np.argmin(dist_mat, axis=1)
     members = np.zeros(len(X), dtype=np.int8)
@@ -52,8 +66,6 @@ def _get_cost(X, medoids, distance_measure):
     for i in range(0, k):
         mem_id = np.where(mask == i)
         members[mem_id] = i
-        distances_within_cluster = dist_mat[mem_id, i]
-        logger.debug('distances_within_cluster {}'.format(str(distances_within_cluster)))
         costs[i] = distance_measure.combine(dist_mat[mem_id, i])
 
     total_cost = distance_measure.combine(costs)

@@ -40,18 +40,23 @@ def plot_series_group_by_color(series_group, series_len, colors):
     plt.show()
 
 
-def plot_discrete_spatial_region(spatial_region, title=''):
+def plot_discrete_spatial_region(spatial_region, title='', subplot=None):
     '''
     Plots a discrete spatial region with a scatter plot, where the values are assigned to colors.
     '''
 
+    if not subplot:
+        _, subplot = plt.subplots(1, 1)
+
     region_np_array = spatial_region.as_numpy
     # plt.imshow(region_np_array, cmap='hot', interpolation='nearest')
-    plt.imshow(region_np_array, interpolation='nearest')
+    subplot.imshow(region_np_array, interpolation='nearest')
 
     if title:
-        plt.title(title)
-    plt.show()
+        subplot.set_title(title)
+
+    if not subplot:
+        plt.show()
 
 
 def plot_clustering_silhouette(distance_matrix, cluster_labels, subplot=None):
@@ -66,16 +71,14 @@ def plot_clustering_silhouette(distance_matrix, cluster_labels, subplot=None):
     logger.debug('Shape of distance_matrix: {}'.format(str(distance_matrix.shape)))
     logger.debug('len(distance_matrix): {}'.format(str(len(distance_matrix))))
 
-    # is_subplot = True
     if not subplot:
-        fig, subplot = plt.subplots(1, 1)
-        # is_subplot = False
+        _, subplot = plt.subplots(1, 1)
 
     # infer the value of k (number of clusters)
     k = len(set(cluster_labels))
 
     # The silhouette coefficient can range from -1, 1, in practice it may be -0.1 to 1
-    subplot.set_xlim([-0.1, 1])
+    subplot.set_xlim([-1, 1])
 
     # The (n_clusters+1)*10 is for inserting blank space between silhouette
     # plots of individual clusters, to demarcate them clearly.
@@ -124,9 +127,13 @@ def plot_clustering_silhouette(distance_matrix, cluster_labels, subplot=None):
     subplot.axvline(x=silhouette_avg, color="red", linestyle="--")
 
     subplot.set_yticks([])  # Clear the yaxis labels / ticks
-    subplot.set_xticks([-0.1, 0, 0.2, 0.4, 0.6, 0.8, 1])
+    subplot.set_xticks(np.linspace(-1, 1, 9))
 
-    plt.show()
+    if not subplot:
+        plt.show()
+
+    # return the metric for analysis
+    return silhouette_avg
 
 
 def check_palette_len(color_length):

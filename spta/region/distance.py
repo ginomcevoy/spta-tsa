@@ -44,18 +44,58 @@ class DistanceByDTW(DistanceBetweenSeries):
         '''
         return arrays_util.root_mean_squared(distances_for_point)
 
-    def distance_matrix(self, spatio_temporal_region):
+    def compute_distance_matrix(self, temporal_data):
         '''
         Given a spatio-temporal region, calculates and stores the distance matrix, i.e. the
         distances between each two points.
 
+        Works with temporal data: an array of series, or a spatio temporal region.
+
         The output is a 2d numpy array, with dimensions (x_len*y_len, x_len*y_len). The value
         at (i, j) is the distance between series_i and series_j.
         '''
-        # Convert to 2d to iterate region
+
+        if temporal_data.ndim == 2:
+            # assume array of series
+            distance_matrix = self.compute_distance_matrix_series_array(temporal_data)
+
+        elif temporal_data.ndim == 3:
+            # assume SpatioTemporalRegion instance
+            distance_matrix = self.compute_distance_matrix_sptr(temporal_data)
+
+        else:
+            err_msg = 'Cannot work with supplied temporal_data: {}'
+            raise ValueError(err_msg.format(type(temporal_data)))
+
+        # save it in this instance for reusability
+        self.distance_matrix = distance_matrix
+        return distance_matrix
+
+    def compute_distance_matrix_series_array(self, X):
+        series_n, _ = X.shape
+        distance_matrix = np.empty((series_n, series_n))
+
+        # iterate the series
+        for i in range(0, series_n):
+
+            series_i = X[i, :]
+
+            # calculate the distances to all other series
+            self.logger.debug('Calculating distances at: {}...'.format(i))
+            distances_for_i = [
+                self.measure(series_i, other_series)
+                for other_series
+                in X
+            ]
+            self.logger.debug('Got: {}'.format(str(distances_for_i)))
+            distance_matrix[i, :] = distances_for_i
+
+        return distance_matrix
+
+    def compute_distance_matrix_sptr(self, spatio_temporal_region):
+
         x_len, y_len, _ = spatio_temporal_region.shape
         sptr_2d = spatio_temporal_region.as_2d
-
         distance_matrix = np.empty((x_len * y_len, x_len * y_len))
 
         # iterate each point in the region
@@ -76,6 +116,7 @@ class DistanceByDTW(DistanceBetweenSeries):
 
         self.logger.debug('Distance matrix:')
         self.logger.debug(str(distance_matrix))
+
         return distance_matrix
 
 
