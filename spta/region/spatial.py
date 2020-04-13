@@ -1,6 +1,7 @@
 import logging
+import numpy as np
 
-from . import reshape_1d_to_2d
+from . import Region, reshape_1d_to_2d
 
 
 # model + test + forecast -> error
@@ -47,6 +48,16 @@ class SpatialRegion:
         '''
         numpy_dataset = reshape_1d_to_2d(list_1d, x, y)
         return SpatialRegion(numpy_dataset)
+
+    @classmethod
+    def region_with_zeroes(cls, region):
+        '''
+        Creates a spatial region filled with zeroes, with the dimensions given by the region.
+        Notice that indices will start at (0, 0)
+        '''
+        (x_len, y_len) = (Region.x2 - Region.x1, Region.y2 - Region.y1)
+        zero_array = np.zeros((x_len, y_len))
+        return SpatialRegion(zero_array)
 
     def __str__(self):
         return str(self.numpy_dataset)

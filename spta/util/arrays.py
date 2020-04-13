@@ -55,7 +55,6 @@ def root_mean_squared(array):
     return (np.nanmean(np.array(array)**2))**0.5
 
 
-
 if __name__ == '__main__':
 
     x = (0, 1, 2, 3, 4)

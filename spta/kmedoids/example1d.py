@@ -56,8 +56,9 @@ def main():
     # apply k-medoids on the data using DTW
     k = len(function_options)
     distance_measure = DistanceByDTW()
-    (medoids, labels, costs, _, _) = kmedoids.run_kmedoids(series_group, k, distance_measure,
-                                                           max_iter=1000, tol=0.001, verbose=True)
+    kmedoids_result = kmedoids.run_kmedoids(series_group, k, distance_measure, seed=1,
+                                            max_iter=1000, tol=0.001, verbose=True)
+    (medoids, labels, costs, _, _) = kmedoids_result
 
     logger.info('Medoids: {}'.format(str(get_medoid_indices(medoids))))
     logger.info('Labels: {}'.format(str(labels)))

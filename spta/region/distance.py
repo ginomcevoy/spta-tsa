@@ -1,10 +1,15 @@
+import logging
 import numpy as np
 from tslearn.metrics import dtw
 
+from spta.region import Point
 from spta.util import arrays as arrays_util
 
 
 class DistanceBetweenSeries:
+
+    def __init__(self):
+        self.logger = logging.getLogger()
 
     def measure(self, first_series, second_series):
         '''
@@ -38,6 +43,40 @@ class DistanceByDTW(DistanceBetweenSeries):
         For DTW, we use the Root Mean Squared.
         '''
         return arrays_util.root_mean_squared(distances_for_point)
+
+    def distance_matrix(self, spatio_temporal_region):
+        '''
+        Given a spatio-temporal region, calculates and stores the distance matrix, i.e. the
+        distances between each two points.
+
+        The output is a 2d numpy array, with dimensions (x_len*y_len, x_len*y_len). The value
+        at (i, j) is the distance between series_i and series_j.
+        '''
+        # Convert to 2d to iterate region
+        x_len, y_len, _ = spatio_temporal_region.shape
+        sptr_2d = spatio_temporal_region.as_2d
+
+        distance_matrix = np.empty((x_len * y_len, x_len * y_len))
+
+        # iterate each point in the region
+        for i in range(0, x_len):
+            for j in range(0, y_len):
+
+                # for point (i, j), calculate the distances to all other points
+                point = Point(i, j)
+                self.logger.debug('Calculating distances at point: {}...'.format(str(point)))
+                point_series = spatio_temporal_region.series_at(point)
+                distances_at_point = [
+                    self.measure(point_series, other_series)
+                    for other_series
+                    in sptr_2d
+                ]
+                self.logger.debug('Got: {}'.format(str(distances_at_point)))
+                distance_matrix[i * y_len + j, :] = distances_at_point
+
+        self.logger.debug('Distance matrix:')
+        self.logger.debug(str(distance_matrix))
+        return distance_matrix
 
 
 class DistanceByRMSE(DistanceBetweenSeries):

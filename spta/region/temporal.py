@@ -67,6 +67,14 @@ class SpatioTemporalRegion(SpatialRegion):
         '''
         return arrays_util.spatio_temporal_to_list_of_time_series(self.numpy_dataset)
 
+    @property
+    def as_2d(self):
+        '''
+        Returns a 2d array, similar to as_list but it is a numpy array.
+        Useful when required to iterate each temporal series.
+        '''
+        return np.array(self.as_list)
+
     # def get_dummy_region(self):
     #     dummy = Region)
 

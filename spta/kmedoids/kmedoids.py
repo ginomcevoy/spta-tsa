@@ -16,8 +16,8 @@ from . import Medoid, get_medoid_indices
 logger = logging.getLogger()
 
 
-def initial_medoids(X, k):
-    seed(1)
+def initial_medoids(X, k, random_seed):
+    seed(random_seed)
     samples = choice(len(X), size=k, replace=False)
 
     logger.info('Initial medoids indices: {}'.format(str(samples)))
@@ -60,11 +60,11 @@ def _get_cost(X, medoids, distance_measure):
     return members, costs, total_cost, dist_mat
 
 
-def run_kmedoids(X, k, distance_measure, max_iter=1000, tol=0.001, verbose=True):
+def run_kmedoids(X, k, distance_measure, seed=1, max_iter=1000, tol=0.001, verbose=True):
     '''run algorithm return centers, members, and etc.'''
     # Get initial centers
     n_samples, n_features = X.shape
-    medoids = initial_medoids(X, k)
+    medoids = initial_medoids(X, k, seed)
 
     members, costs, tot_cost, dist_mat = _get_cost(X, medoids, distance_measure)
     cc, SWAPPED = 0, True
