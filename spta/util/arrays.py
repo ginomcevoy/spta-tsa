@@ -3,27 +3,27 @@ import numpy as np
 
 def copy_array_as_matrix_elements(array, m, n):
     '''
-    Given an array, create the following mxn matrix:
-
-    [ <array>  <array> ... <array>
-      <array>  <array> ... <array>
-      ...
-      <array>  <array> ... <array> ] (mxn)
+    Given an array, create a mxnxlen matrix such that matrix[:, x, y] = array for all x, y.
 
     This allows us to create a SpatioTemporalRegion where all the temporal series are
     the same as the array.
     '''
-    # if we input a matrix and ask for axis=0, we get the effect of copying the array mxn times
     length = len(array)
-    s = [array]
-    mat = np.repeat(s, repeats=m * n, axis=0)
-    return mat.reshape(m, n, length)
+    # s = [array]
+    mat = np.repeat(array, repeats=m * n)  # , axis=0)
+    return mat.reshape(length, m, n)
 
 
 def spatio_temporal_to_list_of_time_series(numpy_dataset):
-    (x_len, y_len, series_len) = numpy_dataset.shape
-    elements_1d = numpy_dataset.reshape(x_len * y_len * series_len)
-    return np.split(elements_1d, x_len * y_len)
+    (series_len, x_len, y_len) = numpy_dataset.shape
+    # elements_1d = numpy_dataset.reshape(series_len * x_len * y_len)
+    # return np.split(elements_1d, x_len * y_len
+    list_of_time_series = []
+    for x in range(0, x_len):
+        for y in range(0, y_len):
+            list_of_time_series.append(numpy_dataset[:, x, y])
+
+    return list_of_time_series
 
 
 def minimum_value_and_index(numpy_dataset):
@@ -55,14 +55,38 @@ def root_mean_squared(array):
     return (np.nanmean(np.array(array)**2))**0.5
 
 
+def list_of_2d_points(x_len, y_len):
+    '''
+    Given (x_len, y_len), outputs a list of points of the corresponding 2d region:
+    (0, 0), (0, 1), ... (0, y_len - 1), (1, 0), (1, 1), ... (x_len - 1, y_len -1)
+    '''
+    result = np.empty((x_len * y_len, 2), dtype=np.int8)
+
+    for i in range(0, x_len):
+        for j in range(0, y_len):
+            index = i * y_len + j
+            result[index, :] = (i, j)
+
+    return result
+
+
+def distances_to_point_in_2d_region(i, j, x_len, y_len):
+    '''
+    Given a 2d region (x_len, y_len) and a point (i, j), returns a list (x_len * y_len, 1) of
+    euclidian distances from each point to the (i,j) point.
+    '''
+    single_point = [i, j]
+    points_of_2d_region = list_of_2d_points(x_len, y_len)
+    return np.linalg.norm(points_of_2d_region - single_point, axis=1)
+
+
 if __name__ == '__main__':
 
     x = (0, 1, 2, 3, 4)
-    print('WTF')
     xx = copy_array_as_matrix_elements(x, 3, 4)
     print('xx: %s' % (xx.shape,))
     print(xx)
-    print(xx[2, 1])
+    print(xx[:, 2, 1])
 
     xx_2d = spatio_temporal_to_list_of_time_series(xx)
     msg = 'spatio_temporal_to_list_of_time_series: %s lists of array with %s elems'
@@ -80,3 +104,14 @@ if __name__ == '__main__':
     print(r2d)
     (m, i) = minimum_value_and_index(r2d)
     print(m, i)
+
+    print('list_of_2d_points(4, 5)')
+    r = list_of_2d_points(4, 5)
+    print(r)
+
+    print('distances_to_point_in_2d_region(2, 3, 4, 5)')
+    r = distances_to_point_in_2d_region(2, 3, 4, 5)
+    print(r)
+
+    print('last distances, reshaped:')
+    print(r.reshape(4, 5))

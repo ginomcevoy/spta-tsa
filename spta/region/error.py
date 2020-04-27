@@ -31,8 +31,8 @@ class ErrorRegion(SpatialRegion):
     def create_from_forecasts(cls, forecast_region, test_region,
                               distance_error=distance.DistanceByDTW()):
 
-        (x1_len, y1_len, series1_len) = forecast_region.shape
-        (x2_len, y2_len, series2_len) = test_region.shape
+        (series1_len, x1_len, y1_len) = forecast_region.shape
+        (series2_len, x2_len, y2_len) = test_region.shape
 
         # we need them to be about the same region and same series length
         assert((x1_len, y1_len, series1_len) == (x2_len, y2_len, series2_len))

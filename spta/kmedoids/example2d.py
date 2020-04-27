@@ -4,6 +4,7 @@ Example for k-medoids with synthetic data
 import logging
 import numpy as np
 import matplotlib.pyplot as plt
+import random
 
 from spta.dataset import synthetic_temporal as synth
 
@@ -34,11 +35,12 @@ def alternating_functions_2d(spatial_region, series_len, function_options):
 
     # spt_numpy = np.zeros(x_len * y_len * series_len)
     # mask_numpy = np.zeros(x_len * y_len)
-    spt_numpy = np.empty((x_len, y_len, series_len))
+    spt_numpy = np.empty((series_len, x_len, y_len))
     mask_numpy = np.empty((x_len, y_len))
 
     options_n = len(function_options)
 
+    random.seed(1)
     for i in range(0, x_len):
 
         for j in range(0, y_len):
@@ -47,12 +49,14 @@ def alternating_functions_2d(spatial_region, series_len, function_options):
             # create about 1/n of points_n with the first function, then 1/n for the second, etc
             # the decider is j (y-axis)
 
-            index = int(j * options_n / y_len)
+            # index = int(j * options_n / y_len)
+            index = (i * j) % options_n
+            # index = random.randint(0, options_n - 1)
             this_function = function_options[index]
 
             # create the data and add it to the matrix
             series = synth.delayed_function_with_noise(this_function, series_len)
-            spt_numpy[i, j, :] = series
+            spt_numpy[:, i, j] = series
             mask_numpy[i, j] = index
 
     spt_region = SpatioTemporalRegion(spt_numpy)
@@ -72,7 +76,7 @@ def main():
                         synth.gaussian_function)
 
     # create the region to be clustered
-    x_len, y_len = (4, 6)
+    x_len, y_len = (8, 8)
     # region = Region(0, x_len, 0, y_len)
     # spatial_region = SpatialRegion.region_with_zeroes(region)
     region2d = np.empty((x_len, y_len))
@@ -81,47 +85,20 @@ def main():
     # plot the mask
     plot_util.plot_discrete_spatial_region(mask_region, 'Input mask')
 
-    # pre-calculate all distances using DTW
-    distance_measure = DistanceByDTW()
-    distance_matrix = distance_measure.compute_distance_matrix(spt_region)
-
-    # convert to an array based on a list of series, so that kmedoids can see 2d shape, and plot it
+    # 2d view of spatio temporal region, for plotting
     series_group = np.array(spt_region.as_list)
     plot_util.plot_series_group(series_group, series_len)
 
-    # iterate k to analyze performance
+    # use DTW, pre-compute matrix
+    distance_measure = DistanceByDTW()
+    distance_measure.compute_distance_matrix(spt_region)
+
+    # try these k, k=3 is best by design
     ks = [2, 3, 4]
-    best_silhouette_avg = -1
-    best_k = 0
-    best_medoids = None
-    best_labels = None
-
-    for k in ks:
-
-        # Create a subplot with 1 row and 2 columns
-        _, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 7))
-        plt.suptitle(("Silhouette analysis for KMeans clustering on sample data "
-                      "with n_clusters = %d" % k), fontsize=14, fontweight='bold')
-
-        # apply k-medoids on the data using DTW
-        kmedoids_result = kmedoids.run_kmedoids(series_group, k, distance_measure, seed=1,
-                                                max_iter=1000, tol=0.001, verbose=True)
-        (medoids, labels, costs, _, _) = kmedoids_result
-
-        # plot the labels in 2d
-        label_region = SpatialRegion.create_from_1d(labels, x_len, y_len)
-        plot_util.plot_discrete_spatial_region(label_region, 'Output mask', subplot=ax1)
-
-        # build the silhouette graph, requires all distances
-        silhouette_avg = plot_util.plot_clustering_silhouette(distance_matrix, labels, subplot=ax2)
-        plt.show()
-
-        # save best results
-        if silhouette_avg > best_silhouette_avg:
-            best_silhouette_avg = silhouette_avg
-            best_k = k
-            best_medoids = medoids
-            best_labels = labels
+    best_k, best_medoids, best_labels = kmedoids.silhouette_spt(ks, spt_region, distance_measure,
+                                                                seed=1, max_iter=1000, tol=0.001,
+                                                                verbose=True, show_graphs=True,
+                                                                save_graphs=None)
 
     # Show best results
     logger.info('Best k: {}'.format(best_k))

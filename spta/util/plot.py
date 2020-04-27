@@ -45,8 +45,9 @@ def plot_discrete_spatial_region(spatial_region, title='', subplot=None):
     Plots a discrete spatial region with a scatter plot, where the values are assigned to colors.
     '''
 
+    fig = None
     if not subplot:
-        _, subplot = plt.subplots(1, 1)
+        fig, subplot = plt.subplots(1, 1)
 
     region_np_array = spatial_region.as_numpy
     # plt.imshow(region_np_array, cmap='hot', interpolation='nearest')
@@ -58,8 +59,10 @@ def plot_discrete_spatial_region(spatial_region, title='', subplot=None):
     if not subplot:
         plt.show()
 
+    return fig
 
-def plot_clustering_silhouette(distance_matrix, cluster_labels, subplot=None):
+
+def plot_clustering_silhouette(distance_matrix, cluster_labels, subplot=None, show_graphs=True):
     '''
     Plot a silhouette to graphically display a measure of the efficiency of a clustering
     algorithm, e.g. k-medoids. Assumes that the distance matrix has already been calculated.
@@ -129,7 +132,7 @@ def plot_clustering_silhouette(distance_matrix, cluster_labels, subplot=None):
     subplot.set_yticks([])  # Clear the yaxis labels / ticks
     subplot.set_xticks(np.linspace(-1, 1, 9))
 
-    if not subplot:
+    if not subplot and show_graphs:
         plt.show()
 
     # return the metric for analysis

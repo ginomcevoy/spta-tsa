@@ -68,7 +68,7 @@ class ArimaForEachPoint:
 
     def create_spatial_region(self):
         # rebuild the region using the known shape
-        (x_len, y_len, training_len) = self.training_region.shape
+        (training_len, x_len, y_len) = self.training_region.shape
         arima_2d = np.array(self.arima_models_1d).reshape(x_len, y_len)
         return ArimaSpatialRegion(arima_2d)
 
@@ -90,7 +90,8 @@ class ArimaForEachPoint:
         # print(forecast_1d)
 
         # rebuild the original region shape, create a spatio temporal object
-        (x_len, y_len, _) = self.training_region.shape
+        # TODO THIS IS WRONG
+        (_, x_len, y_len) = self.training_region.shape
         forecast_region_numpy = np.array(forecast_1d).reshape(x_len, y_len, series_len)
         return temporal.SpatioTemporalRegion(forecast_region_numpy)
 

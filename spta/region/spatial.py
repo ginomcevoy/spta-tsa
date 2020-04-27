@@ -45,6 +45,14 @@ class SpatialRegion:
         (x_len, y_len) = self.numpy_dataset.shape
         return self.numpy_dataset.reshape(x_len * y_len)
 
+    def save(self, filename):
+        '''
+        Saves dataset to a file.
+        '''
+        ds_numpy = self.as_numpy
+        np.save(filename, ds_numpy)
+        self.log.info('Saved to {}: {}'.format(filename, ds_numpy.shape))
+
     @classmethod
     def create_from_1d(cls, list_1d, x, y):
         '''

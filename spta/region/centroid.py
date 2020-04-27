@@ -63,7 +63,7 @@ class CalculateCentroid:
         all the other series in a region. For this, we iterate over each point in the region,
         and calculate the combined distance of each point against the whole region.
         '''
-        (x_len, y_len, series_len) = spatio_temporal_region.shape
+        (series_len, x_len, y_len) = spatio_temporal_region.shape
 
         # if we use the internal function, we only need to do this once
         spatio_temporal_region_as_list = spatio_temporal_region.as_list
