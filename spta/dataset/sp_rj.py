@@ -5,7 +5,8 @@ import sys
 
 from spta.region import Region
 from spta.region.temporal import SpatioTemporalRegion
-from spta.region.distance import DistanceByDTW
+
+from spta.distance.dtw import DistanceByDTW
 
 
 CMD_OPTIONS = ('save', 'distances')

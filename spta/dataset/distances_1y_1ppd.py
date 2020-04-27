@@ -3,7 +3,7 @@ import numpy as np
 import time
 
 from spta.region.temporal import SpatioTemporalRegion
-from spta.region.distance import DistanceByDTW
+from spta.distance.dtw import DistanceByDTW
 
 DISTANCES_1y_1ppd = 'raw/distances_1y_1ppd.npy'
 

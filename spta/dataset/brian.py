@@ -7,7 +7,8 @@ import matplotlib.pyplot as plt
 from spta.region import Region
 from spta.region.spatial import SpatialRegion
 from spta.region.temporal import SpatioTemporalRegion
-from spta.region.distance import DistanceByDTW, DistanceBySpatialDTW
+
+from spta.distance.dtw import DistanceByDTW, DistanceBySpatialDTW
 from spta.kmedoids import kmedoids, get_medoid_indices
 from spta.util import plot as plot_util
 

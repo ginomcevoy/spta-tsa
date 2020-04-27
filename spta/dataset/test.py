@@ -1,6 +1,8 @@
 import matplotlib.pyplot as plt
+
 from spta.util import plot as plot_util
-from spta.region.distance import DistanceByDTW, DistanceBySpatialDTW
+from spta.distance.dtw import DistanceByDTW, DistanceBySpatialDTW
+
 from spta.region import Region
 from spta.region.spatial import SpatialRegion
 

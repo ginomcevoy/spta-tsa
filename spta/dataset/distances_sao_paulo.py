@@ -2,7 +2,7 @@ import logging
 import numpy as np
 
 from spta.region.temporal import SpatioTemporalRegion
-from spta.region.distance import DistanceByDTW
+from spta.distance.dtw import DistanceByDTW
 
 DISTANCES_SAO_PAULO = 'raw/distances_sao_paulo_1y_1ppd.npy'
 
