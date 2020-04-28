@@ -8,7 +8,8 @@ from spta.region import Region
 from spta.region.spatial import SpatialRegion
 from spta.region.temporal import SpatioTemporalRegion
 
-from spta.distance.dtw import DistanceByDTW
+from spta.distance.dtw import DistanceByDTW, DistanceBySpatialDTW
+from spta.distance.dtw_parallel import DistanceByDTWParallel
 from spta.kmedoids import kmedoids, get_medoid_indices
 from spta.util import plot as plot_util
 
@@ -18,57 +19,68 @@ from spta.util import plot as plot_util
 # SP:           55:75, 50:70
 # BRIAN?:       40:80, 45:85
 
-NORDESTE_SMALL_REGION = Region(43, 50, 85, 95)
-NORDESTE_SMALL_DATASET = 'raw/nordeste_small_1y_1ppd.npy'
-NORDESTE_SMALL_DISTANCES = 'raw/distances_nordeste_small_1y_1ppd.npy'
+WHOLE_BRAZIL_REGION = Region(20, 100, 15, 95)
+WHOLE_BRAZIL_DATASET = 'raw/whole_brazil1y_1ppd.npy'
+WHOLE_BRAZIL_DISTANCES = 'raw/distances_whole_brazil1y_1ppd.npy'
 
 logger = logging.getLogger()
 
 
-def save_nordeste_small_dataset():
+def save_dataset(argv):
     '''
-    Saves the SP/RJ dataset into a file
+    Saves the dataset into a file
     '''
     dataset_1y_1ppd = SpatioTemporalRegion.load_1year_1ppd_last()
-    nordeste_small_region = dataset_1y_1ppd.region_subset(NORDESTE_SMALL_REGION)
-    nordeste_small_region.save(NORDESTE_SMALL_DATASET)
+    whole_brazilregion = dataset_1y_1ppd.region_subset(WHOLE_BRAZIL_REGION)
+    whole_brazilregion.save(WHOLE_BRAZIL_DATASET)
 
 
-def calculate_distances():
+def calculate_distances(argv):
+    num_proc = int(argv[2])
+
     # load file
-    nordeste_small_dataset = np.load(NORDESTE_SMALL_DATASET)
-    nordeste_small_region = SpatioTemporalRegion(nordeste_small_dataset)
+    whole_brazildataset = np.load(WHOLE_BRAZIL_DATASET)
+    whole_brazilregion = SpatioTemporalRegion(whole_brazildataset)
 
     logger.info('Calculating distances using DTW...')
-    distance_measure = DistanceByDTW()
-    distance_matrix = distance_measure.compute_distance_matrix(nordeste_small_region)
-    np.save(NORDESTE_SMALL_DISTANCES, distance_matrix)
+    distance_measure = DistanceByDTWParallel(num_proc)
+    distance_matrix = distance_measure.compute_distance_matrix(whole_brazilregion)
+    np.save(WHOLE_BRAZIL_DISTANCES, distance_matrix)
 
 
-def silhouette_analysis():
+def silhouette_analysis(argv):
 
     # Load the dataset
-    nordeste_small_dataset = np.load(NORDESTE_SMALL_DATASET)
-    nordeste_small_region = SpatioTemporalRegion(nordeste_small_dataset)
-    _, x_len, y_len = nordeste_small_region.shape
-    print(nordeste_small_region.shape)
-
-    # Use DTW, use pre-computed distance matrix
-    distance_measure = DistanceByDTW()
-    distance_measure.load_distance_matrix_2d(NORDESTE_SMALL_DISTANCES, NORDESTE_SMALL_REGION)
+    whole_brazildataset = np.load(WHOLE_BRAZIL_DATASET)
+    whole_brazilregion = SpatioTemporalRegion(whole_brazildataset)
+    _, x_len, y_len = whole_brazilregion.shape
+    print(whole_brazilregion.shape)
 
     # Run silhouette analysis for range of ks
-    ks = range(2, 8)
-    seeds = range(0, 8)
+    ks = range(2, 11)
+    seeds = range(0, 4)
 
     # initial_medoids = [0, 69, 11, 13]
     initial_medoids = None
 
-    silhouette_result = kmedoids.silhouette_spt(ks, nordeste_small_region, distance_measure,
+    # weight = 0.8
+    weight = None
+    save_graphs = 'plots/whole_brazilweight{}'.format(weight)
+
+    if weight:
+        logger.info('Using weighted DTW w={}'.format(weight))
+        distance_measure = DistanceBySpatialDTW(weight=weight)
+    else:
+        logger.info('Using DTW')
+        distance_measure = DistanceByDTW()
+
+    # use pre-computed distance matrix
+    distance_measure.load_distance_matrix_2d(WHOLE_BRAZIL_DISTANCES, WHOLE_BRAZIL_REGION)
+
+    silhouette_result = kmedoids.silhouette_spt(ks, whole_brazilregion, distance_measure,
                                                 initial_medoids=initial_medoids, seeds=seeds,
-                                                max_iter=1000, tol=0.1, verbose=True,
-                                                show_graphs=True,
-                                                save_graphs='plots/nordeste_small_seed1')
+                                                max_iter=1000, tol=0.001, verbose=True,
+                                                show_graphs=True, save_graphs=save_graphs)
 
     best_k, best_seed, best_medoids, best_labels = silhouette_result
 
@@ -93,7 +105,7 @@ def silhouette_analysis():
 
 
 FUNC_BY_CMD = {
-    'save': save_nordeste_small_dataset,
+    'save': save_dataset,
     'distances': calculate_distances,
     'kmedoids': silhouette_analysis
 }
@@ -113,6 +125,7 @@ if __name__ == '__main__':
     logging.basicConfig(format='%(asctime)s - %(levelname)6s | %(message)s',
                         level=log_level, datefmt='%d-%b-%y %H:%M:%S')
     logging.getLogger('matplotlib.font_manager').disabled = True
+    logging.getLogger('matplotlib.backends.backend_ps').disabled = True
 
     # work according to requested command
-    FUNC_BY_CMD[sys.argv[1]]()
+    FUNC_BY_CMD[sys.argv[1]](sys.argv)
