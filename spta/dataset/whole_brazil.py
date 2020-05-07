@@ -20,8 +20,8 @@ from spta.util import plot as plot_util
 # BRIAN?:       40:80, 45:85
 
 WHOLE_BRAZIL_REGION = Region(20, 100, 15, 95)
-WHOLE_BRAZIL_DATASET = 'raw/whole_brazil1y_1ppd.npy'
-WHOLE_BRAZIL_DISTANCES = 'raw/distances_whole_brazil1y_1ppd.npy'
+WHOLE_BRAZIL_DATASET = 'raw/whole_brazil_1y_1ppd.npy'
+WHOLE_BRAZIL_DISTANCES = 'raw/distances_whole_brazil_1y_1ppd.npy'
 
 logger = logging.getLogger()
 

@@ -24,6 +24,12 @@ data = {
         Region(40, 50, 50, 60),
         'plots/distances_0_0_sp_small.eps',
         'plots/distances_center_sp_small.eps'
+    ],
+    'whole_brazil': [
+        'raw/distances_whole_brazil_1y_1ppd.npy',
+        Region(20, 100, 15, 95),
+        'plots/distances_0_0_whole_brazil.eps',
+        'plots/distances_center_whole_brazil.eps'
     ]
 }
 
@@ -48,14 +54,16 @@ if __name__ == '__main__':
 
     x_len, y_len = (data[src][1].x2 - data[src][1].x1, data[src][1].y2 - data[src][1].y1)
     ds_0 = ds[0].reshape((x_len, y_len))
-    plot_util.plot_discrete_spatial_region(SpatialRegion(ds_0), 'Distances to point at (0,0)')
+    plot_util.plot_discrete_spatial_region(SpatialRegion(ds_0), 'Distances to point at (0,0)',
+                                           labels=False)
     plt.draw
     plt.savefig(data[src][2])
     plt.show()
 
     center = int(x_len * y_len / 2)
     ds_center = ds[center].reshape((x_len, y_len))
-    plot_util.plot_discrete_spatial_region(SpatialRegion(ds_center), 'Distances to center point')
+    plot_util.plot_discrete_spatial_region(SpatialRegion(ds_center), 'Distances to center point',
+                                           labels=False)
     plt.draw
     plt.savefig(data[src][3])
     plt.show()

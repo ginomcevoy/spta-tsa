@@ -40,7 +40,7 @@ def plot_series_group_by_color(series_group, series_len, colors):
     plt.show()
 
 
-def plot_discrete_spatial_region(spatial_region, title='', subplot=None):
+def plot_discrete_spatial_region(spatial_region, title='', labels=True, subplot=None):
     '''
     Plots a discrete spatial region with a scatter plot, where the values are assigned to colors.
     '''
@@ -50,8 +50,33 @@ def plot_discrete_spatial_region(spatial_region, title='', subplot=None):
         fig, subplot = plt.subplots(1, 1)
 
     region_np_array = spatial_region.as_numpy
-    # plt.imshow(region_np_array, cmap='hot', interpolation='nearest')
-    subplot.imshow(region_np_array, interpolation='nearest')
+
+    if labels:
+        # assume that we want to plot labels, which are between 0 and k.
+        # the idea is to match silhouette colors, so we will use cm.nipy_spectral function
+
+        # imshow receives (M, N), (M, N, 3) or (M, N, 4) array
+        # we want to pass (M, N, 4) array, where the values in (4) are obtained using nipy_spectral
+
+        # get the label values between 0 and 1
+        k = np.max(region_np_array) + 1
+        label_np_array = region_np_array * 1.0 / k
+
+        # apply cm.nipy_spectral over each point in the region
+        # this returns a list of arrays
+        label_colors_list = list(map(cm.nipy_spectral, label_np_array))
+
+        # concatenate the lists into a single array, recover region shape and add the 4 RGBA
+        color_shape = (region_np_array.shape[0], region_np_array.shape[1], 4)
+        color_region = np.concatenate(label_colors_list, axis=0).reshape(color_shape)
+
+        # now call imshow with our (x_len, y_len, 4) color data
+        imgplot = subplot.imshow(color_region)
+        imgplot.set_cmap('nipy_spectral')
+
+    else:
+        # this does produce the colored heat map but colors won't match with a silhouette plot
+        subplot.imshow(region_np_array, interpolation='nearest')
 
     if title:
         subplot.set_title(title)
@@ -113,6 +138,7 @@ def plot_clustering_silhouette(distance_matrix, cluster_labels, subplot=None, sh
         y_upper = y_lower + size_cluster_i
 
         color = cm.nipy_spectral(float(i) / k)
+        print('got a color: {}'.format(color))
         subplot.fill_betweenx(np.arange(y_lower, y_upper), 0, ith_cluster_silhouette_values,
                               facecolor=color, edgecolor=color, alpha=0.7)
 
