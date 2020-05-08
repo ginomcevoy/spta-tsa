@@ -7,6 +7,14 @@ Region = namedtuple('Region', 'x1, x2, y1, y2')
 TimeInterval = namedtuple('TimeInterval', 't1 t2')
 
 
+def reshape_1d_to_2d(list_1d, x, y):
+    return np.array(list_1d).reshape(x, y)
+
+
+from .spatial import SpatialRegion
+from .temporal import SpatioTemporalRegion, SpatioTemporalRegionMetadata
+
+
 # def transpose_region(numpy_region_dataset):
 #     '''
 #     Instead of [time_series, x, y], work with [x, y, time_series]
@@ -18,5 +26,7 @@ TimeInterval = namedtuple('TimeInterval', 't1 t2')
 #     return flattened.reshape(x_len, y_len, series_len)
 
 
-def reshape_1d_to_2d(list_1d, x, y):
-    return np.array(list_1d).reshape(x, y)
+__all__ = [
+    'Point', 'Region', 'TimeInterval', 'reshape_1d_to_2d', 'SpatialRegion', 'SpatioTemporalRegion',
+    'SpatioTemporalRegionMetadata'
+]

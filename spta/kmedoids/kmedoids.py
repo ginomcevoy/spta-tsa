@@ -7,17 +7,22 @@ and https://towardsdatascience.com/k-medoids-clustering-on-iris-data-set-1931bf7
 import logging
 import numpy as np
 from copy import deepcopy
-import matplotlib.pyplot as plt
+from collections import namedtuple
+from numpy.random import choice, seed
 
-from numpy.random import choice
-from numpy.random import seed
-
-from spta.region.spatial import SpatialRegion
-from spta.util import plot as plot_util
+from spta.distance.dtw import DistanceByDTW
 
 from . import Medoid, get_medoid_indices
 
 logger = logging.getLogger()
+
+''' The metadata for a K-medoids run '''
+KmedoidsMetadata = namedtuple('KmedoidsMetadata', ('k', 'distance_measure', 'initial_medoids',
+                                                   'random_seed', 'max_iter', 'tol', 'verbose'))
+
+''' A K-mediods result '''
+KmedoidsResult = namedtuple('KmedoidsResult', ('k', 'random_seed', 'medoids', 'labels', 'costs',
+                                               'total_cost', 'medoid_distances'))
 
 
 def choose_initial_medoids(X, k, random_seed, initial_indices=None):
@@ -83,12 +88,12 @@ def _get_cost(X, medoids, distance_measure):
     return members, costs, total_cost, dist_mat
 
 
-def run_kmedoids(X, k, distance_measure, initial_medoids=None, seed=1, max_iter=1000, tol=0.001,
-                 verbose=True):
+def run_kmedoids(X, k, distance_measure, initial_medoids=None, random_seed=1, max_iter=1000,
+                 tol=0.001, verbose=True):
     '''run algorithm return centers, members, and etc.'''
     # Get initial centers
     n_samples, n_features = X.shape
-    medoids = choose_initial_medoids(X, k, seed, initial_medoids)
+    medoids = choose_initial_medoids(X, k, random_seed, initial_medoids)
 
     members, costs, tot_cost, dist_mat = _get_cost(X, medoids, distance_measure)
     cc, SWAPPED = 0, True
@@ -131,82 +136,22 @@ def run_kmedoids(X, k, distance_measure, initial_medoids=None, seed=1, max_iter=
             break
         cc += 1
 
-    return medoids, members, costs, tot_cost, dist_mat
+    # return (medoids, members, costs, tot_cost, dist_mat)
+    return KmedoidsResult(k, random_seed, medoids, members, costs, tot_cost, dist_mat)
 
 
-def silhouette_spt(ks, spt_region, distance_measure, initial_medoids=None, seeds=(1,),
-                   max_iter=1000, tol=0.001, verbose=True, show_graphs=True,
-                   save_graphs='plots/silhouette'):
+def kmedoids_default_metadata(k, distance_measure=DistanceByDTW(), initial_medoids=None,
+                              random_seed=1, max_iter=1000, tol=0.001, verbose=True):
     '''
-    Given a spatio-temporal region, creates silhouette graphs and calculates the silhouette
-    average for each provided k, using k-medoids algorithm and provided distance function.
-    It requires the distance_measure to have a distance matrix available, so this function will
-    compute it if not provided.
+    Metadata for K-medoids with default values. Still needs a value for k.
     '''
+    return KmedoidsMetadata(k=k, distance_measure=distance_measure,
+                            initial_medoids=initial_medoids, random_seed=random_seed,
+                            max_iter=max_iter, tol=tol, verbose=verbose)
 
-    best_silhouette_avg = -1
-    best_k = 0
-    best_seed = None
-    best_medoids = None
-    best_labels = None
 
-    # k-medoids expectes a matrix (n_samples x n_features)
-    # this converts spatio-temporal region in a list of temporal series
-    series_group = spt_region.as_2d
-
-    # we also need the shape for graphs
-    (_, x_len, y_len) = spt_region.shape
-
-    # need a distance matrix for silhouette analysis
-    if distance_measure.distance_matrix is None:
-        distance_matrix = distance_measure.compute_distance_matrix(spt_region)
-    distance_matrix = distance_measure.distance_matrix
-
-    for a_seed in seeds:
-        logger.info('Using seed: {}'.format(str(a_seed)))
-
-        for k in ks:
-
-            k_initial_medoids = None
-            if initial_medoids:
-                k_initial_medoids = initial_medoids[0:k]
-
-            # apply k-medoids on the data using distance function
-            kmedoids_result = run_kmedoids(series_group, k, distance_measure,
-                                           initial_medoids=k_initial_medoids, seed=a_seed,
-                                           max_iter=max_iter, tol=tol, verbose=verbose)
-            (medoids, labels, costs, _, _) = kmedoids_result
-            logger.debug(labels)
-            logger.debug(costs)
-
-            # Create a subplot with 1 row and 2 columns
-            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 7))
-            plt.suptitle(("Silhouette analysis for KMeans clustering on sample data "
-                          "with k={}, seed={}".format(k, a_seed)), fontsize=14, fontweight='bold')
-
-            # plot the labels in 2d
-            if show_graphs:
-                label_region = SpatialRegion.create_from_1d(labels, x_len, y_len)
-                plot_util.plot_discrete_spatial_region(label_region, 'Output mask', subplot=ax1)
-
-            # build the silhouette graph, requires all distances
-            silhouette_avg = plot_util.plot_clustering_silhouette(distance_matrix, labels,
-                                                                  subplot=ax2)
-
-            if show_graphs:
-                plt.show()
-
-            if save_graphs is not None:
-                # save the figure for this k
-                filename_k = '{}_k{}_seed{}.eps'.format(save_graphs, str(k), str(a_seed))
-                fig.savefig(filename_k)
-
-            # save best results
-            if silhouette_avg > best_silhouette_avg:
-                best_silhouette_avg = silhouette_avg
-                best_k = k
-                best_seed = a_seed
-                best_medoids = medoids
-                best_labels = labels
-
-    return best_k, best_seed, best_medoids, best_labels
+def run_kmedoids_from_metadata(X, kmediods_metadata):
+    return run_kmedoids(X, kmediods_metadata.k, kmediods_metadata.distance_measure,
+                        kmediods_metadata.initial_medoids, kmediods_metadata.random_seed,
+                        kmediods_metadata.max_iter, kmediods_metadata.tol,
+                        kmediods_metadata.verbose)

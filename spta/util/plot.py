@@ -40,7 +40,7 @@ def plot_series_group_by_color(series_group, series_len, colors):
     plt.show()
 
 
-def plot_discrete_spatial_region(spatial_region, title='', labels=True, subplot=None):
+def plot_discrete_spatial_region(spatial_region, title='', clusters=True, subplot=None):
     '''
     Plots a discrete spatial region with a scatter plot, where the values are assigned to colors.
     '''
@@ -51,8 +51,8 @@ def plot_discrete_spatial_region(spatial_region, title='', labels=True, subplot=
 
     region_np_array = spatial_region.as_numpy
 
-    if labels:
-        # assume that we want to plot labels, which are between 0 and k.
+    if clusters:
+        # assume that we want to plot cluster labels, which are between 0 and k.
         # the idea is to match silhouette colors, so we will use cm.nipy_spectral function
 
         # imshow receives (M, N), (M, N, 3) or (M, N, 4) array
@@ -87,6 +87,19 @@ def plot_discrete_spatial_region(spatial_region, title='', labels=True, subplot=
     return fig
 
 
+def plot_2d_clusters(cluster_labels, shape_2d, title='', subplot=None):
+    '''
+    Convenience function for plotting cluster labels in a 2d region, effectively displaying the
+    partitioning of a region.
+    '''
+    x_len, y_len = shape_2d
+
+    # import here to avoid any circular imports
+    from spta.region import SpatialRegion
+    label_region = SpatialRegion.create_from_1d(cluster_labels, x_len, y_len)
+    return plot_discrete_spatial_region(label_region, title, True, subplot)
+
+
 def plot_clustering_silhouette(distance_matrix, cluster_labels, subplot=None, show_graphs=True):
     '''
     Plot a silhouette to graphically display a measure of the efficiency of a clustering
@@ -94,6 +107,8 @@ def plot_clustering_silhouette(distance_matrix, cluster_labels, subplot=None, sh
 
     Based on:
     https://scikit-learn.org/stable/auto_examples/cluster/plot_kmeans_silhouette_analysis.html
+
+    # TODO move some of this to kmedoids.silhouette?
     '''
     logger = logging.getLogger()
     logger.debug('Shape of distance_matrix: {}'.format(str(distance_matrix.shape)))
@@ -138,7 +153,6 @@ def plot_clustering_silhouette(distance_matrix, cluster_labels, subplot=None, sh
         y_upper = y_lower + size_cluster_i
 
         color = cm.nipy_spectral(float(i) / k)
-        print('got a color: {}'.format(color))
         subplot.fill_betweenx(np.arange(y_lower, y_upper), 0, ith_cluster_silhouette_values,
                               facecolor=color, edgecolor=color, alpha=0.7)
 
@@ -148,7 +162,7 @@ def plot_clustering_silhouette(distance_matrix, cluster_labels, subplot=None, sh
         # Compute the new y_lower for next plot
         y_lower = y_upper + 10  # 10 for the 0 samples
 
-    subplot.set_title("The silhouette plot for the various clusters.")
+    subplot.set_title('Silhouette plot, score={:1.3f}'.format(silhouette_avg))
     subplot.set_xlabel("The silhouette coefficient values")
     subplot.set_ylabel("Cluster label")
 
