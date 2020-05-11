@@ -1,9 +1,11 @@
+from spta.distance.dtw import DistanceByDTW
+
 from spta.util import arrays as arrays_util
+from spta.util import log as log_util
 
 from .spatial import SpatialRegion
 
 from . import Point, reshape_1d_to_2d
-from . import distance
 
 
 class ErrorRegion(SpatialRegion):
@@ -29,13 +31,16 @@ class ErrorRegion(SpatialRegion):
 
     @classmethod
     def create_from_forecasts(cls, forecast_region, test_region,
-                              distance_error=distance.DistanceByDTW()):
+                              distance_error=DistanceByDTW()):
 
         (series1_len, x1_len, y1_len) = forecast_region.shape
         (series2_len, x2_len, y2_len) = test_region.shape
 
+        logger = log_util.logger_for_me(cls.create_from_forecasts)
+        logger.debug('Forecast: <{}> Test: <{}>'.format(forecast_region.shape, test_region.shape))
+
         # we need them to be about the same region and same series length
-        assert((x1_len, y1_len, series1_len) == (x2_len, y2_len, series2_len))
+        assert((series1_len, x1_len, y1_len) == (series2_len, x2_len, y2_len))
 
         # work with lists, each element is a time series
         forecast_as_list = forecast_region.as_list

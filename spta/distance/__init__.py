@@ -60,4 +60,16 @@ class DistanceBetweenSeries:
 
         # all good
         self.distance_matrix = distance_matrix
+
+        log_msg = 'Loaded distance matrix for region {} using: {}'
+        self.logger.debug(log_msg.format(str(expected_region), filename))
         return self.distance_matrix
+
+    def load_distance_matrix_md(self, sptr_metadata):
+        '''
+        Given metadata for a spatio-temporal region, loads its DTW pre-computed distance matrix.
+
+        TODO: the sptr_metadata.distances_filename should indicate that it was computed with DTW!
+        '''
+        return self.load_distance_matrix_2d(sptr_metadata.distances_filename,
+                                            sptr_metadata.region)

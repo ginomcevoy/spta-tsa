@@ -5,19 +5,18 @@ import time
 
 # from sklearn.metrics import mean_squared_error
 from statsmodels.tsa.arima_model import ARIMA
-from collections import namedtuple
 
 from matplotlib import pyplot as plt
 
 from spta.region import error, spatial, temporal
 from spta.region import Point, TimeInterval
+from spta.util import log as log_util
+
+from . import ArimaParams
 
 # TRAINING_FRACTION = 0.7
 # TEST_SAMPLES = 28
-TEST_SAMPLES = 7
-
-
-ArimaParams = namedtuple('ArimaParams', 'p d q')
+TEST_SAMPLES = 8
 
 
 def apply_arima(time_series, arima_params, point):
@@ -53,18 +52,17 @@ class ArimaSpatialRegion(spatial.SpatialRegion):
         ]
 
 
-class ArimaForEachPoint:
+class ArimaForEachPoint(log_util.LoggerMixin):
 
     def __init__(self, training_region, arima_models_1d):
         self.training_region = training_region
 
         # we store as 1d because we need to operate on it
         self.arima_models_1d = arima_models_1d
-        self.log = logging.getLogger()
 
         # count missing models
         missing_count = sum([model is None for model in arima_models_1d])
-        self.log.warn('Missing ARIMA models: %s' % str(missing_count))
+        self.logger.warn('Missing ARIMA models: %s' % str(missing_count))
 
     def create_spatial_region(self):
         # rebuild the region using the known shape
@@ -72,28 +70,41 @@ class ArimaForEachPoint:
         arima_2d = np.array(self.arima_models_1d).reshape(x_len, y_len)
         return ArimaSpatialRegion(arima_2d)
 
-    def create_forecast_region(self, series_len=TEST_SAMPLES):
+    def create_forecast_region(self, forecast_len=TEST_SAMPLES):
         '''
         Creates a forecast over a region using the corresponding ARIMA model for each point.
         Returns a SpatioTemporalRegion, where each time series is a different forecast with length
-        series_len.
+        forecast_len.
         '''
         # forecast for each point, missing models get NaN forecast
-        # self.log.debug(self.arima_models_1d)
-        forecast_1d = [
-            arima_model.forecast(series_len)[0]
+        # this is a list of (x_len * y_len) arrays, each array has size TEST_SAMPLES
+        forecast_arrays = [
+            arima_model.forecast(forecast_len)[0]
             if arima_model is not None
             else np.repeat(np.nan, repeats=TEST_SAMPLES)
             for arima_model
             in self.arima_models_1d
         ]
-        # print(forecast_1d)
+        self.logger.debug('First forecast: {}'.format(forecast_arrays[0]))
+        self.logger.debug('Second forecast: {}'.format(forecast_arrays[1]))
 
-        # rebuild the original region shape, create a spatio temporal object
-        # TODO THIS IS WRONG
+        # recover the original region shape
         (_, x_len, y_len) = self.training_region.shape
-        forecast_region_numpy = np.array(forecast_1d).reshape(x_len, y_len, series_len)
-        return temporal.SpatioTemporalRegion(forecast_region_numpy)
+
+        # concatenate the list of arrays into a single array,
+        # this however will return the wrong order of dimensions
+        forecast_wrong_order = np.concatenate(forecast_arrays, axis=0)
+        forecast_wrong_shape = (x_len, y_len, forecast_len)
+        forecast_region_wrong_order = forecast_wrong_order.reshape(forecast_wrong_shape)
+
+        # to get our forecast right, rearrange the axes
+        # shape will now be (forecast_len, x_len, y_len)
+        forecast_region_np = np.moveaxis(forecast_region_wrong_order, 2, 0)
+
+        self.logger.debug('Forecast for first point: {}'.format(forecast_region_np[:, 0, 0]))
+        self.logger.debug('Forecast for second point: {}'.format(forecast_region_np[:, 0, 1]))
+
+        return temporal.SpatioTemporalRegion(forecast_region_np)
 
     @classmethod
     def train(cls, training_region, arima_params, arima_func=apply_arima):
@@ -137,6 +148,10 @@ def split_region_in_train_test(spatio_temp_region, test_len=TEST_SAMPLES):
     training_subset = spatio_temp_region.interval_subset(training_interval)
     test_subset = spatio_temp_region.interval_subset(test_interval)
 
+    logger = log_util.logger_for_me(split_region_in_train_test)
+    logger.debug('training_subset: {}'.format(training_subset.shape))
+    logger.debug('test_subset: {}'.format(test_subset.shape))
+
     return (training_subset, test_subset)
 
 
@@ -146,8 +161,8 @@ def plot_one_arima(training_region, forecast_region, test_region, arima_region):
     forecast_point = forecast_region.series_at(point)
     test_point = test_region.series_at(point)
 
-    (_, _, training_len) = training_region.shape
-    (_, _, test_len) = test_region.shape
+    (training_len, _, _) = training_region.shape
+    (test_len, _, _) = test_region.shape
     test_index = np.arange(training_len, training_len + test_len)
 
     train_series = pd.Series(train_point)
@@ -208,14 +223,21 @@ def evaluate_forecast_errors_arima(spatio_temp_region, arima_params, centroid=No
     '''
     Compare the following forecast errors:
 
-    1. Build one ARIMA model for each point, then choose the model with the smallest prediction
-        error among the points of the region. Then use that model to forecast the entire region,
-        and obtain the combined error.
+    1. Build one ARIMA model for each point, forecast TEST_SAMPLES days and compute the error
+       of each forecast. This will create an error region (error_region_each).
+       Combine the errors using distance_measure.combine to obtain a single metric for the
+       prediction error. (error_region_each.combined_error)
 
-    2. Find the centroid of the region, then use the ARIMA model of *that* point to forecast the
-        entire region, and obtain the combined error.
-        If centroid is provided, skip its calculation (it does not depend on ARIMA, only on the
-        dataset)
+    2. Choose the model with the smallest local prediction error among the points of the region
+       (min_local_arima). Then use that model to forecast the entire region, and obtain the
+       combined error. (error_region_min_local.combined_error)
+
+    3. Find the centroid of the region, then use the ARIMA model of *that* point to forecast the
+        entire region (errro_region_centroid), and obtain the combined error
+        (errro_region_centroid.combined_error).
+
+    If centroid is provided, skip its calculation (it does not depend on ARIMA, only on the
+    dataset)
     '''
     log = logging.getLogger()
     log.info('Using (p, d, q) = %s' % (arima_params,))
@@ -237,13 +259,14 @@ def evaluate_forecast_errors_arima(spatio_temp_region, arima_params, centroid=No
     log.info('Point with best ARIMA: %s' % str(point_min_error))
 
     # use the ARIMA with min error to forecast the entire region
-    min_error_arima = arima_region.value_at(point_min_error)
-    forecast_using_best = create_forecast_region_one_model(min_error_arima, spatio_temp_region)
+    min_local_arima = arima_region.value_at(point_min_error)
+    forecast_using_best = create_forecast_region_one_model(min_local_arima, spatio_temp_region)
     # log.debug('forecast_using_best')
     # log.debug(forecast_using_best)
 
-    error_region_best = error.ErrorRegion.create_from_forecasts(forecast_using_best, test_region)
-    log.info('Error from best ARIMA: %s' % error_region_best.combined_error)
+    error_region_min_local = error.ErrorRegion.create_from_forecasts(forecast_using_best,
+                                                                     test_region)
+    log.info('Error from best ARIMA: %s' % error_region_min_local.combined_error)
 
     # find the centroid point of the region, use its ARIMA for forecasting
     if centroid:
@@ -259,7 +282,13 @@ def evaluate_forecast_errors_arima(spatio_temp_region, arima_params, centroid=No
                                                                     test_region)
     log.info('Error from centroid ARIMA: %s' % error_region_centroid.combined_error)
 
-    return (centroid, centroid_arima, training_region, test_region)
+    log.debug('training_region: {}'.format(training_region.shape))
+    log.debug('forecast_region: {}'.format(forecast_region_each.shape))
+    log.debug('test_region: {}'.format(test_region.shape))
+    log.debug('arima_region: {}'.format(arima_region.shape))
+
+    return (centroid, centroid_arima, training_region, forecast_region_each, test_region,
+            arima_region)
 
 
 if __name__ == '__main__':

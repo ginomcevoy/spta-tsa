@@ -31,7 +31,7 @@ class SpatioTemporalRegionMetadata(object):
             path where to load/store numpy files
     '''
 
-    def __init__(self, name, region, series_len, ppd, last=True, dataset_dir='raw'):
+    def __init__(self, name, region, series_len, ppd, last=True, centroid=None, dataset_dir='raw'):
         self.name = name
         self.region = region
         self.series_len = series_len
@@ -81,6 +81,22 @@ class SpatioTemporalRegionMetadata(object):
 
 class SpatioTemporalRegion(SpatialRegion):
 
+    def __next__(self):
+        '''
+        Used for iterating over points.
+        The iterator returns the tuple (Point, series) for each point.
+        '''
+        # the index will iterate from Point(0, 0) to Point(x_len - 1, y_len - 1)
+        if self.point_index >= self.y_len * self.x_len:
+            # stop iteration, but allow reuse of iterator from start again
+            self.point_index = 0
+            raise StopIteration
+
+        # iterate
+        point_i_j = Point(int(self.point_index / self.y_len), self.point_index % self.y_len)
+        self.point_index += 1
+        return (point_i_j, self.series_at(point_i_j))
+
     def series_at(self, point):
         return self.numpy_dataset[:, point.x, point.y]
 
@@ -119,6 +135,7 @@ class SpatioTemporalRegion(SpatialRegion):
 
     @property
     def centroid(self):
+        # TODO bad idea, need to pass distance_measure!
         from . import centroid
         centroid_calc = centroid.CalculateCentroid()
         return centroid_calc.find_point_with_least_distance(self)
@@ -207,8 +224,14 @@ class SpatioTemporalRegion(SpatialRegion):
         if sptr_metadata.ppd == 1:
             numpy_dataset = average_4ppd_to_1ppd(numpy_dataset, logger)
 
-        logger.info('Loaded dataset: {}'.format(sptr_metadata))
-        return SpatioTemporalRegion(numpy_dataset).region_subset(sptr_metadata.region)
+        # subset the data to work only with region
+        spt_region = SpatioTemporalRegion(numpy_dataset).region_subset(sptr_metadata.region)
+
+        # save the metadata in the instance, can be useful later
+        spt_region.metadata = sptr_metadata
+
+        logger.info('Loaded dataset {}: {}'.format(sptr_metadata, sptr_metadata.region))
+        return spt_region
 
     @classmethod
     def copy_series_over_region(cls, series, region_3d):
@@ -241,6 +264,8 @@ def average_4ppd_to_1ppd(sptr_numpy, logger=None):
         log_msg = 'reshaped 4ppd {} to 1ppd {}'
         logger.info(log_msg.format(sptr_numpy.shape, single_point_per_day.shape))
 
+    return single_point_per_day
+
 
 if __name__ == '__main__':
     import time
@@ -258,9 +283,6 @@ if __name__ == '__main__':
     # print('small: ', small.shape)
 
     # print('centroid %s' % str(small.centroid))
-
-    # use metadata... beware of circular imports
-    from spta.metadata import SpatioTemporalRegionMetadata
     sp_small_md = SpatioTemporalRegionMetadata('sp_small', Region(40, 50, 50, 60), 1460, 4,
                                                last=False)
     sp_small = SpatioTemporalRegion.from_metadata(sp_small_md)

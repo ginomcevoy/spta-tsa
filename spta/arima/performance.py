@@ -6,7 +6,7 @@ from spta.region import Point
 from spta.region.temporal import SpatioTemporalRegion
 from spta.region.error import ErrorRegion
 
-from . import arima
+from . import arima, ArimaParams
 
 TEST_SAMPLES = 7
 CENTROID = Point(5, 15)
@@ -60,7 +60,7 @@ def evaluate_arima_performance_parameters(p_values, d_values, q_values, training
     for p in p_values:
         for d in d_values:
             for q in q_values:
-                arima_params = arima.ArimaParams(p, d, q)
+                arima_params = ArimaParams(p, d, q)
                 results[index] = evaluate_arima_performance(arima_params, training_region,
                                                             test_region, forecast_len, centroid)
                 index = index + 1
