@@ -4,6 +4,8 @@ import unittest
 from spta.region import Point, SpatialRegion, SpatioTemporalRegion
 from spta.region.function import FunctionRegionScalar, FunctionRegionSeries
 
+from spta.tests.stub import stub_region
+
 
 class TestFunctionRegionScalar(unittest.TestCase):
     '''
@@ -53,13 +55,14 @@ class TestFunctionRegionScalar(unittest.TestCase):
 
         spt_region = SpatioTemporalRegion(sptr_data)
 
-        # create the function region that calculates the mean of each series
-        mean_function_list = [
-            np.mean
-            for i in range(0, 6)
-        ]
-        mean_function_np = np.array(mean_function_list).reshape((2, 3))
-        mean_function_region = FunctionRegionScalar(mean_function_np)
+        # # create the function region that calculates the mean of each series
+        # mean_function_list = [
+        #     np.mean
+        #     for i in range(0, 6)
+        # ]
+        # mean_function_np = np.array(mean_function_list).reshape((2, 3))
+        # mean_function_region = FunctionRegionScalar(mean_function_np)
+        mean_function_region = stub_region.stub_mean_function_scalar()
 
         # apply the function
         output_region = mean_function_region.apply_to(spt_region)

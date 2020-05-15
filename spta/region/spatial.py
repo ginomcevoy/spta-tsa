@@ -13,13 +13,15 @@ from . import Point, Region, reshape_1d_to_2d
 class SpatialRegion(log_util.LoggerMixin):
 
     def __init__(self, numpy_dataset, region_metadata=None):
+        super(SpatialRegion, self).__init__()
+
         self.numpy_dataset = numpy_dataset
         self.metadata = region_metadata
 
         # used for iterating over points
         self.point_index = 0
 
-        # to make iterations faster
+        # convenience
         self.shape = numpy_dataset.shape
         self.ndim = numpy_dataset.ndim
 
@@ -166,6 +168,109 @@ class SpatialRegion(log_util.LoggerMixin):
 
     def __str__(self):
         return str(self.numpy_dataset)
+
+
+class SpatialCluster(SpatialRegion):
+    '''
+    A subset of a spatial region that represents a cluster created by a clustering
+    algorithm, or obtained by interacting with a spatio-temporal cluster.
+
+    See temporal.SpatioTemporalCluster for more information.
+    '''
+    def __init__(self, numpy_dataset, spatial_mask, label=1, region_metadata=None):
+
+        if region_metadata is not None:
+            error_msg = 'region_metadata not supported for {}!'
+            raise NotImplementedError(error_msg.format(self.__class__.__name__))
+
+        super(SpatialCluster, self).__init__(numpy_dataset, region_metadata)
+
+        # cluster-specific
+        self.spatial_mask = spatial_mask
+        self.label = label
+
+    def region_subset(self, region):
+        error_msg = 'region_subset not allowed for {}!'
+        raise NotImplementedError(error_msg.format(self.__class__.__name__))
+
+    def value_at(self, point):
+        if self.spatial_mask.value_at(point):
+            return self.numpy_dataset[point.x, point.y]
+        else:
+            raise ValueError('Point not in cluster mask: {}'.format(point))
+
+    def __next__(self):
+        '''
+        Used for iterating over points in the cluster. Only points in the mask are iterated!
+        The iterator returns the tuple (Point, value) for each point.
+        '''
+        # the index will iterate from Point(0, 0) to Point(x_len - 1, y_len - 1)
+        if self.point_index >= self.y_len * self.x_len:
+            # stop iteration, but allow reuse of iterator from start again
+            self.point_index = 0
+            raise StopIteration
+
+        # find the next point in the mask to iterate
+        while True:
+
+            # candidate point
+            i = int(self.point_index / self.y_len)
+            j = self.point_index % self.y_len
+            point_i_j = Point(i, j)
+
+            # next candidate point
+            self.point_index += 1
+
+            if self.spatial_mask.value_at(point_i_j):
+                # found next point in the mask
+                break
+
+        # return the next point in the mask and its value
+        return (point_i_j, self.value_at(point_i_j))
+
+    def apply_function_scalar(self, function_region_scalar):
+        '''
+        Applies an instance of FunctionRegionScalar on this region, to get a SpatialCluster
+        as a result.
+
+        Behaves similar to the SpatialRegion implementation, with these differences:
+          - only points in the mask are iterated (iterator is overridden)
+          - a new SpatialCluster is created, instead of a new SpatialRegion.
+
+        Should be reusable in SpatioTemporalCluster (still returns a SpatialCluster), even though
+        the value passed to the function is expected to be an array.
+
+        Cannot be used inside the class iterator!
+        '''
+
+        # call the parent code (SpatialRegion)
+        # since the iterator is overridden, this should only iterate over points in the mask
+        spatial_region = super(SpatialCluster, self).apply_function_scalar(function_region_scalar)
+
+        # return a SpatialCluster instead!
+        # Notice that the calling function is not aware of the change
+        return SpatialCluster(spatial_region.numpy_dataset, self.spatial_mask, self.label)
+
+    def apply_function_series(self, function_region_series):
+        '''
+        Applies an instance of FunctionRegionSeries on this region, to get a
+        SpatioTemporalCluster as a result.
+
+        Behaves similar to the SpatialRegion implementation, with these differences:
+          - only points in the mask are iterated (iterator is overridden)
+          - a new SpatioTemporalCluster is created, instead of a new SpatioTemporalRegion.
+
+        Cannot be used inside the class iterator!
+        '''
+
+        # call the parent code (SpatialRegion)
+        # since the iterator is overridden, this should only iterate over points in the mask
+        spt_region = super(SpatialCluster, self).apply_function_series(function_region_series)
+
+        # return a SpatioTemporalCluster instead!
+        # Notice that the calling function is not aware of the change
+        from .temporal import SpatioTemporalCluster
+        return SpatioTemporalCluster(spt_region.numpy_dataset, self.spatial_mask, self.label)
 
 
 if __name__ == '__main__':

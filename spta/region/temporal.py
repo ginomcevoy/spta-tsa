@@ -4,7 +4,7 @@ import numpy as np
 from spta.dataset import temp_brazil
 from spta.util import arrays as arrays_util
 
-from .spatial import SpatialRegion
+from .spatial import SpatialRegion, SpatialCluster
 from . import Point, Region, TimeInterval
 
 # SMALL_REGION = Region(55, 58, 50, 54)
@@ -81,6 +81,9 @@ class SpatioTemporalRegionMetadata(object):
 
 class SpatioTemporalRegion(SpatialRegion):
 
+    def __init__(self, numpy_dataset, region_metadata=None):
+        super(SpatioTemporalRegion, self).__init__(numpy_dataset, region_metadata)
+
     def __next__(self):
         '''
         Used for iterating over points.
@@ -156,9 +159,10 @@ class SpatioTemporalRegion(SpatialRegion):
         Returns a list of arrays, where the size of the list is the number of points in the region
         (Region.x * Region.y). Each array is a temporal series.
 
-        Useful when required to iterate each temporal series.
+        Uses the class iterator! Cannot be used inside another class iterator
         '''
-        return arrays_util.spatio_temporal_to_list_of_time_series(self.numpy_dataset)
+        # return arrays_util.spatio_temporal_to_list_of_time_series(self.numpy_dataset)
+        return [series for (point, series) in self]
 
     @property
     def as_2d(self):
@@ -214,11 +218,179 @@ class SpatioTemporalRegion(SpatialRegion):
         '''
         Given a series with length series_len and a 2D shape (x_len, y_len), create a
         SpatioTemporalRegion with shape (series_len, x_len, y_len), where each point contains
-        the same provided series.s
+        the same provided series.
         '''
         (x_len, y_len) = shape2D
         numpy_dataset = arrays_util.copy_array_as_matrix_elements(series, x_len, y_len)
         return SpatioTemporalRegion(numpy_dataset)
+
+
+class SpatioTemporalCluster(SpatialCluster, SpatioTemporalRegion):
+    '''
+    A subset of a spatio-temporal region that represents a cluster, created by a clustering
+    algorithm. A spatio-temporal region may be split into two or more clusters, so that each
+    is represented by a label (number) and a mask (spatial region).
+
+    The cluster behaves like a full spatio-temporal region when it comes to iteration and
+    and some properties. Specifically:
+
+    - Each cluster retains the shape of the entire region.
+    - The iteration of points is made only over the points indicated by the mask (points
+        belonging to the cluster).
+    - A FunctionRegion can be applied to the cluster, only points in the mask will be considered
+        (it uses the iteration above).
+    - It can be split along time intervals the same way.
+    - The functions as_list and as_2d wiill iterate over the cluster points (since they
+        are using the iterator which is overiddenw)
+    - Region subsets are not allowed (TODO?), calling region_subset raises NotImplementedError
+    - Attempt to use series_at at a point outside of the mask will raise ValueError.
+    '''
+
+    def __init__(self, numpy_dataset, spatial_mask, label=1, region_metadata=None):
+        '''
+        Creates a new instance.
+
+        numpy_dataset
+            numpy array (series_len, x_len, y_len)
+
+        spatial_mask
+            a SpatialRegion with values either 1 or 0. A value of 1 in (i, j) indicates that the
+            point P(i, j) belongs to this cluster, 0 otherwise
+
+        label
+            optional, indicates the i-th member of the output of a clustering algorithm.
+
+        region_metadata
+            must be None, different value is not allowed and will raise error (TODO?).
+        '''
+        # beware the diamond problem!!
+        # this should be solved in parents...
+
+        # call parent constructor explicity
+        # SpatialCluster.__init__(numpy_dataset, spatial_mask, label, region_metadata)
+
+        super(SpatioTemporalCluster, self).__init__(numpy_dataset, spatial_mask, label,
+                                                    region_metadata)
+
+    def interval_subset(self, ti):
+        '''
+        ti: TimeInterval
+        Will create a new spatio-temporal cluster, maintaining current mask and label
+        '''
+        self.logger.debug('SpatioTemporalCluster interval_subset')
+        numpy_region_subset = self.numpy_dataset[ti.t1:ti.t2, :, :]
+        return SpatioTemporalCluster(numpy_region_subset, self.spatial_mask, self.label)
+
+    def series_at(self, point):
+        '''
+        Returns the time series at specified point, the point must belong to cluster mask
+        '''
+        self.logger.debug('SpatioTemporalCluster series_at')
+        if self.spatial_mask.value_at(point):
+            return self.numpy_dataset[:, point.x, point.y]
+        else:
+            raise ValueError('Point not in cluster mask: {}'.format(point))
+
+    def repeat_point(self, point):
+        '''
+        Creates a new spatio-temporal cluster with this same shape, where all the series are the
+        same series as in the provided point.
+
+        The series is repeated over all points for simplicity, but calling series_at on points
+        outside the mask should remain forbidden.
+        '''
+        self.logger.debug('SpatioTemporalCluster repeat_point')
+        series_at_point = self.series_at(point)
+        repeated_series_np = arrays_util.copy_array_as_matrix_elements(series_at_point, self.x_len,
+                                                                       self.y_len)
+        return SpatioTemporalCluster(repeated_series_np. self.spatial_mask, self.label)
+
+    def __next__(self):
+        '''
+        Used for iterating over points in the cluster. Only points in the mask are iterated!
+        The iterator returns the tuple (Point, value) for each point.
+        '''
+
+        # find the next point in the mask to iterate
+        while True:
+
+            # the index will iterate from Point(0, 0) to Point(x_len - 1, y_len - 1)
+            if self.point_index >= self.y_len * self.x_len:
+                # stop iteration, but allow reuse of iterator from start again
+                self.point_index = 0
+                raise StopIteration
+
+            # candidate point, first is (0, 0)
+            i = int(self.point_index / self.y_len)
+            j = self.point_index % self.y_len
+            point_i_j = Point(i, j)
+
+            # next point to evaluate after this
+            self.point_index += 1
+
+            if self.spatial_mask.value_at(point_i_j):
+                # found point in the mask
+                break
+
+        # return next point in the mask
+        return (point_i_j, self.series_at(point_i_j))
+
+    @classmethod
+    def from_clustering(cls, spt_region, members, label, centroids=None):
+        '''
+        Given a clustering result and a label, create a new instance of spatio-temporal cluster.
+        A clustering algorithm with parameter k should create k clusters, with labels ranging
+        from 0 to k-1.
+
+        The members and label are used to select one of the clusters and to create the
+        spatial_mask used as input of a the cluster instance.
+
+        spt_region
+            the spatio-temporal region that was clustered
+
+        members
+            a 1-d array (not region!) of labels indicating the membership of a point to a cluster,
+            given the index position of the point.
+
+        label
+            a value i from [0, k-1] that refers to the i-th cluster of a clustering result.
+
+        centroids (optional)
+            a 1-d array of indices (not points!) indicating the centroids of each cluster.
+            If present, the i-th centroid will be saved as a centroid of the new instance.
+        '''
+        (_, x_len, y_len) = spt_region.shape
+
+        # sanity checks
+        assert members.ndim == 1
+        assert members.shape[0] == x_len * y_len
+
+        assert isinstance(label, int)
+        assert label >= 0 and label <= np.max(members)
+
+        # build spatial_mask from members and label
+        # one way to do this is to select the elements in members that have the label,
+        # then reshape the array to 2D using the spt_region shape.
+
+        # ones full of 1, zeros full of 0, then select according to members
+        ones = np.repeat(1, x_len * y_len)
+        zeros = np.zeros(x_len * y_len, dtype=np.int8)
+        mask = np.where(members == label, ones, zeros)
+
+        # 2D SpatialRegion mask
+        spatial_mask_np = mask.reshape((x_len, y_len))
+        spatial_mask = SpatialRegion(spatial_mask_np)
+
+        cluster = SpatioTemporalCluster(spt_region.as_numpy, spatial_mask, label, None)
+
+        # centroid available?
+        if centroids is not None:
+            centroid_index = centroids[label]
+            i = int(centroid_index / y_len)
+            j = centroid_index % y_len
+            cluster.centroid = Point(i, j)
+
+        return cluster
 
 
 def average_4ppd_to_1ppd(sptr_numpy, logger=None):

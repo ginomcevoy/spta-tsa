@@ -6,6 +6,8 @@ class LoggerMixin(object):
     Mixin for adding logging capabilities to a class.
     Only works on instance methods.
     '''
+    def __init__(self):
+        super(LoggerMixin, self).__init__()
 
     @property
     def logger(self):

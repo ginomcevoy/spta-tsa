@@ -40,6 +40,8 @@ class ErrorRegion(SpatialRegion):
     '''
     A spatial region where each value represents the forecast error of a model.
     It is created by measuring the distance between a forecast region and a test region.
+
+    TODO reimplement this using FunctionRegionScalar!
     '''
 
     def __init__(self, numpy_dataset, distance_error):
