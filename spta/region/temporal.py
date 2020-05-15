@@ -4,7 +4,7 @@ import numpy as np
 from spta.dataset import temp_brazil
 from spta.util import arrays as arrays_util
 
-from .spatial import SpatialRegion, SpatialRegionDecorator, SpatialCluster
+from .spatial import SpatialRegion, SpatialDecorator, SpatialCluster
 from . import Point, Region, TimeInterval
 
 # SMALL_REGION = Region(55, 58, 50, 54)
@@ -26,7 +26,7 @@ class SpatioTemporalRegionMetadata(object):
         ppd
             the points per day
         last
-            if True, use the last years, else use the first years (TODO add this to the names)
+            if True, use the last years, else use the first years
         dataset_dir
             path where to load/store numpy files
     '''
@@ -232,7 +232,7 @@ class SpatioTemporalRegion(SpatialRegion):
         return SpatioTemporalRegion(numpy_dataset)
 
 
-class SpatioTemporalDecorator(SpatialRegionDecorator, SpatioTemporalRegion):
+class SpatioTemporalDecorator(SpatialDecorator, SpatioTemporalRegion):
     '''
     A decorator to extend the functionality of a spatio-temporal region.
     Reuses decorator properties from SpatialRegionDecorator.
@@ -262,9 +262,6 @@ class SpatioTemporalDecorator(SpatialRegionDecorator, SpatioTemporalRegion):
 
     def get_centroid(self, distance_measure=None):
         return self.decorated_region.get_centroid(distance_measure)
-
-    def __next__(self):
-        return self.decorated_region.__next__()
 
 
 class SpatioTemporalCluster(SpatialCluster, SpatioTemporalDecorator):
@@ -320,8 +317,8 @@ class SpatioTemporalCluster(SpatialCluster, SpatioTemporalDecorator):
         Will create a new spatio-temporal cluster, maintaining current mask and label
         '''
         self.logger.debug('SpatioTemporalCluster interval_subset')
-        numpy_region_subset = self.numpy_dataset[ti.t1:ti.t2, :, :]
-        return SpatioTemporalCluster(numpy_region_subset, self.spatial_mask, self.label)
+        decorated_interval_subset = self.decorated_region.interval_subset(ti)
+        return SpatioTemporalCluster(decorated_interval_subset, self.spatial_mask, self.label)
 
     def series_at(self, point):
         '''
@@ -345,13 +342,24 @@ class SpatioTemporalCluster(SpatialCluster, SpatioTemporalDecorator):
         repeated_region = self.decorated_region.repeat_point(point)
         return SpatioTemporalCluster(repeated_region, self.spatial_mask, self.label)
 
+    # def apply_function_scalar(self, function_region_scalar):
+    #     # There are two parents overriding this, and we want to use the version from SpatialCluster
+    #     # which iterates over clusters
+    #     return SpatialCluster.apply_function_scalar(self, function_region_scalar)
+
+    # def apply_function_series(self, function_region_series):
+    #     # There are two parents overriding this, and we want to use the version from SpatialCluster
+    #     # which iterates over clusters
+    #     return SpatialCluster.apply_function_series(self, function_region_series)
+
     def __next__(self):
         '''
         Used for iterating over points in the cluster. Only points in the mask are iterated!
         The iterator returns the tuple (Point, value) for each point.
         '''
-
         # find the next point in the mask to iterate
+        self.logger.debug('SpatioTemporalCluster __next__')
+
         while True:
 
             # the index will iterate from Point(0, 0) to Point(x_len - 1, y_len - 1)
@@ -370,6 +378,7 @@ class SpatioTemporalCluster(SpatialCluster, SpatioTemporalDecorator):
 
             if self.spatial_mask.value_at(point_i_j):
                 # found point in the mask
+                self.logger.debug('Next point in spatio-temporal cluster: {}'.format(point_i_j))
                 break
 
         # return next point in the mask

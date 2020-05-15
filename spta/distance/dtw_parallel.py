@@ -1,7 +1,12 @@
 import numpy as np
+
 from spta.util import parallel as parallel_util
+from spta.util import log as log_util
+
 from .dtw import DistanceByDTW
 
+
+# TODO improve performance by assigning rows to processes, instead of single points
 
 class DistanceByDTWParallel(DistanceByDTW):
 
@@ -69,18 +74,15 @@ if __name__ == '__main__':
     import numpy as np
     import logging
 
-    from spta.dataset import nordeste_small
-    from spta.region.temporal import SpatioTemporalRegion
+    from spta.region import Region, SpatioTemporalRegion, SpatioTemporalRegionMetadata
 
-    log_level = logging.DEBUG
-    logging.basicConfig(format='%(asctime)s - %(levelname)6s | %(message)s',
-                        level=log_level, datefmt='%d-%b-%y %H:%M:%S')
-    logger = logging.getLogger()
+    logger = log_util.setup_log('DEBUG')
 
-    # load file
-    nordeste_small_dataset = np.load(nordeste_small.NORDESTE_SMALL_DATASET)
-    logger.debug('Region: {}'.format(nordeste_small_dataset.shape))
-    nordeste_small_region = SpatioTemporalRegion(nordeste_small_dataset)
+    # load dataset from metadata
+
+    nordeste_small_md = SpatioTemporalRegionMetadata('nordeste_small', Region(43, 50, 85, 95),
+                                                     series_len=365, ppd=1, last=True)
+    nordeste_small_region = SpatioTemporalRegion.from_metadata(nordeste_small_md)
 
     logger.info('Calculating distances using DTW...')
     distance_measure_parallel = DistanceByDTWParallel(4)
@@ -89,7 +91,8 @@ if __name__ == '__main__':
 
     # compare with known result
     # it is not really equal because of triangular approach...
-    distance_saved = np.load(nordeste_small.NORDESTE_SMALL_DISTANCES)
+    dtw = DistanceByDTW()
+    distance_saved = dtw.load_distance_matrix_md(nordeste_small_md)
     print(distance_saved)
 
     print(distance_saved - distance_matrix)

@@ -2,10 +2,10 @@ import numpy as np
 from spta.distance.dtw import DistanceByDTW
 from spta.util import log as log_util
 
-from .spatial import SpatialRegionDecorator
+from .spatial import SpatialDecorator
 
 
-class ErrorRegion(SpatialRegionDecorator):
+class ErrorRegion(SpatialDecorator):
     '''
     A spatial region where each value represents the forecast error of a model.
     It is created by measuring the distance between a forecast region and a test region.
@@ -44,6 +44,13 @@ class ErrorRegion(SpatialRegionDecorator):
                 min_point = point
 
         return min_point
+
+    def __next__(self):
+        '''
+        Use the decorated iteration, which may be more interesting than the "default" from
+        SpatialCluster.
+        '''
+        return self.decorated_region.__next__()
 
     @classmethod
     def create_from_forecasts(cls, forecast_region, test_region,

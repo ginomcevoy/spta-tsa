@@ -41,6 +41,9 @@ def setup_log(log_level_str):
     logging.getLogger('matplotlib.backends.backend_ps').disabled = True
     logging.getLogger('matplotlib.font_manager').disabled = True
 
+    # a main method may have use for this
+    return logging.getLogger()
+
 
 def setup_log_argparse(args, default_level='DEBUG'):
     '''

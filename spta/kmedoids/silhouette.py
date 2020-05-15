@@ -233,7 +233,7 @@ def single_silhouette(kmedoids_result, silhouette_metadata, shape_2d):
     The region is already represented as a list of series to save computation time.
     The shape of the region is needed for graphs.
 
-    TODO: graphs are not saved unless they are shown (silhouette_metadata.show_graphs=True)
+    FIXME: graphs are not saved unless they are shown (silhouette_metadata.show_graphs=True)
     '''
 
     (k, random_seed, labels) = (kmedoids_result.k, kmedoids_result.random_seed,

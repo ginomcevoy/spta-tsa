@@ -41,6 +41,7 @@ class SpatialRegion(log_util.LoggerMixin):
         Used for iterating over points.
         The iterator returns the tuple (Point, value) for each point.
         '''
+        self.logger.debug('SpatialRegion next')
         # the index will iterate from Point(0, 0) to Point(x_len - 1, y_len - 1)
         if self.point_index >= self.y_len * self.x_len:
             # stop iteration, but allow reuse of iterator from start again
@@ -177,7 +178,7 @@ class SpatialRegion(log_util.LoggerMixin):
         return str(self.numpy_dataset)
 
 
-class SpatialRegionDecorator(SpatialRegion):
+class SpatialDecorator(SpatialRegion):
     '''
     Reifies the decorator pattern for a SpatialRegion.
     Decorates can extend the behavior of another SpatialRegion instance.
@@ -186,10 +187,7 @@ class SpatialRegionDecorator(SpatialRegion):
 
         # keep SpatialRegion initialization (shape, iterator index, etc)
         self.decorated_region = decorated_region
-        super(SpatialRegionDecorator, self).__init__(decorated_region.numpy_dataset, **kwargs)
-
-    def __next__(self):
-        return self.decorated_region.__next__()
+        super(SpatialDecorator, self).__init__(decorated_region.numpy_dataset, **kwargs)
 
     def region_subset(self, region):
         return self.decorated_region.region_subset(region)
@@ -203,14 +201,17 @@ class SpatialRegionDecorator(SpatialRegion):
     def save(self, filename):
         return self.decorated_region.save(filename)
 
-    def apply_function_scalar(self, function_region_scalar):
-        return self.decorated_region.apply_function_scalar(function_region_scalar)
+    # code below is wrong, we don't want to use the decorated function which will use the
+    # decorated iteraror, instead of a more useful iterator in decorating overrides
 
-    def apply_function_series(self, function_region_series):
-        return self.decorated_region.apply_function_series(function_region_series)
+    # def apply_function_scalar(self, function_region_scalar):
+    #     return self.decorated_region.apply_function_scalar(function_region_scalar)
+
+    # def apply_function_series(self, function_region_series):
+    #     return self.decorated_region.apply_function_series(function_region_series)
 
 
-class SpatialCluster(SpatialRegionDecorator):
+class SpatialCluster(SpatialDecorator):
     '''
     A subset of a spatial region that represents a cluster created by a clustering
     algorithm, or obtained by interacting with a spatio-temporal cluster.
@@ -240,11 +241,11 @@ class SpatialCluster(SpatialRegionDecorator):
         else:
             raise ValueError('Point not in cluster mask: {}'.format(point))
 
-    def empty_region(self):
+    def empty_region_2d(self):
         '''
         Returns an empty SpatialCluster with the same shape as this region, and same mask/label.
         '''
-        empty_spatial_region = self.decorated_region.empty_region()
+        empty_spatial_region = self.decorated_region.empty_region_2d()
         return SpatialCluster(decorated_region=empty_spatial_region,
                               spatial_mask=self.spatial_mask, label=self.label)
 
@@ -253,6 +254,7 @@ class SpatialCluster(SpatialRegionDecorator):
         Used for iterating over points in the cluster. Only points in the mask are iterated!
         The iterator returns the tuple (Point, value) for each point.
         '''
+        self.logger.debug('SpatialCluster next')
         while True:
 
             # the index will iterate from Point(0, 0) to Point(x_len - 1, y_len - 1)
@@ -271,6 +273,8 @@ class SpatialCluster(SpatialRegionDecorator):
 
             if self.spatial_mask.value_at(point_i_j):
                 # found point in the mask
+                self.logger.debug('Next point in iteration: {} {}'.format(self.__class__.__name__,
+                                                                          point_i_j))
                 break
 
         # return next point in the mask
@@ -278,7 +282,7 @@ class SpatialCluster(SpatialRegionDecorator):
 
     def apply_function_scalar(self, function_region_scalar):
         '''
-        Applies an instance of FunctionRegionScalar on this region, to get a SpatialCluster
+        Applies an instance of FunctionRegionScalar on this cluster region, to get a SpatialCluster
         as a result.
 
         Behaves similar to the SpatialRegion implementation, with these differences:
@@ -293,7 +297,9 @@ class SpatialCluster(SpatialRegionDecorator):
 
         # call the parent code (SpatialRegion)
         # since the iterator is overridden, this should only iterate over points in the mask
-        spatial_region = super(SpatialCluster, self).apply_function_scalar(function_region_scalar)
+        supah = super(SpatialCluster, self)
+        self.logger.debug('SpatialCluster apply_function_scalar with supah {}'.format(supah))
+        spatial_region = supah.apply_function_scalar(function_region_scalar)
 
         # return a SpatialCluster instead!
         # Notice that the calling function is not aware of the change
@@ -301,7 +307,7 @@ class SpatialCluster(SpatialRegionDecorator):
 
     def apply_function_series(self, function_region_series):
         '''
-        Applies an instance of FunctionRegionSeries on this region, to get a
+        Applies an instance of FunctionRegionSeries on this cluster region, to get a
         SpatioTemporalCluster as a result.
 
         Behaves similar to the SpatialRegion implementation, with these differences:
@@ -310,6 +316,7 @@ class SpatialCluster(SpatialRegionDecorator):
 
         Cannot be used inside the class iterator!
         '''
+        self.logger.debug('SpatialCluster apply_function_series')
 
         # call the parent code (SpatialRegion)
         # since the iterator is overridden, this should only iterate over points in the mask
