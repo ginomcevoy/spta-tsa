@@ -1,3 +1,5 @@
+import numpy as np
+
 from . import SpatialRegion, SpatioTemporalRegion
 
 
@@ -5,7 +7,12 @@ class FunctionRegion(SpatialRegion):
     '''
     A SpatialRegion where the value at each point is a function that can be applied to another
     region (SpationTemporalRegion instance?).
+
+    The constructor accepts an optional dtype, which will be used when creating the output.
     '''
+    def __init__(self, numpy_dataset, dtype=np.float64):
+        super(FunctionRegion, self).__init__(numpy_dataset)
+        self.dtype = dtype
 
     def function_at(self, point):
         '''
@@ -56,10 +63,10 @@ class FunctionRegionSeries(FunctionRegion):
     A FunctionRegion that returns a series for each point in the parameter region.
     The result should be a SpatioTemporalRegion (!)
 
-    The length of the result should be known.
+    The length of the result must be known.
     '''
-    def __init__(self, numpy_dataset, output_len):
-        super(FunctionRegion, self).__init__(numpy_dataset)
+    def __init__(self, numpy_dataset, output_len, dtype=np.float64):
+        super(FunctionRegionSeries, self).__init__(numpy_dataset, dtype)
         self.output_len = output_len
 
     def apply_to(self, spt_region):

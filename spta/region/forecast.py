@@ -8,7 +8,39 @@ from .spatial import SpatialRegion
 from . import Point, reshape_1d_to_2d
 
 
+class ForecastLengthRegion(SpatialRegion):
+    '''
+    A spatial region [x_len, y_len] with a constant value on all points, representing the size of
+    a forecasted series, forecast_len.
+
+    This region can be applied to FunctionRegionSeries subclasses that represent forecasting
+    models, so that the result would be SpatioTemporalRegion with shape
+    [forecast_len, x_len, y_len]
+
+    Not currently used by ARIMA.
+    '''
+    def __init__(self, numpy_dataset, forecast_len):
+        super(ForecastLengthRegion, self).__init__(numpy_dataset)
+
+        # save value for convenience
+        self.forecast_len = forecast_len
+
+    @classmethod
+    def from_value_and_region(cls, forecast_len, sp_region):
+
+        # get desired shape
+        x_len, y_len = (sp_region.x_len, sp_region.y_len)
+
+        # all elements are the same
+        np_array = arrays_util.copy_value_as_matrix_elements(forecast_len, x_len, y_len)
+        return ForecastLengthRegion(np_array, forecast_len)
+
+
 class ErrorRegion(SpatialRegion):
+    '''
+    A spatial region where each value represents the forecast error of a model.
+    It is created by measuring the distance between a forecast region and a test region.
+    '''
 
     def __init__(self, numpy_dataset, distance_error):
         super(ErrorRegion, self).__init__(numpy_dataset)

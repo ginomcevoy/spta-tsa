@@ -133,6 +133,16 @@ class SpatioTemporalRegion(SpatialRegion):
         small_interval = TimeInterval(0, 10)
         return self.subset(SMALL_REGION, small_interval)
 
+    def repeat_point(self, point):
+        '''
+        Creates a new spatio-temporal region with this same shape, where all the series are the
+        same series as in the provided point.
+        '''
+        series_at_point = self.series_at(point)
+        repeated_series_np = arrays_util.copy_array_as_matrix_elements(series_at_point, self.x_len,
+                                                                       self.y_len)
+        return SpatioTemporalRegion(repeated_series_np)
+
     @property
     def centroid(self):
         # TODO bad idea, need to pass distance_measure!
@@ -165,40 +175,6 @@ class SpatioTemporalRegion(SpatialRegion):
 
     # def get_dummy_region(self):
     #     dummy = Region)
-
-    @classmethod
-    def load_4years(cls):
-
-        # load raw data
-        numpy_dataset = temp_brazil.load_brazil_temps(4)
-        # pts_4y = ds.POINTS_PER_YEAR * 4
-        # numpy_dataset = ds.load_with_len(pts_4y)
-
-        # transposed_dataset = transpose_region(numpy_dataset)
-        return SpatioTemporalRegion(numpy_dataset)
-
-    @classmethod
-    def load_sao_paulo(cls):
-        sptr = cls.load_1year()
-        sptr_sp = sptr.region_subset(SAO_PAULO)
-
-        # we have 4 points per day
-        # average these four points to get a smoother curve
-        (x_len, y_len) = (SAO_PAULO.x2 - SAO_PAULO.x1, SAO_PAULO.y2 - SAO_PAULO.y1)
-        new_series_len = int(sptr_sp.series_len() / 4)
-        single_point_per_day = np.empty((x_len, y_len, new_series_len))
-
-        for x in range(0, x_len):
-            for y in range(0, y_len):
-                point = Point(x, y)
-                point_series = sptr_sp.series_at(point)
-                series_reshape = (new_series_len, 4)
-                smooth = np.mean(np.reshape(point_series, series_reshape), axis=1)
-                # sptr_sp.log.debug('smooth: %s' % smooth)
-                single_point_per_day[:, x, y] = np.array(smooth)
-
-        sptr_sp.log.info('sao paulo: %s' % str(single_point_per_day.shape))
-        return SpatioTemporalRegion(single_point_per_day)
 
     @classmethod
     def from_metadata(cls, sptr_metadata):
@@ -234,9 +210,14 @@ class SpatioTemporalRegion(SpatialRegion):
         return spt_region
 
     @classmethod
-    def copy_series_over_region(cls, series, region_3d):
-        (_, m, n) = region_3d.shape
-        numpy_dataset = arrays_util.copy_array_as_matrix_elements(series, m, n)
+    def repeat_series_over_region(cls, series, shape2D):
+        '''
+        Given a series with length series_len and a 2D shape (x_len, y_len), create a
+        SpatioTemporalRegion with shape (series_len, x_len, y_len), where each point contains
+        the same provided series.s
+        '''
+        (x_len, y_len) = shape2D
+        numpy_dataset = arrays_util.copy_array_as_matrix_elements(series, x_len, y_len)
         return SpatioTemporalRegion(numpy_dataset)
 
 
@@ -275,9 +256,6 @@ if __name__ == '__main__':
     log_level = logging.DEBUG
     logging.basicConfig(format='%(asctime)s - %(levelname)6s | %(message)s',
                         level=log_level, datefmt='%d-%b-%y %H:%M:%S')
-
-    # sptr = SpatioTemporalRegion.load_4years()
-    # print('brazil: ', sptr.shape)
 
     # small = sptr.get_small()
     # print('small: ', small.shape)

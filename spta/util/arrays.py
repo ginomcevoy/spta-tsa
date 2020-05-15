@@ -3,7 +3,8 @@ import numpy as np
 
 def copy_array_as_matrix_elements(array, m, n):
     '''
-    Given an array, create a lenxmxn matrix such that matrix[:, x, y] = array for all x, y.
+    Given an array with length l, create a lxmxn matrix such that matrix[:, x, y] = array for all
+    x, y in range.
 
     This allows us to create a SpatioTemporalRegion where all the temporal series are
     the same as the array.
@@ -12,6 +13,16 @@ def copy_array_as_matrix_elements(array, m, n):
     # s = [array]
     mat = np.repeat(array, repeats=m * n)  # , axis=0)
     return mat.reshape(length, m, n)
+
+
+def copy_value_as_matrix_elements(value, m, n):
+    '''
+    Given a value, create a mxn matrix such that matrix[i, j] = value for all i, j in range.
+
+    This allows us to create a SpatialRegion where all the values are the same as provided.
+    '''
+    same_value_mn_times = np.repeat(value, repeats=(m * n))
+    return same_value_mn_times.reshape(m, n)
 
 
 def spatio_temporal_to_list_of_time_series(numpy_dataset):

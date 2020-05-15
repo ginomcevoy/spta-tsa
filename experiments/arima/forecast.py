@@ -46,9 +46,8 @@ def do_arima_forecast(args):
     # get the ARIMA experiment
     arima_experiment = predefined_arima_experiments()[args.arima]
     for arima_params in arima_experiment:
-        (centroid, centroid_arima, training_region, forecast_region, test_region,
-            arima_region) = arima.evaluate_forecast_errors_arima(spt_region, arima_params,
-                                                                 centroid=centroid)
+        (centroid, training_region, forecast_region, test_region, arima_region) = \
+            arima.evaluate_forecast_errors_arima(spt_region, arima_params, centroid=centroid)
         arima.plot_one_arima(training_region, forecast_region, test_region, arima_region)
 
 

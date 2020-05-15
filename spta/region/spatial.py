@@ -1,5 +1,6 @@
-import logging
 import numpy as np
+
+from spta.util import log as log_util
 
 from . import Point, Region, reshape_1d_to_2d
 
@@ -9,12 +10,11 @@ from . import Point, Region, reshape_1d_to_2d
 # arimitas -> error de cada arima en su entrenamiento
 # 1 model + test/region + forecast/region -> error en cada punto
 
-class SpatialRegion:
+class SpatialRegion(log_util.LoggerMixin):
 
     def __init__(self, numpy_dataset, region_metadata=None):
         self.numpy_dataset = numpy_dataset
         self.metadata = region_metadata
-        self.log = logging.getLogger()
 
         # used for iterating over points
         self.point_index = 0
@@ -82,7 +82,7 @@ class SpatialRegion:
         '''
         ds_numpy = self.as_numpy
         np.save(filename, ds_numpy)
-        self.log.info('Saved to {}: {}'.format(filename, ds_numpy.shape))
+        self.logger.info('Saved to {}: {}'.format(filename, ds_numpy.shape))
 
     def apply_function_scalar(self, function_region_scalar):
         '''
@@ -100,7 +100,8 @@ class SpatialRegion:
         assert self.y_len == function_region_scalar.y_len
 
         # condition passed, the output will have the same 2D shape
-        result_np = np.zeros((self.x_len, self.y_len))
+        # the output dtype is given by the function
+        result_np = np.zeros((self.x_len, self.y_len), dtype=function_region_scalar.dtype)
         result = SpatialRegion(result_np)
 
         # use internal iterator! this means we can't use this function inside another iteration...
@@ -126,8 +127,9 @@ class SpatialRegion:
         assert self.x_len == function_region_series.x_len
         assert self.y_len == function_region_series.y_len
 
-        # the length of the result series is given by the function
-        result_np = np.zeros((function_region_series.output_len, self.x_len, self.y_len))
+        # the length and dtype of the result series is given by the function
+        result_np = np.zeros((function_region_series.output_len, self.x_len, self.y_len),
+                             dtype=function_region_series.dtype)
 
         # ugly import to avoid circular imports
         from .temporal import SpatioTemporalRegion

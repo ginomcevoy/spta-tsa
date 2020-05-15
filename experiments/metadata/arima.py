@@ -5,7 +5,8 @@ def predefined_arima_experiments():
 
     # add ARIMA experiments here
     arima_experiments = {
-        'arima_simple': [ArimaParams(2, 0, 2)]
+        'arima_simple': [ArimaParams(2, 0, 2)],
+        'arima_1_1_1': [ArimaParams(1, 1, 1)]
     }
 
     return arima_experiments
