@@ -4,6 +4,7 @@ from functools import partial
 from matplotlib import pyplot as plt
 from statsmodels.tsa.arima_model import ARIMA
 
+from spta.distance.dtw import DistanceByDTW
 from spta.region.function import FunctionRegionScalar, FunctionRegionSeries
 from spta.region import Point, SpatialRegion
 from spta.region import forecast, train
@@ -14,7 +15,7 @@ from spta.util import log as log_util
 from . import ArimaParams
 
 # default number of data points to forecast and test
-FORECAST_LENGTH = 8 
+FORECAST_LENGTH = 8
 
 
 class FailedArima(object):
@@ -210,11 +211,10 @@ def evaluate_forecast_errors_arima(spt_region, arima_params, forecast_len=FORECA
     arima_models_each = arima_trainings.apply_to(training_region)
 
     # do a forecast: pass an (empty!) region. This region will control the iteration though.
-    empty_region_np = np.empty(arima_models_each.shape)
-    empty_region = SpatialRegion(empty_region_np)
+    empty_region_2d = training_region.empty_region_2d()
 
     # use the ARIMA models to forecast for their respective points
-    forecast_region_each = arima_models_each.apply_to(empty_region)
+    forecast_region_each = arima_models_each.apply_to(empty_region_2d)
 
     error_region_each = forecast.ErrorRegion.create_from_forecasts(forecast_region_each,
                                                                    test_region)
@@ -240,7 +240,7 @@ def evaluate_forecast_errors_arima(spt_region, arima_params, forecast_len=FORECA
     if centroid:
         logger.info('Using pre-established centroid: %s' % str(centroid))
     else:
-        centroid = spt_region.centroid
+        centroid = spt_region.get_centroid(distance_measure=DistanceByDTW())
 
     # the model at the centroid
 

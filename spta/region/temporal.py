@@ -4,7 +4,7 @@ import numpy as np
 from spta.dataset import temp_brazil
 from spta.util import arrays as arrays_util
 
-from .spatial import SpatialRegion, SpatialCluster
+from .spatial import SpatialRegion, SpatialRegionDecorator, SpatialCluster
 from . import Point, Region, TimeInterval
 
 # SMALL_REGION = Region(55, 58, 50, 54)
@@ -146,12 +146,19 @@ class SpatioTemporalRegion(SpatialRegion):
                                                                        self.y_len)
         return SpatioTemporalRegion(repeated_series_np)
 
-    @property
-    def centroid(self):
-        # TODO bad idea, need to pass distance_measure!
-        from . import centroid
-        centroid_calc = centroid.CalculateCentroid()
-        return centroid_calc.find_point_with_least_distance(self)
+    def get_centroid(self, distance_measure=None):
+        if self.centroid is not None:
+            return self.centroid
+
+        elif distance_measure is None:
+            raise ValueError('No pre-calculated centroid, and no distance_measure provided!')
+
+        else:
+            # calculate the centroid, ew
+            from . import centroid
+            centroid_calc = centroid.CalculateCentroid(distance_measure)
+            self.centroid = centroid_calc.find_point_with_least_distance(self)
+            return self.centroid
 
     @property
     def as_list(self):
@@ -225,7 +232,42 @@ class SpatioTemporalRegion(SpatialRegion):
         return SpatioTemporalRegion(numpy_dataset)
 
 
-class SpatioTemporalCluster(SpatialCluster, SpatioTemporalRegion):
+class SpatioTemporalDecorator(SpatialRegionDecorator, SpatioTemporalRegion):
+    '''
+    A decorator to extend the functionality of a spatio-temporal region.
+    Reuses decorator properties from SpatialRegionDecorator.
+    '''
+    def __init__(self, decorated_region, **kwargs):
+        # diamond problem! should use SpatialDecorator constructor, which will account for
+        # the metadata parameter in SpatioTemporalCluster
+        super(SpatioTemporalDecorator, self).__init__(decorated_region=decorated_region, **kwargs)
+
+    def series_at(self, point):
+        return self.decorated_region.series_at(point)
+
+    def series_len(self):
+        return self.decorated_region.series_len()
+
+    def region_subset(self, region):
+        return self.decorated_region.region_subset(region)
+
+    def interval_subset(self, ti):
+        return self.decorated_region.interval_subset(ti)
+
+    def subset(self, region, ti):
+        return self.decorated_region.subset(region, ti)
+
+    def repeat_point(self, point):
+        return self.decorated_region.repeat_point(point)
+
+    def get_centroid(self, distance_measure=None):
+        return self.decorated_region.get_centroid(distance_measure)
+
+    def __next__(self):
+        return self.decorated_region.__next__()
+
+
+class SpatioTemporalCluster(SpatialCluster, SpatioTemporalDecorator):
     '''
     A subset of a spatio-temporal region that represents a cluster, created by a clustering
     algorithm. A spatio-temporal region may be split into two or more clusters, so that each
@@ -246,7 +288,7 @@ class SpatioTemporalCluster(SpatialCluster, SpatioTemporalRegion):
     - Attempt to use series_at at a point outside of the mask will raise ValueError.
     '''
 
-    def __init__(self, numpy_dataset, spatial_mask, label=1, region_metadata=None):
+    def __init__(self, decorated_region, spatial_mask, label=1, region_metadata=None):
         '''
         Creates a new instance.
 
@@ -269,7 +311,7 @@ class SpatioTemporalCluster(SpatialCluster, SpatioTemporalRegion):
         # call parent constructor explicity
         # SpatialCluster.__init__(numpy_dataset, spatial_mask, label, region_metadata)
 
-        super(SpatioTemporalCluster, self).__init__(numpy_dataset, spatial_mask, label,
+        super(SpatioTemporalCluster, self).__init__(decorated_region, spatial_mask, label,
                                                     region_metadata)
 
     def interval_subset(self, ti):
@@ -285,9 +327,9 @@ class SpatioTemporalCluster(SpatialCluster, SpatioTemporalRegion):
         '''
         Returns the time series at specified point, the point must belong to cluster mask
         '''
-        self.logger.debug('SpatioTemporalCluster series_at')
+        self.logger.debug('SpatioTemporalCluster {} series_at {}'.format(self.label, point))
         if self.spatial_mask.value_at(point):
-            return self.numpy_dataset[:, point.x, point.y]
+            return self.decorated_region.series_at(point)
         else:
             raise ValueError('Point not in cluster mask: {}'.format(point))
 
@@ -300,10 +342,8 @@ class SpatioTemporalCluster(SpatialCluster, SpatioTemporalRegion):
         outside the mask should remain forbidden.
         '''
         self.logger.debug('SpatioTemporalCluster repeat_point')
-        series_at_point = self.series_at(point)
-        repeated_series_np = arrays_util.copy_array_as_matrix_elements(series_at_point, self.x_len,
-                                                                       self.y_len)
-        return SpatioTemporalCluster(repeated_series_np. self.spatial_mask, self.label)
+        repeated_region = self.decorated_region.repeat_point(point)
+        return SpatioTemporalCluster(repeated_region, self.spatial_mask, self.label)
 
     def __next__(self):
         '''
@@ -381,7 +421,7 @@ class SpatioTemporalCluster(SpatialCluster, SpatioTemporalRegion):
         spatial_mask_np = mask.reshape((x_len, y_len))
         spatial_mask = SpatialRegion(spatial_mask_np)
 
-        cluster = SpatioTemporalCluster(spt_region.as_numpy, spatial_mask, label, None)
+        cluster = SpatioTemporalCluster(spt_region, spatial_mask, label, None)
 
         # centroid available?
         if centroids is not None:
