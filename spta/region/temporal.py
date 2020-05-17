@@ -358,8 +358,6 @@ class SpatioTemporalCluster(SpatialCluster, SpatioTemporalDecorator):
         The iterator returns the tuple (Point, value) for each point.
         '''
         # find the next point in the mask to iterate
-        self.logger.debug('SpatioTemporalCluster __next__')
-
         while True:
 
             # the index will iterate from Point(0, 0) to Point(x_len - 1, y_len - 1)
@@ -378,7 +376,6 @@ class SpatioTemporalCluster(SpatialCluster, SpatioTemporalDecorator):
 
             if self.spatial_mask.value_at(point_i_j):
                 # found point in the mask
-                self.logger.debug('Next point in spatio-temporal cluster: {}'.format(point_i_j))
                 break
 
         # return next point in the mask

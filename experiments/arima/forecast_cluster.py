@@ -10,7 +10,7 @@ from spta.kmedoids import kmedoids
 from spta.region import SpatioTemporalRegion, SpatioTemporalCluster
 from spta.util import log as log_util
 
-from experiments.metadata.arima import predefined_arima_experiments
+from experiments.metadata.arima import arima_suite_by_name
 from experiments.metadata.arima_clustering import arima_clustering_experiments
 from experiments.metadata.region import predefined_regions
 
@@ -30,6 +30,8 @@ def processRequest():
     parser.add_argument('arima_clustering', help='ID of arima clustering experiment',
                         choices=arima_clustering_options)
     parser.add_argument('--log', help='log level: WARN|INFO|DEBUG')
+    parser.add_argument('--plot', help='add the plot of the ARIMA model result at Point(0, 0)?',
+                        default=False, action='store_true')
 
     args = parser.parse_args()
     log_util.setup_log_argparse(args)
@@ -42,11 +44,10 @@ def do_arima_forecast_cluster(args):
     spt_region_metadata = predefined_regions()[args.region]
     spt_region = SpatioTemporalRegion.from_metadata(spt_region_metadata)
 
-    # get experiment parameters
-    # e.g. 'arima_simple_2_0': ['arima_simple', 'Kmedoids', 2, 0]
+    # get experiment parameters including ARIMA suite
     exp_params = arima_clustering_experiments()[args.arima_clustering]
     (arima_experiment_id, clustering_id, distance_id, k, seed) = exp_params
-    arima_experiment = predefined_arima_experiments()[arima_experiment_id]
+    arima_suite = arima_suite_by_name(arima_experiment_id)
 
     # for now
     assert clustering_id == 'Kmedoids'
@@ -73,13 +74,43 @@ def do_arima_forecast_cluster(args):
                                                           label=i, centroids=medoid_indices)
         clusters.append(cluster_i)
 
-    # iterate arima analysis, for each analysis work on all clusters
-    for arima_params in arima_experiment:
+    # here we will store ARIMA results by cluster and by parameters
+    arima_results_by_cluster = {}
 
-        for cluster_i in clusters:
-            centroid_i = cluster_i.centroid
-            (centroid, training_region, forecast_region, test_region, arima_region) = \
-                arima.evaluate_forecast_errors_arima(cluster_i, arima_params, centroid=centroid_i)
+    # iterate the spatio-temporal clusters
+    for i in range(0, k):
+        cluster_i = SpatioTemporalCluster.from_clustering(spt_region, kmedoids_result.labels,
+                                                          label=i, centroids=medoid_indices)
+        clusters.append(cluster_i)
+
+        # the medoid will be used as centroid for the ARIMA analysis
+        centroid_i = cluster_i.centroid
+
+        # iterate the ARIMA suite
+        arima_results_by_cluster[i] = {}
+        for arima_params in arima_suite.arima_params_gen():
+
+            # evaluate this ARIMA model
+            arima_result = arima.evaluate_forecast_errors_arima(cluster_i, arima_params,
+                                                                centroid=centroid_i)
+            (centroid, training_region, forecast_region_each, test_region, arima_models_each,
+                combined_errors) = arima_result
+
+            # save errors
+            arima_results_by_cluster[i][arima_params] = combined_errors
+
+            if args.plot:
+                # plot forecast at Point(0, 0)
+                arima.plot_one_arima(training_region, forecast_region_each, test_region,
+                                     arima_models_each)
+
+    # print results
+    for i in range(0, k):
+        print('Results for cluster {} with medoid {}'.format(i, clusters[i].centroid))
+        for (arima_params, combined_errors) in arima_results_by_cluster[i].items():
+            result_line = '{}: {} errors -> each={:.2f}, min_local={:.2f}, centroid={:.2f}'
+            print(result_line.format(i, arima_params, combined_errors[0], combined_errors[1],
+                                     combined_errors[2]))
 
 
 if __name__ == '__main__':

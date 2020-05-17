@@ -41,7 +41,6 @@ class SpatialRegion(log_util.LoggerMixin):
         Used for iterating over points.
         The iterator returns the tuple (Point, value) for each point.
         '''
-        self.logger.debug('SpatialRegion next')
         # the index will iterate from Point(0, 0) to Point(x_len - 1, y_len - 1)
         if self.point_index >= self.y_len * self.x_len:
             # stop iteration, but allow reuse of iterator from start again
@@ -254,7 +253,6 @@ class SpatialCluster(SpatialDecorator):
         Used for iterating over points in the cluster. Only points in the mask are iterated!
         The iterator returns the tuple (Point, value) for each point.
         '''
-        self.logger.debug('SpatialCluster next')
         while True:
 
             # the index will iterate from Point(0, 0) to Point(x_len - 1, y_len - 1)
@@ -273,8 +271,6 @@ class SpatialCluster(SpatialDecorator):
 
             if self.spatial_mask.value_at(point_i_j):
                 # found point in the mask
-                self.logger.debug('Next point in iteration: {} {}'.format(self.__class__.__name__,
-                                                                          point_i_j))
                 break
 
         # return next point in the mask

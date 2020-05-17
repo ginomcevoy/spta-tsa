@@ -219,22 +219,24 @@ def evaluate_forecast_errors_arima(spt_region, arima_params, forecast_len=FORECA
     error_region_each = forecast.ErrorRegion.create_from_forecasts(forecast_region_each,
                                                                    test_region)
 
-    logger.info('Combined error from all ARIMAs: %s' % error_region_each.combined_error)
+    combined_error_each = error_region_each.combined_error
+    logger.info('Combined error from all ARIMAs: {}'.format(combined_error_each))
 
     #
     # ARIMA with minimum local error
     #
 
     point_min_error = error_region_each.point_with_min_error()
-    logger.info('Point with best ARIMA: %s' % str(point_min_error))
+    logger.info('Point at which ARIMA has min local error: %s' % str(point_min_error))
 
     # create a forecast region that is made of the forecast series with min local error,
     # repeated all over the region
     forecast_region_min_local = forecast_region_each.repeat_point(point_min_error)
     error_region_min_local = forecast.ErrorRegion.create_from_forecasts(forecast_region_min_local,
                                                                         test_region)
+    combined_error_min_local = error_region_min_local.combined_error
     log_msg = 'Error from ARIMA with min local error: {}'
-    logger.info(log_msg.format(error_region_min_local.combined_error))
+    logger.info(log_msg.format(combined_error_min_local))
 
     # find the centroid point of the region, use its ARIMA for forecasting
     if centroid:
@@ -250,9 +252,12 @@ def evaluate_forecast_errors_arima(spt_region, arima_params, forecast_len=FORECA
 
     error_region_centroid = forecast.ErrorRegion.create_from_forecasts(forecast_region_centroid,
                                                                        test_region)
-    logger.info('Error from centroid ARIMA: %s' % error_region_centroid.combined_error)
+    combined_error_centroid = error_region_centroid.combined_error
+    logger.info('Error from centroid ARIMA: {}'.format(combined_error_centroid))
 
-    return (centroid, training_region, forecast_region_each, test_region, arima_models_each)
+    combined_errors = (combined_error_each, combined_error_min_local, combined_error_centroid)
+    return (centroid, training_region, forecast_region_each, test_region, arima_models_each,
+            combined_errors)
 
 
 def plot_one_arima(training_region, forecast_region, test_region, arima_region):
@@ -302,6 +307,6 @@ if __name__ == '__main__':
     arima_params = ArimaParams(1, 1, 1)
     forecast_len = 8
 
-    (centroid, training_region, forecast_region, test_region, arima_region) =\
+    (centroid, training_region, forecast_region, test_region, arima_region, _) =\
         evaluate_forecast_errors_arima(spt_region, arima_params, forecast_len, centroid)
     plot_one_arima(training_region, forecast_region, test_region, arima_region)
