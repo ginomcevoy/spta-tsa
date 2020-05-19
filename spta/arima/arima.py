@@ -5,9 +5,9 @@ from matplotlib import pyplot as plt
 from statsmodels.tsa.arima_model import ARIMA
 
 from spta.distance.dtw import DistanceByDTW
+from spta.region import Point, train
 from spta.region.function import FunctionRegionScalar, FunctionRegionSeries
-from spta.region import Point, SpatialRegion
-from spta.region import forecast, train
+from spta.region.forecast import ErrorRegionMASE
 
 from spta.util import arrays as arrays_util
 from spta.util import log as log_util
@@ -216,11 +216,13 @@ def evaluate_forecast_errors_arima(spt_region, arima_params, forecast_len=FORECA
     # use the ARIMA models to forecast for their respective points
     forecast_region_each = arima_models_each.apply_to(empty_region_2d)
 
-    error_region_each = forecast.ErrorRegion.create_from_forecasts(forecast_region_each,
-                                                                   test_region)
+    #error_region_each = forecast.ErrorRegion.create_from_forecasts(forecast_region_each,
+    #                                                              test_region)
 
-    combined_error_each = error_region_each.combined_error
-    logger.info('Combined error from all ARIMAs: {}'.format(combined_error_each))
+    # calculate forecast error using MASE
+    error_region_each = ErrorRegionMASE(forecast_region_each, test_region, training_region)
+    overall_error_each = error_region_each.overall_error
+    logger.info('Combined error from all ARIMAs: {}'.format(overall_error_each))
 
     #
     # ARIMA with minimum local error
@@ -232,11 +234,13 @@ def evaluate_forecast_errors_arima(spt_region, arima_params, forecast_len=FORECA
     # create a forecast region that is made of the forecast series with min local error,
     # repeated all over the region
     forecast_region_min_local = forecast_region_each.repeat_point(point_min_error)
-    error_region_min_local = forecast.ErrorRegion.create_from_forecasts(forecast_region_min_local,
-                                                                        test_region)
-    combined_error_min_local = error_region_min_local.combined_error
+
+    # error for the entire region using that ARIMA model
+    error_region_min_local = ErrorRegionMASE(forecast_region_min_local, test_region,
+                                             training_region)
+    overall_error_min_local = error_region_min_local.overall_error
     log_msg = 'Error from ARIMA with min local error: {}'
-    logger.info(log_msg.format(combined_error_min_local))
+    logger.info(log_msg.format(overall_error_min_local))
 
     # find the centroid point of the region, use its ARIMA for forecasting
     if centroid:
@@ -250,14 +254,16 @@ def evaluate_forecast_errors_arima(spt_region, arima_params, forecast_len=FORECA
     # repeated all over the region
     forecast_region_centroid = forecast_region_each.repeat_point(centroid)
 
-    error_region_centroid = forecast.ErrorRegion.create_from_forecasts(forecast_region_centroid,
-                                                                       test_region)
-    combined_error_centroid = error_region_centroid.combined_error
-    logger.info('Error from centroid ARIMA: {}'.format(combined_error_centroid))
+    # error_region_centroid = forecast.ErrorRegion.create_from_forecasts(forecast_region_centroid,
+    #                                                                    test_region)
+    error_region_centroid = ErrorRegionMASE(forecast_region_centroid, test_region,
+                                            training_region)
+    overall_error_centroid = error_region_centroid.overall_error
+    logger.info('Error from centroid ARIMA: {}'.format(overall_error_centroid))
 
-    combined_errors = (combined_error_each, combined_error_min_local, combined_error_centroid)
+    overall_errors = (overall_error_each, overall_error_min_local, overall_error_centroid)
     return (centroid, training_region, forecast_region_each, test_region, arima_models_each,
-            combined_errors)
+            overall_errors)
 
 
 def plot_one_arima(training_region, forecast_region, test_region, arima_region):

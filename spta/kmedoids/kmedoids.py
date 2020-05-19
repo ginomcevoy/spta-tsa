@@ -76,26 +76,26 @@ def _get_cost(X, medoids, distance_measure):
 
     # print(dist_mat)
     mask = np.argmin(dist_mat, axis=1)
-    members = np.zeros(len(X), dtype=np.int8)
+    labels = np.zeros(len(X), dtype=np.int8)
     costs = np.zeros(k)
     for i in range(0, k):
         mem_id = np.where(mask == i)
-        members[mem_id] = i
+        labels[mem_id] = i
         # costs[i] = distance_measure.combine(dist_mat[mem_id, i])
         costs[i] = np.sum(dist_mat[mem_id, i])
 
     total_cost = distance_measure.combine(costs)
-    return members, costs, total_cost, dist_mat
+    return labels, costs, total_cost, dist_mat
 
 
 def run_kmedoids(X, k, distance_measure, initial_medoids=None, random_seed=1, max_iter=1000,
                  tol=0.001, verbose=True):
-    '''run algorithm return centers, members, and etc.'''
+    '''run algorithm return centers, labels, and etc.'''
     # Get initial centers
     n_samples, n_features = X.shape
     medoids = choose_initial_medoids(X, k, random_seed, initial_medoids)
 
-    members, costs, tot_cost, dist_mat = _get_cost(X, medoids, distance_measure)
+    labels, costs, tot_cost, dist_mat = _get_cost(X, medoids, distance_measure)
     cc, SWAPPED = 0, True
 
     while True:
@@ -112,12 +112,12 @@ def run_kmedoids(X, k, distance_measure, initial_medoids=None, random_seed=1, ma
                 medoids_ = deepcopy(medoids)
                 medoids_[j] = Medoid(i, X[i])
 
-                members_, costs_, tot_cost_, dist_mat_ = _get_cost(X, medoids_,
-                                                                   distance_measure)
+                labels_, costs_, tot_cost_, dist_mat_ = _get_cost(X, medoids_,
+                                                                  distance_measure)
 
                 # logger.debug('Cost improvement: {}'.format(tot_cost - tot_cost_))
                 if tot_cost - tot_cost_ > tol:
-                    members, costs, tot_cost, dist_mat = members_, costs_, tot_cost_, dist_mat_
+                    labels, costs, tot_cost, dist_mat = labels_, costs_, tot_cost_, dist_mat_
                     medoids = medoids_
                     SWAPPED = True
                     medoid_indices = get_medoid_indices(medoids)
@@ -136,8 +136,31 @@ def run_kmedoids(X, k, distance_measure, initial_medoids=None, random_seed=1, ma
             break
         cc += 1
 
-    # return (medoids, members, costs, tot_cost, dist_mat)
-    return KmedoidsResult(k, random_seed, medoids, members, costs, tot_cost, dist_mat)
+    result = KmedoidsResult(k, random_seed, medoids, labels, costs, tot_cost, dist_mat)
+    show_report(result)
+
+    return result
+
+
+def show_report(result):
+
+    medoids = get_medoid_indices(result.medoids)
+
+    logger.info('----------------------------')
+    logger.info('K-medoids for k={}, seed={}'.format(result.k, result.random_seed))
+    logger.info('----------------------------')
+    logger.info('Medoids={}'.format(medoids))
+
+    # calculate size of each cluster: count the number of members for each label
+    _, points_per_cluster = np.unique(result.labels, return_counts=True)
+    total_points = len(result.labels)
+
+    for i in range(0, result.k):
+        # show info per cluster
+        points_i = points_per_cluster[i]
+        coverage_i = points_i * 100.0 / total_points
+        cluster_msg = 'Cluster {}: medoid={}, {} points ({:.1f}%)'
+        logger.info(cluster_msg.format(i, medoids[i], points_i, coverage_i))
 
 
 def kmedoids_default_metadata(k, distance_measure=DistanceByDTW(), initial_medoids=None,

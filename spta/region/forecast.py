@@ -1,11 +1,121 @@
 import numpy as np
 from spta.distance.dtw import DistanceByDTW
 from spta.util import log as log_util
+from spta.util import arrays as arrays_util
+from spta.util import error as error_util
 
 from .spatial import SpatialDecorator
 
 
 class ErrorRegion(SpatialDecorator):
+    '''
+    A spatial region where each value represents the forecast error of a model.
+    Uses the decorator pattern to allow integration with new subclasses of SpatialRegion.
+
+    Here we don't work with forecast/observation regions, subclasses will.
+    '''
+    def __init__(self, decorated_region, **kwargs):
+        super(ErrorRegion, self).__init__(decorated_region, **kwargs)
+
+    @property
+    def overall_error(self):
+        '''
+        Calculate a single value for the forecast error in the region.
+        We use Root Mean Squared to find the RMSE value.
+        '''
+        error_list = []
+
+        # this iterator will iterate over all the valid points in the region
+        for point, error_at_point in self:
+            error_list.append(error_at_point)
+
+        # single RMSE value for region
+        return arrays_util.root_mean_squared(error_list)
+
+    def point_with_min_error(self):
+        '''
+        Searches the errors in the region for the smallest. Returns the (x, y) coordinates as
+        region.Point (2d)
+
+        Uses the instance iterator, cannot be used inside another iteration over itself!
+        '''
+        # save the min value
+        min_value = np.Inf
+        min_point = None
+
+        # use the iterator, should work as expected for subclasses of SpatialRegion
+        for (point, value) in self:
+            if value < min_value:
+                min_value = value
+                min_point = point
+
+        return min_point
+
+    def __next__(self):
+        '''
+        Use the decorated iteration, which may be more interesting than the default iteration
+        from SpatialRegion.
+        '''
+        return self.decorated_region.__next__()
+
+
+class ErrorRegionMASE(ErrorRegion):
+    '''
+    A spatial region where each value represents the forecast error of a model using MASE
+    (Mean Absolute Scaled Error).
+
+    In addition to observation values, MASE requires values in the training region (Yi) to scale
+    the forecast error:
+
+    qt = et / [(1 / n-1) * sum(| Y_i - Y_{i-1}|, i=2, i=n)
+    MASE = mean(|qt|)
+    '''
+    # def __init__(self, decorated_region, **kwargs):
+    #     super(ErrorRegionMASE, self).__init__(decorated_region, **kwargs)
+
+    # def create_from_forecast(cls, forecast_region, observation_region, training_region):
+    def __init__(self, forecast_region, observation_region, training_region):
+        '''
+        Create an instance of ErrorRegionMASE, by aplying MASE to each point in the forecast
+        region. The instance will be region with the MASE error in each point.
+        This requires not only the forecast and observation regions, but also the training region.
+        '''
+        (forecast_len, f_x_len, f_y_len) = forecast_region.shape
+        (observation_len, o_x_len, o_y_len) = observation_region.shape
+        (training_len, t_x_len, t_y_len) = training_region.shape
+
+        # sanity check: all have the same 2D region
+        assert (f_x_len, f_y_len) == (o_x_len, o_y_len)
+        assert (f_x_len, f_y_len) == (t_x_len, t_y_len)
+
+        # sanity check: forecasts and observations have the same length
+        assert forecast_len == observation_len
+        log_msg = 'Forecast: <{}> Observation: <{}>'
+        self.logger.debug(log_msg.format(forecast_region.shape, observation_region.shape))
+
+        # tell forecast region to create a new region, this way we get behavior from subclasses
+        # of SpatialRegion
+        decorated_region = forecast_region.empty_region_2d()
+        error_region_np = decorated_region.as_numpy
+
+        # iterate over the forecast points
+        for (point_ij, forecast_series_ij) in forecast_region:
+
+            # corresponding observation and training series at Point(i, j)
+            observation_series_ij = observation_region.series_at(point_ij)
+            training_series_ij = training_region.series_at(point_ij)
+
+            # calculate MASE for Point(i, j)
+            error_ij = error_util.mase(forecast_series_ij, observation_series_ij,
+                                       training_series_ij)
+            error_region_np[point_ij.x, point_ij.y] = error_ij
+
+        # finally create the instance of this class: the decorated region contains the data,
+        # we wrap around this region to get ErrorRegion methods
+        super(ErrorRegionMASE, self).__init__(decorated_region)
+
+
+class ErrorRegionOld(SpatialDecorator):
     '''
     A spatial region where each value represents the forecast error of a model.
     It is created by measuring the distance between a forecast region and a test region.
@@ -14,7 +124,7 @@ class ErrorRegion(SpatialDecorator):
     '''
 
     def __init__(self, decorated_region, distance_measure, **kwargs):
-        super(ErrorRegion, self).__init__(decorated_region, **kwargs)
+        super(ErrorRegionOld, self).__init__(decorated_region, **kwargs)
         self.distance_measure = distance_measure
 
     @property

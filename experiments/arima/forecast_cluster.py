@@ -3,6 +3,9 @@ Execute this program to perform clustering on a spatio-temporal region, then app
 forecasting and error evaluation on each cluster.
 '''
 import argparse
+import csv
+from collections import namedtuple
+import time
 
 from spta.arima import arima
 from spta.distance.dtw import DistanceByDTW
@@ -13,6 +16,22 @@ from spta.util import log as log_util
 from experiments.metadata.arima import arima_suite_by_name
 from experiments.metadata.arima_clustering import arima_clustering_experiments
 from experiments.metadata.region import predefined_regions
+
+
+'''
+This tuple will hold analysis results for each cluster.
+For each cluster and for each ArimaParams tuple (p, d, q), save the computation time and the
+following errors:
+
+    error_each: RMSE of forecast MASE errors using ARIMA models trained in each point
+
+    error_min_local: RMSE of forecast MASE errors using the ARIMA model that has the
+        minimum local error among all points
+
+    error_medoid: RMSE of forecast MASE errors using the ARIMA model trained at the cluster medoid
+'''
+ArimaExperiment = namedtuple('ArimaExperiment', ('cluster', 'p', 'd', 'q', 'time', 'error_each',
+                                                 'error_min_local', 'error_medoid'))
 
 
 def processRequest():
@@ -39,6 +58,8 @@ def processRequest():
 
 
 def do_arima_forecast_cluster(args):
+
+    logger = log_util.logger_for_me(do_arima_forecast_cluster)
 
     # get the region from metadata
     spt_region_metadata = predefined_regions()[args.region]
@@ -75,42 +96,63 @@ def do_arima_forecast_cluster(args):
         clusters.append(cluster_i)
 
     # here we will store ARIMA results by cluster and by parameters
-    arima_results_by_cluster = {}
+    arima_experiment_results = []
 
     # iterate the spatio-temporal clusters
-    for i in range(0, k):
-        cluster_i = SpatioTemporalCluster.from_clustering(spt_region, kmedoids_result.labels,
-                                                          label=i, centroids=medoid_indices)
-        clusters.append(cluster_i)
+    # for i in range(0, k):
+    for i in range(0, 1):
 
         # the medoid will be used as centroid for the ARIMA analysis
+        cluster_i = clusters[i]
         centroid_i = cluster_i.centroid
 
+        logger.info('************************************')
+        logger.info('Analyzing cluster {} with medoid: {}'.format(i, centroid_i))
+        logger.info('************************************')
+
         # iterate the ARIMA suite
-        arima_results_by_cluster[i] = {}
         for arima_params in arima_suite.arima_params_gen():
 
             # evaluate this ARIMA model
+            # this can take some time, register the time as a performance metric
+            t_start = time.time()
             arima_result = arima.evaluate_forecast_errors_arima(cluster_i, arima_params,
                                                                 centroid=centroid_i)
             (centroid, training_region, forecast_region_each, test_region, arima_models_each,
-                combined_errors) = arima_result
+                overall_errors) = arima_result
 
-            # save errors
-            arima_results_by_cluster[i][arima_params] = combined_errors
+            t_stop = time.time()
+
+            # prepare to save experiment result
+            t_elapsed = '{:.3f}'.format(t_stop - t_start)
+            (p, d, q) = arima_params
+
+            # format the float as nice strings
+            (overall_error_each, overall_error_min_local, overall_error_centroid) = overall_errors
+            error_each = '{:.3f}'.format(overall_error_each)
+            error_min_local = '{:.3f}'.format(overall_error_min_local)
+            error_medoid = '{:.3f}'.format(overall_error_centroid)
+
+            # save error and performance data for this experiment
+            arima_experiment = ArimaExperiment(i, p, d, q, t_elapsed, error_each, error_min_local,
+                                               error_medoid)
+            arima_experiment_results.append(arima_experiment)
 
             if args.plot:
                 # plot forecast at Point(0, 0)
                 arima.plot_one_arima(training_region, forecast_region_each, test_region,
                                      arima_models_each)
 
-    # print results
-    for i in range(0, k):
-        print('Results for cluster {} with medoid {}'.format(i, clusters[i].centroid))
-        for (arima_params, combined_errors) in arima_results_by_cluster[i].items():
-            result_line = '{}: {} errors -> each={:.2f}, min_local={:.2f}, centroid={:.2f}'
-            print(result_line.format(i, arima_params, combined_errors[0], combined_errors[1],
-                                     combined_errors[2]))
+    # save results in CSV format
+    csv_filename = '{}.csv'.format(args.arima_clustering)
+    with open(csv_filename, 'w', newline='') as csv_file:
+        csv_writer = csv.writer(csv_file, delimiter=' ', quotechar='|',
+                                quoting=csv.QUOTE_MINIMAL)
+        # header
+        csv_writer.writerow(ArimaExperiment._fields)
+
+        for result in arima_experiment_results:
+            csv_writer.writerow(result)
 
 
 if __name__ == '__main__':
