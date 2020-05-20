@@ -9,6 +9,7 @@ def predefined_arima_suites():
         'arima_simple': [(2,), (0,), (2,)],
         'arima_1_1_1': [(1,), (2,), (3,)],
         'arima_two': [(2,), (0,), range(1, 3)],
+        'arima_2_2_2': [(2,), (2,), (2,)],
         'arima_sweep': [[0, 1, 2, 4, 6, 8, 10], range(0, 3), range(0, 3)]
     }
 

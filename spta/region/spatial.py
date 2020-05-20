@@ -230,6 +230,9 @@ class SpatialCluster(SpatialDecorator):
         self.spatial_mask = spatial_mask
         self.label = label
 
+        # also save the number of points that are members of this cluster, using the mask
+        self.cluster_len = np.count_nonzero(spatial_mask.as_numpy == 1)
+
     def region_subset(self, region):
         error_msg = 'region_subset not allowed for {}!'
         raise NotImplementedError(error_msg.format(self.__class__.__name__))

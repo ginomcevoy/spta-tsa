@@ -45,7 +45,7 @@ def setup_log(log_level_str):
     return logging.getLogger()
 
 
-def setup_log_argparse(args, default_level='DEBUG'):
+def setup_log_argparse(args, default_level='INFO'):
     '''
     Configure the logger when using argparse. Defaults to 'DEBUG'.
     '''

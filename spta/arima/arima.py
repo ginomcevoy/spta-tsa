@@ -45,10 +45,14 @@ def train_arima(arima_params, time_series):
     try:
         model = ARIMA(time_series, order=(arima_params.p, arima_params.d, arima_params.q))
         model_fit = model.fit(disp=0)
-    except ValueError:
-        # log.warn('could not train ARIMA %s for point %s' % (str(arima_params), point))
-        # could not train the model
-        model_fit = FailedArima()
+    except ValueError as err:
+        log.warn('ARIMA {} failed with ValueError: {}'.format(arima_params, err))
+        model_fit = None
+    except np.linalg.LinAlgError as err:
+        # the "SVD did not converge" can create an error
+        #
+        log.warn('ARIMA {} failed with LinAlgError: {}'.format(arima_params, err))
+        model_fit = None
 
     return model_fit
 
@@ -96,15 +100,15 @@ class ArimaTrainingRegion(FunctionRegionScalar):
         spatial_region = super(ArimaTrainingRegion, self).apply_to(spt_region)
 
         # count and log missing models, iterate to find them
-        missing_count = 0
-        for (point, arima_model) in self:
-            if isinstance(arima_model, FailedArima):
-                missing_count += 1
-                log_msg = 'Could not train ARIMA {} for point {}'
-                self.logger.warn(log_msg.format(str(arima_params), point))
+        self.missing_count = 0
+        for (point, arima_model) in spatial_region:
+            # if isinstance(arima_model, FailedArima):
 
-        if missing_count:
-            self.logger.warn('Missing ARIMA models: {}' % str(missing_count))
+            if arima_model is None:
+                self.missing_count += 1
+
+        if self.missing_count:
+            self.logger.warn('Missing ARIMA models: {}'.format(self.missing_count))
         else:
             self.logger.info('ARIMA was trained in all points successfully.')
 
@@ -112,7 +116,7 @@ class ArimaTrainingRegion(FunctionRegionScalar):
         # Since ArimaModelRegion is a FunctionRegionSeries, it requires the length of its output
         # series, that is forecast_len.
 
-        # TODO: can this approach support clusters later?!
+        # TODO: should ArimaModelRegion be a SpatialCluster?
         return ArimaModelRegion(spatial_region.as_numpy, output_len=self.forecast_len)
 
     @classmethod
@@ -170,8 +174,13 @@ class ArimaModelRegion(FunctionRegionSeries):
         # generic when SVM comes! (a wrapper subclass for ARIMA, a wrapper subclass for SVM)
         def forecast_from_model(value):
             # ignore the value of the input region, we already have forecast_len available
-            # TODO catch None model here, and get rid of FailArima?
-            return model_at_point.forecast(self.output_len)[0]
+            if model_at_point is None:
+                # no model, return array of NaNs
+                return np.repeat(np.nan, repeats=self.output_len)
+            else:
+                # return a forecast array, [0] because the forecast function returns an array
+                # with the forecast array at index 0.
+                return model_at_point.forecast(self.output_len)[0]
 
         return forecast_from_model
 
@@ -208,16 +217,19 @@ def evaluate_forecast_errors_arima(spt_region, arima_params, forecast_len=FORECA
     # a function region with produces trained models when applied to a training region
     arima_trainings = ArimaTrainingRegion.from_training_region(training_region, arima_params,
                                                                forecast_len)
+
+    # train the models: this returns an instance of statsmodels.tsa.arima.ARIMAResults in each
+    # point of the region
     arima_models_each = arima_trainings.apply_to(training_region)
+
+    # save the number of failed models... ugly but works
+    arima_models_each.missing_count = arima_trainings.missing_count
 
     # do a forecast: pass an (empty!) region. This region will control the iteration though.
     empty_region_2d = training_region.empty_region_2d()
 
     # use the ARIMA models to forecast for their respective points
     forecast_region_each = arima_models_each.apply_to(empty_region_2d)
-
-    #error_region_each = forecast.ErrorRegion.create_from_forecasts(forecast_region_each,
-    #                                                              test_region)
 
     # calculate forecast error using MASE
     error_region_each = ErrorRegionMASE(forecast_region_each, test_region, training_region)
@@ -254,8 +266,6 @@ def evaluate_forecast_errors_arima(spt_region, arima_params, forecast_len=FORECA
     # repeated all over the region
     forecast_region_centroid = forecast_region_each.repeat_point(centroid)
 
-    # error_region_centroid = forecast.ErrorRegion.create_from_forecasts(forecast_region_centroid,
-    #                                                                    test_region)
     error_region_centroid = ErrorRegionMASE(forecast_region_centroid, test_region,
                                             training_region)
     overall_error_centroid = error_region_centroid.overall_error
@@ -313,6 +323,6 @@ if __name__ == '__main__':
     arima_params = ArimaParams(1, 1, 1)
     forecast_len = 8
 
-    (centroid, training_region, forecast_region, test_region, arima_region, _) =\
+    (centroid, training_region, forecast_region, test_region, arima_models_each, _) =\
         evaluate_forecast_errors_arima(spt_region, arima_params, forecast_len, centroid)
-    plot_one_arima(training_region, forecast_region, test_region, arima_region)
+    plot_one_arima(training_region, forecast_region, test_region, arima_models_each)

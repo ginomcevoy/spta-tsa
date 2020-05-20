@@ -30,9 +30,9 @@ following errors:
 
     error_medoid: RMSE of forecast MASE errors using the ARIMA model trained at the cluster medoid
 '''
-ArimaExperiment = namedtuple('ArimaExperiment', ('cluster', 'p', 'd', 'q', 'time', 'error_each',
-                                                 'error_min_local', 'error_medoid'))
-
+ArimaExperiment = namedtuple('ArimaExperiment',
+                             ('cluster', 'size', 'p', 'd', 'q', 'failed', 'time', 'error_each',
+                              'error_min_local', 'error_medoid'))
 
 def processRequest():
 
@@ -79,9 +79,13 @@ def do_arima_forecast_cluster(args):
     distance_dtw.load_distance_matrix_2d(spt_region_metadata.distances_filename,
                                          spt_region_metadata.region)
 
+    # faster...
+    initial_medoids = [3607, 1248, 5021, 5472, 3345, 1429, 372, 3861]
+
     # build a KmedoidsMetadata object
     kmedoids_metadata = kmedoids.kmedoids_default_metadata(k, distance_measure=distance_dtw,
-                                                           random_seed=seed)
+                                                           random_seed=seed,
+                                                           initial_medoids=initial_medoids)
 
     # run k-medoids
     # KmedoidsResult(k, random_seed, medoids, labels, costs, tot_cost, dist_mat)
@@ -105,6 +109,7 @@ def do_arima_forecast_cluster(args):
         # the medoid will be used as centroid for the ARIMA analysis
         cluster_i = clusters[i]
         centroid_i = cluster_i.centroid
+        size_i = cluster_i.cluster_len
 
         logger.info('************************************')
         logger.info('Analyzing cluster {} with medoid: {}'.format(i, centroid_i))
@@ -126,6 +131,7 @@ def do_arima_forecast_cluster(args):
             # prepare to save experiment result
             t_elapsed = '{:.3f}'.format(t_stop - t_start)
             (p, d, q) = arima_params
+            failed = arima_models_each.missing_count
 
             # format the float as nice strings
             (overall_error_each, overall_error_min_local, overall_error_centroid) = overall_errors
@@ -134,8 +140,8 @@ def do_arima_forecast_cluster(args):
             error_medoid = '{:.3f}'.format(overall_error_centroid)
 
             # save error and performance data for this experiment
-            arima_experiment = ArimaExperiment(i, p, d, q, t_elapsed, error_each, error_min_local,
-                                               error_medoid)
+            arima_experiment = ArimaExperiment(i, size_i, p, d, q, failed, t_elapsed, error_each,
+                                               error_min_local, error_medoid)
             arima_experiment_results.append(arima_experiment)
 
             if args.plot:

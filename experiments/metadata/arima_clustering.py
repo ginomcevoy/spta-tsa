@@ -8,7 +8,8 @@ def arima_clustering_experiments():
     return {
         'arima_simple_2_0': ['arima_simple', 'Kmedoids', 'DistanceByDTW', 2, 0],
         'arima_two_2_0': ['arima_two', 'Kmedoids', 'DistanceByDTW', 2, 0],
-        'arima_whole_brazil': ['arima_sweep', 'Kmedoids', 'DistanceByDTW', 8, 0]
+        'arima_whole_brazil': ['arima_sweep', 'Kmedoids', 'DistanceByDTW', 8, 0],
+        'arima_whole_brazil_fails': ['arima_2_2_2', 'Kmedoids', 'DistanceByDTW', 8, 0]
     }
 
 

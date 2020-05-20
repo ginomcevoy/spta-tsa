@@ -304,10 +304,6 @@ class SpatioTemporalCluster(SpatialCluster, SpatioTemporalDecorator):
         '''
         # beware the diamond problem!!
         # this should be solved in parents...
-
-        # call parent constructor explicity
-        # SpatialCluster.__init__(numpy_dataset, spatial_mask, label, region_metadata)
-
         super(SpatioTemporalCluster, self).__init__(decorated_region, spatial_mask, label,
                                                     region_metadata)
 
