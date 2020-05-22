@@ -20,7 +20,7 @@ class TestFunctionRegionOnSpatioTemporalCluster(unittest.TestCase):
         mean_function_region = stub_region.stub_mean_function_scalar()
 
         # when getting cluster with label 2 and applying the function to it
-        cluster_2 = SpatioTemporalCluster.from_clustering(spt_region, members, label=2)
+        cluster_2 = SpatioTemporalCluster.from_crisp_clustering(spt_region, members, label=2)
         mean_cluster_2 = mean_function_region.apply_to(cluster_2)
 
         # then result is a SpatialCluster
@@ -59,7 +59,7 @@ class TestFunctionRegionOnSpatioTemporalCluster(unittest.TestCase):
         reverse_function_region = stub_region.stub_reverse_function_series()
 
         # when getting cluster with label 2 and applying the function to it
-        cluster_2 = SpatioTemporalCluster.from_clustering(spt_region, members, label=2)
+        cluster_2 = SpatioTemporalCluster.from_crisp_clustering(spt_region, members, label=2)
         reversed_cluster = reverse_function_region.apply_to(cluster_2)
 
         # then result is a SpatialTemporalCluster

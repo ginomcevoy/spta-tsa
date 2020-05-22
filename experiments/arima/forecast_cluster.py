@@ -79,8 +79,9 @@ def do_arima_forecast_cluster(args):
     distance_dtw.load_distance_matrix_2d(spt_region_metadata.distances_filename,
                                          spt_region_metadata.region)
 
-    # faster...
-    initial_medoids = [3607, 1248, 5021, 5472, 3345, 1429, 372, 3861]
+    # faster... (whole_brazil_1y_1ppd, k=8, seed=0)
+    # initial_medoids = [3607, 1248, 5021, 5472, 3345, 1429, 372, 3861]
+    initial_medoids = None
 
     # build a KmedoidsMetadata object
     kmedoids_metadata = kmedoids.kmedoids_default_metadata(k, distance_measure=distance_dtw,
@@ -95,8 +96,8 @@ def do_arima_forecast_cluster(args):
     # build the spatio-temporal clusters
     clusters = []
     for i in range(0, k):
-        cluster_i = SpatioTemporalCluster.from_clustering(spt_region, kmedoids_result.labels,
-                                                          label=i, centroids=medoid_indices)
+        cluster_i = SpatioTemporalCluster.from_crisp_clustering(spt_region, kmedoids_result.labels,
+                                                                label=i, centroids=medoid_indices)
         clusters.append(cluster_i)
 
     # here we will store ARIMA results by cluster and by parameters

@@ -1,12 +1,18 @@
 import numpy as np
 
-from . import SpatialRegion, SpatioTemporalRegion
+# this approach avoids circular imports
+import spta.region.base
+import spta.region.spatial
+import spta.region.temporal
 
 
-class FunctionRegion(SpatialRegion):
+class FunctionRegion(spta.region.spatial.SpatialRegion):
     '''
     A SpatialRegion where the value at each point is a function that can be applied to another
     region (SpationTemporalRegion instance?).
+
+    This implementation reifies the Visitor pattern: the domain is the visitor, and the
+    functions get "visited" by the domain so that the function can be applied at each point.
 
     The constructor accepts an optional dtype, which will be used when creating the output.
     '''
@@ -27,10 +33,11 @@ class FunctionRegion(SpatialRegion):
 
         return function_at_point
 
-    def apply_to(self, spt_region):
+    def apply_to(self, domain_region):
         '''
-        Apply this function region to a spatio-temporal region.
-        Subclasses should implement this.
+        Apply this function region to a domain region.
+        Subclasses should implement this by declaring how the function "accepts" the domain
+        visitor in the Visitor pattern.
         '''
         raise NotImplementedError
 
@@ -41,19 +48,20 @@ class FunctionRegionScalar(FunctionRegion):
     The result should be a SpatialRegion.
     '''
 
-    def apply_to(self, spt_region):
+    def apply_to(self, domain_region):
         '''
-        Apply this function to a spatio-temporal region, to get a SpatialRegion as result.
+        Apply this function to a domain region, to get a SpatialRegion as result.
 
         Lets the parameter region handle the call by default. This enables outputs that are
         subclasses of SpatialRegion, without the function knowing about the polymorphism.
         '''
         # the function passes itself, delegates computation to the region
-        result_region = spt_region.apply_function_scalar(self)
+        # visitor pattern: visitor.visitElementA(this)
+        result_region = domain_region.apply_function_scalar(self)
 
         # should not be SpatioTemporalRegion, otherwise we should have used a different function
-        assert isinstance(result_region, SpatialRegion)
-        assert not isinstance(result_region, SpatioTemporalRegion)
+        assert isinstance(result_region, spta.region.spatial.SpatialRegion)
+        assert not isinstance(result_region, spta.region.temporal.SpatioTemporalRegion)
 
         return result_region
 
@@ -69,17 +77,18 @@ class FunctionRegionSeries(FunctionRegion):
         super(FunctionRegionSeries, self).__init__(numpy_dataset, dtype)
         self.output_len = output_len
 
-    def apply_to(self, spt_region):
+    def apply_to(self, domain_region):
         '''
-        Apply this function to a spatio-temporal region, to get a SpatioTemporalRegion as result.
+        Apply this function to a domain region, to get a SpatioTemporalRegion as result.
 
         Lets the parameter region handle the call by default. This enables outputs that are
         subclasses of SpatioTemporalRegion, without the function knowing about the polymorphism.
         '''
         # the function passes itself, delegates computation to the region
-        result_region = spt_region.apply_function_series(self)
+        # visitor pattern: visitor.visitElementB(this)
+        result_region = domain_region.apply_function_series(self)
 
         # should be SpatioTemporalRegion otherwise we should have used a different function
-        assert isinstance(result_region, SpatioTemporalRegion)
+        assert isinstance(result_region, spta.region.temporal.SpatioTemporalRegion)
 
         return result_region
