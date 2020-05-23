@@ -6,7 +6,7 @@ def predefined_arima_suites():
     # add ARIMA suite experiments here
     # the syntax is [p_values, q_values, d_values]
     arima_suites = {
-        'arima_simple': [(2,), (0,), (2,)],
+        'arima_simple': [(2,), (1,), (1,)],
         'arima_1_1_1': [(1,), (2,), (3,)],
         'arima_two': [(2,), (0,), range(1, 3)],
         'arima_2_2_2': [(2,), (2,), (2,)],

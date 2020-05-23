@@ -192,6 +192,16 @@ class SpatioTemporalRegion(DomainRegion):
     # def get_dummy_region(self):
     #     dummy = Region)
 
+    def __str__(self):
+        '''
+        A string representation: if a name is available, return it.
+        Otherwise, return a generic name.
+        '''
+        if self.region_metadata is not None:
+            return self.region_metadata.name
+        else:
+            return 'SpatioTemporalRegion {}'.format(self.shape)
+
     @classmethod
     def from_metadata(cls, sptr_metadata):
         '''
@@ -220,7 +230,7 @@ class SpatioTemporalRegion(DomainRegion):
         spt_region = SpatioTemporalRegion(numpy_dataset).region_subset(sptr_metadata.region)
 
         # save the metadata in the instance, can be useful later
-        spt_region.metadata = sptr_metadata
+        spt_region.region_metadata = sptr_metadata
 
         logger.info('Loaded dataset {}: {}'.format(sptr_metadata, sptr_metadata.region))
         return spt_region
@@ -301,17 +311,20 @@ class SpatioTemporalCluster(SpatialCluster, SpatioTemporalDecorator):
     def interval_subset(self, ti):
         '''
         ti: TimeInterval
-        Will create a new spatio-temporal cluster, maintaining current mask
+        Will create a new spatio-temporal cluster, copying current mask
         '''
-        self.logger.debug('SpatioTemporalCluster interval_subset')
+        self.logger.debug('{} interval_subset'.format(self))
         decorated_interval_subset = self.decorated_region.interval_subset(ti)
-        return SpatioTemporalCluster(decorated_interval_subset, self.mask_region)
+
+        # we need to clone the mask!
+        # if we don't, training and observation will have the same iterators when forecasting
+        return SpatioTemporalCluster(decorated_interval_subset, self.mask_region.clone())
 
     def series_at(self, point):
         '''
         Returns the time series at specified point, the point must belong to cluster mask
         '''
-        self.logger.debug('SpatioTemporalCluster {} series_at {}'.format(self.label, point))
+        # self.logger.debug('SpatioTemporalCluster {} series_at {}'.format(self.label, point))
         if self.mask_region.is_member(point):
             return self.decorated_region.series_at(point)
         else:
@@ -325,7 +338,7 @@ class SpatioTemporalCluster(SpatialCluster, SpatioTemporalDecorator):
         The series is repeated over all points for simplicity, but calling series_at on points
         outside the mask should remain forbidden.
         '''
-        self.logger.debug('SpatioTemporalCluster repeat_point')
+        self.logger.debug('{} repeat_point'.format(self))
         repeated_region = self.decorated_region.repeat_point(point)
         return SpatioTemporalCluster(repeated_region, self.mask_region, self.region_metadata)
 
@@ -339,6 +352,16 @@ class SpatioTemporalCluster(SpatialCluster, SpatioTemporalDecorator):
 
         # return next point and series in the cluster
         return (point_in_mask, self.series_at(point_in_mask))
+
+    def __str__(self):
+        '''
+        A string representation: if a name is available, return it.
+        Otherwise, return a generic name.
+        '''
+        if hasattr(self, 'name'):
+            return self.name
+        else:
+            return 'SpatioTemporalCluster {}'.format(self.shape)
 
     @classmethod
     def from_crisp_clustering(cls, spt_region, members, label, centroids=None):
@@ -375,9 +398,11 @@ class SpatioTemporalCluster(SpatialCluster, SpatioTemporalDecorator):
 
         # build mask_region from members and label
         mask_region = MaskRegionCrisp.from_1d_labels(members, label, x_len, y_len)
+        mask_region.name = '{}->MaskRegion{}'.format(spt_region, label)
 
         # build one cluster for this label
         cluster = SpatioTemporalCluster(spt_region, mask_region, None)
+        cluster.name = '{}->cluster{}'.format(spt_region, label)
 
         # centroid available?
         if centroids is not None:

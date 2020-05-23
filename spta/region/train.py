@@ -42,10 +42,11 @@ def split_region_in_train_test(spt_region, test_len, test_from='last'):
     training_subset = spt_region.interval_subset(training_interval)
     test_subset = spt_region.interval_subset(test_interval)
 
+    training_subset.name = 'train_{}'.format(spt_region)
+    test_subset.name = 'test_{}'.format(spt_region)
+
     logger = log_util.logger_for_me(split_region_in_train_test)
-    logger.debug('training_subset: {} {}'.format(training_subset.__class__.__name__,
-                                                 training_subset.shape))
-    logger.debug('test_subset: {} {}'.format(test_subset.__class__.__name__,
-                                             test_subset.shape))
+    logger.debug('training_subset: {} -> {}'.format(training_subset, training_subset.shape))
+    logger.debug('test_subset: {} -> {}'.format(test_subset, test_subset.shape))
 
     return (training_subset, test_subset)

@@ -1,7 +1,9 @@
 import numpy as np
 
 from .base import BaseRegion
-from . import Region, reshape_1d_to_2d
+from . import Point, Region, reshape_1d_to_2d
+
+from spta.util import arrays as arrays_util
 
 
 class DomainRegion(BaseRegion):
@@ -35,6 +37,8 @@ class DomainRegion(BaseRegion):
 
         # use internal iterator! this means we can't use this function inside another iteration...
         for (point, value) in self:
+
+            self.logger.debug('Iterating in {} at point {}'.format(self, point))
 
             # get the function at the point (can vary!), apply it to get result at point
             function_at_point = function_region_scalar.function_at(point)
@@ -115,6 +119,42 @@ class SpatialRegion(DomainRegion):
     def value_at(self, point):
         return self.numpy_dataset[point.x, point.y]
 
+    def find_minimum(self):
+        '''
+        Find the point with the minimum value, return the (point, value) tuple.
+
+        Cannot be used inside another iterator of this instance!
+        '''
+        # save the min value
+        min_value = np.Inf
+        min_point = None
+
+        # use the iterator, should work as expected for subclasses of SpatialRegion
+        for (point, value) in self:
+            if value < min_value:
+                min_value = value
+                min_point = point
+
+        return (min_point, min_value)
+
+    def find_maximum(self):
+        '''
+        Find the point with the maximum value, return the (point, value) tuple.
+
+        Cannot be used inside another iterator of this instance!
+        '''
+        # save the max value
+        max_value = -np.Inf
+        max_point = None
+
+        # use the iterator, should work as expected for subclasses of SpatialRegion
+        for (point, value) in self:
+            if value > max_value:
+                max_value = value
+                max_point = point
+
+        return (max_point, max_value)
+
     @classmethod
     def create_from_1d(cls, list_1d, x, y):
         '''
@@ -134,7 +174,14 @@ class SpatialRegion(DomainRegion):
         return SpatialRegion(zero_array)
 
     def __str__(self):
-        return str(self.numpy_dataset)
+        '''
+        A string representation: if a name is available, return it.
+        Otherwise, return a generic name.
+        '''
+        if hasattr(self, 'name'):
+            return self.name
+        else:
+            return 'SpatialRegion {}'.format(self.shape)
 
 
 class SpatialDecorator(SpatialRegion):
@@ -159,6 +206,9 @@ class SpatialDecorator(SpatialRegion):
 
     def save(self, filename):
         return self.decorated_region.save(filename)
+
+    def __str__(self):
+        return str(self.decorated)
 
     # code below is wrong, we don't want to use the decorated function which will use the
     # decorated iterator, instead of a more useful iterator in decorating overrides
@@ -252,9 +302,8 @@ class SpatialCluster(SpatialDecorator):
 
         # call the parent code (SpatialRegion)
         # since the iterator is overridden, this should only iterate over points in the mask
-        supah = super(SpatialCluster, self)
-        self.logger.debug('SpatialCluster apply_function_scalar with supah {}'.format(supah))
-        spatial_region = supah.apply_function_scalar(function_region_scalar)
+        self.logger.debug('{} apply_function_scalar'.format(self))
+        spatial_region = super(SpatialCluster, self).apply_function_scalar(function_region_scalar)
 
         # return a SpatialCluster instead!
         # Notice that the calling function is not aware of the change
@@ -272,7 +321,7 @@ class SpatialCluster(SpatialDecorator):
 
         Cannot be used inside the class iterator!
         '''
-        self.logger.debug('SpatialCluster apply_function_series')
+        self.logger.debug('{} apply_function_series'.format(self))
 
         # call the parent code (SpatialRegion)
         # since the iterator is overridden, this should only iterate over points in the mask
@@ -283,6 +332,16 @@ class SpatialCluster(SpatialDecorator):
         # (visitor is not aware of how the visited element is of a differnt subclass)
         from .temporal import SpatioTemporalCluster
         return SpatioTemporalCluster(spt_region, self.mask_region)
+
+    def __str__(self):
+        '''
+        A string representation: if a name is available, return it.
+        Otherwise, return a generic name.
+        '''
+        if hasattr(self, 'name'):
+            return self.name
+        else:
+            return 'SpatialCluster {}'.format(self.shape)
 
 
 if __name__ == '__main__':

@@ -30,9 +30,9 @@ following errors:
 
     error_medoid: RMSE of forecast MASE errors using the ARIMA model trained at the cluster medoid
 '''
-ArimaExperiment = namedtuple('ArimaExperiment',
-                             ('cluster', 'size', 'p', 'd', 'q', 'failed', 'time', 'error_each',
-                              'error_min_local', 'error_medoid'))
+ArimaClusterResult = namedtuple('ArimaClusterResult',
+                                ('cluster', 'size', 'p', 'd', 'q', 'failed', 'time', 'error_each',
+                                 'error_min', 'error_min_local', 'error_medoid', 'error_max'))
 
 def processRequest():
 
@@ -104,8 +104,8 @@ def do_arima_forecast_cluster(args):
     arima_experiment_results = []
 
     # iterate the spatio-temporal clusters
-    # for i in range(0, k):
-    for i in range(0, 1):
+    for i in range(0, k):
+    # for i in range(0, 1):
 
         # the medoid will be used as centroid for the ARIMA analysis
         cluster_i = clusters[i]
@@ -134,15 +134,21 @@ def do_arima_forecast_cluster(args):
             (p, d, q) = arima_params
             failed = arima_models_each.missing_count
 
-            # format the float as nice strings
-            (overall_error_each, overall_error_min_local, overall_error_centroid) = overall_errors
+            # format all errors as nice strings
+            # TODO do a loop?
+            (overall_error_each, overall_error_min, overall_error_min_local,
+                overall_error_centroid, overall_error_max) = overall_errors
+
             error_each = '{:.3f}'.format(overall_error_each)
+            error_min = '{:.3f}'.format(overall_error_min)
             error_min_local = '{:.3f}'.format(overall_error_min_local)
             error_medoid = '{:.3f}'.format(overall_error_centroid)
+            error_max = '{:.3f}'.format(overall_error_max)
 
             # save error and performance data for this experiment
-            arima_experiment = ArimaExperiment(i, size_i, p, d, q, failed, t_elapsed, error_each,
-                                               error_min_local, error_medoid)
+            arima_experiment = ArimaClusterResult(i, size_i, p, d, q, failed, t_elapsed,
+                                                  error_each, error_min, error_min_local,
+                                                  error_medoid, error_max)
             arima_experiment_results.append(arima_experiment)
 
             if args.plot:
@@ -156,7 +162,7 @@ def do_arima_forecast_cluster(args):
         csv_writer = csv.writer(csv_file, delimiter=' ', quotechar='|',
                                 quoting=csv.QUOTE_MINIMAL)
         # header
-        csv_writer.writerow(ArimaExperiment._fields)
+        csv_writer.writerow(ArimaClusterResult._fields)
 
         for result in arima_experiment_results:
             csv_writer.writerow(result)

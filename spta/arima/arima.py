@@ -7,7 +7,7 @@ from statsmodels.tsa.arima_model import ARIMA
 from spta.distance.dtw import DistanceByDTW
 from spta.region import Point, train
 from spta.region.function import FunctionRegionScalar, FunctionRegionSeries
-from spta.region.forecast import ErrorRegionMASE
+from spta.region.forecast import ErrorRegionMASE, OverallErrorForEachForecast
 
 from spta.util import arrays as arrays_util
 from spta.util import log as log_util
@@ -185,6 +185,36 @@ class ArimaModelRegion(FunctionRegionSeries):
         return forecast_from_model
 
 
+def error_single_model(forecast_region_each, test_region, training_region, point, description=''):
+    '''
+    Given the forecast region containing the forecast of each trained ARIMA model, calculate
+    the forecast error when using a single ARIMA model at a given point.
+
+    Example: evaluate the forecast error when using the ARIMA model that was trained at the
+    centroid, and replicate that forecast over the entire region.
+
+    Returns both the error region and the overall error.
+    '''
+
+    logger = log_util.logger_for_me(error_single_model)
+    logger.info('ARIMA at point {}: {}'.format(point, description))
+
+    # create a forecast region that is made of the forecast series created by the single model,
+    # repeated all over the region
+    forecast_region_repeated = forecast_region_each.repeat_point(point)
+
+    # error for the entire region using that ARIMA model
+    # use MASE to calculate the forecast error at each point
+    error_region = ErrorRegionMASE(forecast_region_repeated, test_region, training_region)
+
+    # find the overall erorr (single value)
+    overall_error = error_region.overall_error
+    log_msg = 'Error from ARIMA {} = {}'
+    logger.info(log_msg.format(description, overall_error))
+
+    return (error_region, overall_error)
+
+
 def evaluate_forecast_errors_arima(spt_region, arima_params, forecast_len=FORECAST_LENGTH,
                                    centroid=None):
     '''
@@ -210,6 +240,10 @@ def evaluate_forecast_errors_arima(spt_region, arima_params, forecast_len=FORECA
     logger.info('Using (p, d, q) = %s' % (arima_params,))
     (training_region, test_region) = train.split_region_in_train_test(spt_region, forecast_len)
 
+    # names to help debugging
+    training_region.name = 'training_region'
+    test_region.name = 'test_region'
+
     #
     # ARIMA for each point in the region
     #
@@ -230,29 +264,43 @@ def evaluate_forecast_errors_arima(spt_region, arima_params, forecast_len=FORECA
 
     # use the ARIMA models to forecast for their respective points
     forecast_region_each = arima_models_each.apply_to(empty_region_2d)
+    forecast_region_each.name = 'forecast_region_each'
 
     # calculate forecast error using MASE
     error_region_each = ErrorRegionMASE(forecast_region_each, test_region, training_region)
     overall_error_each = error_region_each.overall_error
     logger.info('Combined error from all ARIMAs: {}'.format(overall_error_each))
 
+    # calculate the prediction error when using each ARIMA model to forecast the entire region
+    # the output is a spatial region that has the overall error in each point P(i, j),
+    # corresponding to the overall error when using the ARIMA model at P(i, j)
+    overall_error_each_function = OverallErrorForEachForecast(test_region, training_region)
+    overall_error_region = overall_error_each_function.apply_to(forecast_region_each)
+
     #
-    # ARIMA with minimum local error
+    # Best ARIMA model: the one that minimizes the overall error when it is uesd to forecast
+    # the entire region
     #
+    (point_overall_error_min, overall_error_min) = overall_error_region.find_minimum()
+    log_msg = 'Minimum overall error with single ARIMA at {}: {}'
+    logger.info(log_msg.format(point_overall_error_min, overall_error_min))
 
-    point_min_error = error_region_each.point_with_min_error()
-    logger.info('Point at which ARIMA has min local error: %s' % str(point_min_error))
+    #
+    # ARIMA using the model with minimum local error
+    #
+    point_min_local_error = error_region_each.point_with_min_error()
+    overall_error_min_local = overall_error_region.value_at(point_min_local_error)
+    # desc_min_error = 'min local error'
+    # (_, overall_error_min_local) = error_single_model(forecast_region_each, test_region,
+    #                                                   training_region, point_min_error,
+    #                                                   desc_min_error)
 
-    # create a forecast region that is made of the forecast series with min local error,
-    # repeated all over the region
-    forecast_region_min_local = forecast_region_each.repeat_point(point_min_error)
+    log_msg = 'Error from ARIMA model with min local error at {}: {}'
+    logger.info(log_msg.format(point_min_local_error, overall_error_min_local))
 
-    # error for the entire region using that ARIMA model
-    error_region_min_local = ErrorRegionMASE(forecast_region_min_local, test_region,
-                                             training_region)
-    overall_error_min_local = error_region_min_local.overall_error
-    log_msg = 'Error from ARIMA with min local error: {}'
-    logger.info(log_msg.format(overall_error_min_local))
+    #
+    # ARIMA using the model at the centroid
+    #
 
     # find the centroid point of the region, use its ARIMA for forecasting
     if centroid:
@@ -260,18 +308,23 @@ def evaluate_forecast_errors_arima(spt_region, arima_params, forecast_len=FORECA
     else:
         centroid = spt_region.get_centroid(distance_measure=DistanceByDTW())
 
-    # the model at the centroid
+    # desc_centroid = 'centroid'
+    # (_, overall_error_centroid) = error_single_model(forecast_region_each, test_region,
+    #                                                  training_region, centroid, desc_centroid)
+    overall_error_centroid = overall_error_region.value_at(centroid)
+    log_msg = 'Error from ARIMA model at centroid {}: {}'
+    logger.info(log_msg.format(centroid, overall_error_centroid))
 
-    # create a forecast region that is made of the forecast series at the centroid,
-    # repeated all over the region
-    forecast_region_centroid = forecast_region_each.repeat_point(centroid)
+    #
+    # Worst ARIMA model: the one that maximizes the overall error when it is used to
+    # to forecast the entire region
+    #
+    (point_overall_error_max, overall_error_max) = overall_error_region.find_maximum()
+    log_msg = 'Maximum overall error with single ARIMA at {}: {}'
+    logger.info(log_msg.format(point_overall_error_max, overall_error_max))
 
-    error_region_centroid = ErrorRegionMASE(forecast_region_centroid, test_region,
-                                            training_region)
-    overall_error_centroid = error_region_centroid.overall_error
-    logger.info('Error from centroid ARIMA: {}'.format(overall_error_centroid))
-
-    overall_errors = (overall_error_each, overall_error_min_local, overall_error_centroid)
+    overall_errors = (overall_error_each, overall_error_min, overall_error_min_local,
+                      overall_error_centroid, overall_error_max)
     return (centroid, training_region, forecast_region_each, test_region, arima_models_each,
             overall_errors)
 

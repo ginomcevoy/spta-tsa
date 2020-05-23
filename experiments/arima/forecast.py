@@ -66,9 +66,14 @@ def do_arima_forecast(args):
 
     # print results
     for (arima_params, combined_errors) in arima_results.items():
+
+        # all ARIMA errors
+        (overall_error_each, overall_error_min, overall_error_min_local,
+            overall_error_centroid, overall_error_max) = combined_errors
+
         result_line = '{} errors -> each={:.2f}, min_local={:.2f}, centroid={:.2f}'
-        print(result_line.format(arima_params, combined_errors[0], combined_errors[1],
-                                 combined_errors[2]))
+        print(result_line.format(arima_params, overall_error_each, overall_error_min_local,
+                                 overall_error_centroid))
 
 
 if __name__ == '__main__':

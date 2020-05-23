@@ -75,3 +75,13 @@ class BaseRegion(log_util.LoggerMixin):
 
         # return current point in iteration
         return Point(i, j)
+
+    def __str__(self):
+        '''
+        A string representation: if a name is available, return it.
+        Otherwise, return a generic name.
+        '''
+        if hasattr(self, 'name'):
+            return self.name
+        else:
+            return 'Region {}'.format(self.shape)

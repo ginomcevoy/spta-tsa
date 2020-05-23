@@ -29,6 +29,13 @@ class MaskRegion(BaseRegion):
         '''
         raise NotImplementedError
 
+    def clone(self):
+        '''
+        Return an identical mask instance. This is useful because we get a new iterator index.
+        Subclasses must override this.
+        '''
+        raise NotImplementedError
+
     def __next__(self):
         '''
         Iterate over points in the mask. Returns the next point that is a member of the current
@@ -38,7 +45,14 @@ class MaskRegion(BaseRegion):
         while True:
 
             # use the base iterator to get next candidate point in region
-            candidate_point = super(MaskRegion, self).__next__()
+            # when the base iterator stops, we also stop
+            try:
+                candidate_point = super(MaskRegion, self).__next__()
+            except StopIteration:
+                # self.logger.debug('Base region iteration stopped')
+                raise
+
+            # self.logger.debug('{}: candidate = {}'.format(self, candidate_point))
 
             if self.is_member(candidate_point):
                 # found a member of the cluster
@@ -77,6 +91,9 @@ class MaskRegionCrisp(MaskRegion):
         Implemented by checking the label value in the 2-d region.
         '''
         return self.numpy_dataset[point.x, point.y] == self.label
+
+    def clone(self):
+        return MaskRegionCrisp(np.copy(self.numpy_dataset), self.label)
 
     @classmethod
     def from_1d_labels(cls, labels, label, x_len, y_len):

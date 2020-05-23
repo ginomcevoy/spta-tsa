@@ -54,6 +54,23 @@ def minimum_value_and_index(numpy_dataset):
     return (minimum, tuple(index))
 
 
+def maximum_value_and_index(numpy_dataset):
+    '''
+    Given a n-dimensional array, finds the overall maximum value.
+    Returns the value and the index in the dataset. The index is expressed as a n-tuple
+    (n dimensions)
+    '''
+    # overall max, ignore NaN
+    maximum = np.nanmax(numpy_dataset)
+    index_as_tuple_of_arrays = np.where(numpy_dataset == maximum)
+    index = [
+        index_coord[0]
+        for index_coord
+        in index_as_tuple_of_arrays
+    ]
+    return (maximum, tuple(index))
+
+
 def root_sum_squared(array):
     return np.sum(np.array(array)**2)**.5
 
