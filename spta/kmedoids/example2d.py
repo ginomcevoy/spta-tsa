@@ -1,21 +1,19 @@
 '''
 Example for k-medoids with synthetic data
 '''
-import logging
 import numpy as np
-import matplotlib.pyplot as plt
 import random
 
 from spta.dataset import synthetic_temporal as synth
 
-from spta.region import Point
 from spta.region.spatial import SpatialRegion
 from spta.region.temporal import SpatioTemporalRegion
-from spta.region.distance import DistanceByDTW
+from spta.distance.dtw import DistanceByDTW
 
 from spta.util import plot as plot_util
+from spta.util import log as log_util
 
-from . import kmedoids
+from . import silhouette
 from . import get_medoid_indices
 
 
@@ -65,11 +63,7 @@ def alternating_functions_2d(spatial_region, series_len, function_options):
 
 
 def main():
-    log_level = logging.DEBUG
-    # log_level = logging.INFO
-    logging.basicConfig(format='%(asctime)s - %(levelname)6s | %(message)s',
-                        level=log_level, datefmt='%d-%b-%y %H:%M:%S')
-    logger = logging.getLogger()
+    logger = log_util.setup_log('DEBUG')
 
     series_len = 200
     function_options = (synth.sine_function, synth.square_function,
@@ -95,10 +89,11 @@ def main():
 
     # try these k, k=3 is best by design
     ks = [2, 3, 4]
-    best_k, best_medoids, best_labels = kmedoids.silhouette_spt(ks, spt_region, distance_measure,
-                                                                seed=1, max_iter=1000, tol=0.001,
-                                                                verbose=True, show_graphs=True,
-                                                                save_graphs=None)
+    random_seeds = (1,)
+
+    metadata = silhouette.silhouette_default_metadata(ks, random_seeds, distance_measure)
+    best_k, _, best_medoids, best_labels = silhouette.do_silhouette_analysis(spt_region,
+                                                                             metadata)
 
     # Show best results
     logger.info('Best k: {}'.format(best_k))

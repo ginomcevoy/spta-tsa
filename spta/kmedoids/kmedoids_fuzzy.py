@@ -1,7 +1,7 @@
 '''
-Light Weight K-Medoids Implementation
-Based on https://github.com/shenxudeu/K_Medoids/blob/master/k_medoids.py
-and https://towardsdatascience.com/k-medoids-clustering-on-iris-data-set-1931bf781e05
+K-Medoids Fuzzy implementation
+Based on http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.41.2622&rep=rep1&type=pdf
+and https://github.com/shenxudeu/K_Medoids/blob/master/k_medoids.py
 '''
 
 import logging
@@ -17,12 +17,13 @@ from . import Medoid, get_medoid_indices
 logger = logging.getLogger()
 
 ''' The metadata for a K-medoids run '''
-KmedoidsMetadata = namedtuple('KmedoidsMetadata', ('k', 'distance_measure', 'initial_medoids',
-                                                   'random_seed', 'max_iter', 'tol', 'verbose'))
+KmedoidsFuzzyMetadata = namedtuple('KmedoidsFuzzyMetadata', ('k', 'm', 'distance_measure',
+                                                             'initial_medoids', 'random_seed',
+                                                             'max_iter', 'tol', 'verbose'))
 
-''' A K-mediods result '''
-KmedoidsResult = namedtuple('KmedoidsResult', ('k', 'random_seed', 'medoids', 'labels', 'costs',
-                                               'total_cost', 'medoid_distances'))
+''' A K-mediods fuzzy result '''
+KmedoidsFuzzyResult = namedtuple('KmedoidsFuzzyResult', ('k', 'm', 'random_seed', 'medoids',
+                                                         'membership', 'costs', 'total_cost'))
 
 
 def choose_initial_medoids(X, k, random_seed, initial_indices=None):
@@ -43,8 +44,23 @@ def choose_initial_medoids(X, k, random_seed, initial_indices=None):
     return medoids
 
 
-def _get_cost(X, medoids, distance_measure):
-    '''return total cost and cost of each cluster'''
+def compute_membership_fcm(X, medoids, distance_measure):
+    '''
+    Given a distance measure and a list of medoids, find the membership of each point.
+    The membership for each point i is a vector u such that uij is the degree of membership of
+    point i to cluster j.
+
+    Using FCM 
+
+    This is a probabilistic approach:
+
+        uij in [0, 1]
+        0 < sum(uij, j=0, j=k-1) < N for all i
+        sum(uij, )
+
+
+
+    '''
 
     k = len(medoids)
     dist_mat = np.zeros((len(X), k))

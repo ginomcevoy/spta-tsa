@@ -1,12 +1,12 @@
 '''
 Example for k-medoids with synthetic data
 '''
-import logging
 import numpy as np
 
 from spta.dataset import synthetic_temporal as synth
-from spta.region.distance import DistanceByDTW
+from spta.distance.dtw import DistanceByDTW
 from spta.util import plot as plot_util
+from spta.util import log as log_util
 
 from . import kmedoids
 from . import get_medoid_indices
@@ -38,11 +38,7 @@ def alternating_functions_1d(series_n, series_len, function_options):
 
 
 def main():
-    log_level = logging.DEBUG
-    # log_level = logging.INFO
-    logging.basicConfig(format='%(asctime)s - %(levelname)6s | %(message)s',
-                        level=log_level, datefmt='%d-%b-%y %H:%M:%S')
-    logger = logging.getLogger()
+    logger = log_util.setup_log('DEBUG')
 
     series_n = 18
     series_len = 200
@@ -63,13 +59,12 @@ def main():
 
     # apply k-medoids on the data using DTW
     k = len(function_options)
-    kmedoids_result = kmedoids.run_kmedoids(series_group, k, distance_measure, seed=1,
+    kmedoids_result = kmedoids.run_kmedoids(series_group, k, distance_measure, random_seed=1,
                                             max_iter=1000, tol=0.001, verbose=True)
-    (medoids, labels, costs, _, _) = kmedoids_result
 
-    logger.info('Medoids: {}'.format(str(get_medoid_indices(medoids))))
-    logger.info('Labels: {}'.format(str(labels)))
-    plot_util.plot_series_group_by_color(series_group, series_len, labels)
+    logger.info('Medoids: {}'.format(str(get_medoid_indices(kmedoids_result.medoids))))
+    logger.info('Labels: {}'.format(str(kmedoids_result.labels)))
+    plot_util.plot_series_group_by_color(series_group, series_len, kmedoids_result.labels)
 
 
 if __name__ == '__main__':
