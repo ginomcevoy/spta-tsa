@@ -152,8 +152,8 @@ class OverallErrorForEachForecast(FunctionRegionScalar):
     combining these errors, that is the resulting output value at P(0, 0). The same is done for
     each point.
 
-    Example: the value of the result at the centroid will be the overall error of using the ARIMA
-    model at the centroid to forecast the entire region.
+    Example: the value of the result at the centroid will be the overall error computed, when
+    using the forecasted series at the centroid to forecast the entire region.
 
     This function is meant to be applied to the output of ArimaModelRegion, which produces a
     forecast region where each point is forecasted by its own ARIMA model.
@@ -178,39 +178,70 @@ class OverallErrorForEachForecast(FunctionRegionScalar):
 
         def error_single_model(forecast_series):
             '''
-            The function called at each point of this function region.
-            The domain of the function region is the forecast region, and the forecast_series
-            parameter here corresponds to the forecast at each point.
-
-            We use this forecast to create a "fake" forecast region, where all values are the same
-            as forecast_series, then calculate the overall error of that forecast as the return
-            value of the function.
+            The function called at each point of this function region to find the forecast error
+            of using a single forecast to predict the entire region.
+            See error_single_model_mase for more information.
             '''
-
-            # the "fake" forecast region where all points are the same as in the current point
-            # we need a spatio-temporal region to store the repeated forecast data
-
-            # This should work when using decorated regions, because:
-            # 1. the iteration to call this error_single_model function is determined by the
-            #   (possibly decorated) domain region.
-            # 2. the ErrorRegionMASE below will iterate over the observation region, not
-            #   the forecast region!
-            # TODO: improve this hack?
-            forecast_rep = SpatioTemporalRegion.repeat_series_over_region(forecast_series,
-                                                                          (self.x_len, self.y_len))
-
-            # error for the entire region using that forecast
-            # use MASE to calculate the forecast error at each point
-            error_region = ErrorRegionMASE(forecast_rep, self.observation_region,
-                                           self.training_region)
+            # call top-level function (refactored out for parallelization)
+            overall_error_at_point = error_single_model_mase(point, forecast_series,
+                                                             self.observation_region,
+                                                             self.training_region)
 
             self.logger.debug('Finished calculating error_single_model at {}'.format(point))
 
             # return the overall error as a single numerical value for the current forecast series
-            return error_region.overall_error
+            return overall_error_at_point
 
         # the function that will be applied at each forecast point
         return error_single_model
+
+
+def error_single_model_mase(point, forecast_series, observation_region, training_region):
+    '''
+    The function called at each point of this function region.
+    The domain of the function region is the forecast region, and the forecast_series
+    parameter here corresponds to the forecast at each point.
+
+    We use this forecast to create a "fake" forecast region, where all values are the same
+    as forecast_series, then calculate the overall error of that forecast as the return
+    value of the function.
+
+    This function is separated from OverallErrorForEachForecast to allow parallelization.
+    '''
+
+    # sanity check: no forecast, return nan
+    if np.isnan(forecast_series).all():
+        return np.nan
+
+    # recover shape
+    (_, x_len, y_len) = observation_region.shape
+
+    # the "fake" forecast region where all points are the same as in the current point
+    # we need a spatio-temporal region to store the repeated forecast data
+
+    # This should work when using decorated regions, because:
+    # 1. the iteration to call this error_single_model function is determined by the
+    #   (possibly decorated) domain region.
+    # 2. the ErrorRegionMASE below will iterate over the observation region, not
+    #   the forecast region!
+    # TODO: improve this hack?
+    forecast_rep = SpatioTemporalRegion.repeat_series_over_region(forecast_series,
+                                                                  (x_len, y_len))
+
+    # error for the entire region using that forecast
+    # use MASE to calculate the forecast error at each point
+    error_region = ErrorRegionMASE(forecast_rep, observation_region, training_region)
+
+    # return the overall error as a single numerical value for the current forecast series
+    overall_error = error_region.overall_error
+
+    # for parallel implementations, should be printed in a separate file
+    # to avoid filling up the output, only print first in row
+    if point.y == 0:
+        print('error_single_model for {} at {} = {:.3f}'.format(observation_region,
+                                                                point, overall_error), flush=True)
+
+    return overall_error
 
 
 class ErrorRegionOld(SpatialDecorator):

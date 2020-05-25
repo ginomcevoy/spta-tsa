@@ -90,6 +90,10 @@ class MaskRegionCrisp(MaskRegion):
         Returns True iff the point is a member of the cluster with this mask.
         Implemented by checking the label value in the 2-d region.
         '''
+        # sanity check
+        if point is None:
+            return False
+
         return self.numpy_dataset[point.x, point.y] == self.label
 
     def clone(self):

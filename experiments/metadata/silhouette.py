@@ -30,7 +30,7 @@ def silhouette_metadata_by_name(silhouette_name):
             k_values=(2, 3, 4), seed_values=(0,), plot_name='sp_rj'),
 
         'whole_brazil': silhouette_default_metadata(
-            k_values=range(2, 11), seed_values=range(0, 4), plot_name='whole_brazil'),
+            k_values=range(12, 13), seed_values=range(0, 4), plot_name='whole_brazil'),
     }
 
     return silhouettes_metadata[silhouette_name]

@@ -3,11 +3,14 @@ import pandas as pd
 from functools import partial
 from matplotlib import pyplot as plt
 from statsmodels.tsa.arima_model import ARIMA
+import time
 
 from spta.distance.dtw import DistanceByDTW
 from spta.region import Point, train
 from spta.region.function import FunctionRegionScalar, FunctionRegionSeries
-from spta.region.forecast import ErrorRegionMASE, OverallErrorForEachForecast
+from spta.region.forecast import ErrorRegionMASE, OverallErrorForEachForecast, error_single_model_mase
+
+from spta.distance.error_parallel import ParallelForecastError
 
 from spta.util import arrays as arrays_util
 from spta.util import log as log_util
@@ -216,33 +219,42 @@ def error_single_model(forecast_region_each, test_region, training_region, point
 
 
 def evaluate_forecast_errors_arima(spt_region, arima_params, forecast_len=FORECAST_LENGTH,
-                                   centroid=None):
+                                   centroid=None, parallel_workers=None):
     '''
-    Compare the following forecast errors:
+    Perform the following analysis:
 
     1. Build one ARIMA model for each point, forecast FORECAST_LENGTH days and compute the error
        of each forecast. This will create an error region (error_region_each).
        Combine the errors using distance_measure.combine to obtain a single metric for the
        prediction error. (error_region_each.combined_error)
 
-    2. Choose the model with the smallest local prediction error among the points of the region
-       (min_local_arima). Then use that model to forecast the entire region, and obtain the
-       combined error. (error_region_min_local.combined_error)
+    2. Consider ARIMA models at different points as representatives of the region. For a given
+       point, use the forecast made by the model at *that* point, and use it to predict the
+       observed values in the entire region. Obtain the MASE errors for each point
+       ("error_single_model"), then compute the overall error made by combining the errors (RMSE).
 
-    3. Find the centroid of the region, then use the ARIMA model of *that* point to forecast the
-        entire region (errro_region_centroid), and obtain the combined error
-        (errro_region_centroid.combined_error).
+    3. Consider the following points for 2.:
+        - minimum: the point that minimizes the error_single_model, i.e. has the minimum RMSE
+            of the MASE errors on each point, when using its ARIMA model to forecast the
+            entire region.
+
+        - min_local: the point that has the smallest forecast MASE error when forecasting its own
+            observation.
+
+        - centroid: the centroid of the region calculated externally, or using DTW if not provided.
+
+        - maximum: the point that maximizes its error_single_model. This is the worst possible
+            ARIMA model for the region, used for comparison.
 
     If centroid is provided, skip its calculation (it does not depend on ARIMA, only on the
     dataset)
+
+    If parallel_workers is supplied, use a parallel implementation of OverallErrorForEachForecast
+    to speed up MASE calculations.
     '''
     logger = log_util.logger_for_me(evaluate_forecast_errors_arima)
     logger.info('Using (p, d, q) = %s' % (arima_params,))
     (training_region, test_region) = train.split_region_in_train_test(spt_region, forecast_len)
-
-    # names to help debugging
-    training_region.name = 'training_region'
-    test_region.name = 'test_region'
 
     #
     # ARIMA for each point in the region
@@ -263,19 +275,29 @@ def evaluate_forecast_errors_arima(spt_region, arima_params, forecast_len=FORECA
     empty_region_2d = training_region.empty_region_2d()
 
     # use the ARIMA models to forecast for their respective points
+    time_forecast_start = time.time()
     forecast_region_each = arima_models_each.apply_to(empty_region_2d)
     forecast_region_each.name = 'forecast_region_each'
+    time_forecast_end = time.time()
+    time_forecast = time_forecast_end - time_forecast_start
 
     # calculate forecast error using MASE
     error_region_each = ErrorRegionMASE(forecast_region_each, test_region, training_region)
     overall_error_each = error_region_each.overall_error
     logger.info('Combined error from all ARIMAs: {}'.format(overall_error_each))
 
-    # calculate the prediction error when using each ARIMA model to forecast the entire region
-    # the output is a spatial region that has the overall error in each point P(i, j),
-    # corresponding to the overall error when using the ARIMA model at P(i, j)
-    overall_error_each_function = OverallErrorForEachForecast(test_region, training_region)
-    overall_error_region = overall_error_each_function.apply_to(forecast_region_each)
+    if parallel_workers is None:
+        # calculate the prediction error when using each ARIMA model to forecast the entire region
+        # the output is a spatial region that has the overall error in each point P(i, j),
+        # corresponding to the overall error when using the ARIMA model at P(i, j)
+        overall_error_each_function = OverallErrorForEachForecast(test_region, training_region)
+        overall_error_region = overall_error_each_function.apply_to(forecast_region_each)
+    else:
+        # same as above but use a parallel implementation with the number of workers supplied
+        # need to pass the function used by OverallErrorForEachForecast internally
+        parallel_error = ParallelForecastError(int(parallel_workers), forecast_region_each,
+                                               test_region, training_region)
+        overall_error_region = parallel_error.operate(error_single_model_mase)
 
     #
     # Best ARIMA model: the one that minimizes the overall error when it is uesd to forecast
@@ -326,7 +348,7 @@ def evaluate_forecast_errors_arima(spt_region, arima_params, forecast_len=FORECA
     overall_errors = (overall_error_each, overall_error_min, overall_error_min_local,
                       overall_error_centroid, overall_error_max)
     return (centroid, training_region, forecast_region_each, test_region, arima_models_each,
-            overall_errors)
+            overall_errors, time_forecast)
 
 
 def plot_one_arima(training_region, forecast_region, test_region, arima_region):
@@ -376,6 +398,9 @@ if __name__ == '__main__':
     arima_params = ArimaParams(1, 1, 1)
     forecast_len = 8
 
-    (centroid, training_region, forecast_region, test_region, arima_models_each, _) =\
-        evaluate_forecast_errors_arima(spt_region, arima_params, forecast_len, centroid)
+    parallel_workers = 4
+
+    (centroid, training_region, forecast_region, test_region, arima_models_each, _, _) =\
+        evaluate_forecast_errors_arima(spt_region, arima_params, forecast_len, centroid,
+                                       parallel_workers)
     plot_one_arima(training_region, forecast_region, test_region, arima_models_each)

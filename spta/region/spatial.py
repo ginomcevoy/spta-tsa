@@ -117,6 +117,10 @@ class SpatialRegion(DomainRegion):
         return SpatialRegion(numpy_region_subset)
 
     def value_at(self, point):
+        # sanity check
+        if point is None:
+            return np.nan
+
         return self.numpy_dataset[point.x, point.y]
 
     def find_minimum(self):
@@ -260,6 +264,10 @@ class SpatialCluster(SpatialDecorator):
         raise NotImplementedError(error_msg.format(self.__class__.__name__))
 
     def value_at(self, point):
+        # sanity check
+        if point is None:
+            return np.nan
+
         if self.mask_region.is_member(point):
             return self.decorated_region.value_at(point)
         else:

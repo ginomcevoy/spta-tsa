@@ -54,7 +54,7 @@ def do_arima_forecast(args):
         arima_result = arima.evaluate_forecast_errors_arima(spt_region, arima_params,
                                                             centroid=centroid)
         (centroid, training_region, forecast_region_each, test_region, arima_models_each,
-            combined_errors) = arima_result
+            combined_errors, time_forecast) = arima_result
 
         # save errors
         arima_results[arima_params] = combined_errors

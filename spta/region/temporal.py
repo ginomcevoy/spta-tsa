@@ -113,6 +113,11 @@ class SpatioTemporalRegion(DomainRegion):
         return (next_point, self.series_at(next_point))
 
     def series_at(self, point):
+        # sanity check
+        if point is None:
+            series_len, _, _ = self.numpy_dataset.shape
+            np.repeat(np.nan, repeats=series_len)
+
         return self.numpy_dataset[:, point.x, point.y]
 
     def series_len(self):
@@ -324,6 +329,11 @@ class SpatioTemporalCluster(SpatialCluster, SpatioTemporalDecorator):
         '''
         Returns the time series at specified point, the point must belong to cluster mask
         '''
+        # sanity check
+        if point is None:
+            series_len, _, _ = self.numpy_dataset.shape
+            np.repeat(np.nan, repeats=series_len)
+
         # self.logger.debug('SpatioTemporalCluster {} series_at {}'.format(self.label, point))
         if self.mask_region.is_member(point):
             return self.decorated_region.series_at(point)

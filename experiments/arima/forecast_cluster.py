@@ -31,8 +31,9 @@ following errors:
     error_medoid: RMSE of forecast MASE errors using the ARIMA model trained at the cluster medoid
 '''
 ArimaClusterResult = namedtuple('ArimaClusterResult',
-                                ('cluster', 'size', 'p', 'd', 'q', 'failed', 'time', 'error_each',
-                                 'error_min', 'error_min_local', 'error_medoid', 'error_max'))
+                                ('cluster', 'size', 'p', 'd', 'q', 'failed', 't_forecast',
+                                 't_elapsed', 'error_each', 'error_min', 'error_min_local',
+                                 'error_medoid', 'error_max'))
 
 def processRequest():
 
@@ -48,6 +49,7 @@ def processRequest():
     parser.add_argument('region', help='Name of the region metadata', choices=region_options)
     parser.add_argument('arima_clustering', help='ID of arima clustering experiment',
                         choices=arima_clustering_options)
+    parser.add_argument('--parallel', help='number of parallel workers')
     parser.add_argument('--log', help='log level: WARN|INFO|DEBUG')
     parser.add_argument('--plot', help='add the plot of the ARIMA model result at Point(0, 0)?',
                         default=False, action='store_true')
@@ -70,6 +72,11 @@ def do_arima_forecast_cluster(args):
     (arima_experiment_id, clustering_id, distance_id, k, seed) = exp_params
     arima_suite = arima_suite_by_name(arima_experiment_id)
 
+    # use parallelization?
+    parallel_workers = None
+    if args.parallel:
+        parallel_workers = int(args.parallel)
+
     # for now
     assert clustering_id == 'Kmedoids'
     assert distance_id == 'DistanceByDTW'
@@ -80,7 +87,8 @@ def do_arima_forecast_cluster(args):
                                          spt_region_metadata.region)
 
     # faster... (whole_brazil_1y_1ppd, k=8, seed=0)
-    # initial_medoids = [3607, 1248, 5021, 5472, 3345, 1429, 372, 3861]
+    #initial_medoids = [5816, 1163, 4295, 4905, 3156, 2648, 172, 3764]
+    # initial_medoids = [3764, 2648, 5816, 4905, 4295, 172, 1163, 3156]
     initial_medoids = None
 
     # build a KmedoidsMetadata object
@@ -100,12 +108,17 @@ def do_arima_forecast_cluster(args):
                                                                 label=i, centroids=medoid_indices)
         clusters.append(cluster_i)
 
-    # here we will store ARIMA results by cluster and by parameters
-    arima_experiment_results = []
+    # save results in CSV format: write header now
+    csv_filename = '{}.csv'.format(args.arima_clustering)
+    with open(csv_filename, 'w', newline='') as csv_file:
+        csv_writer = csv.writer(csv_file, delimiter=' ', quotechar='|',
+                                quoting=csv.QUOTE_MINIMAL)
+        # header
+        csv_writer.writerow(ArimaClusterResult._fields)
 
     # iterate the spatio-temporal clusters
     for i in range(0, k):
-    # for i in range(0, 1):
+    # for i in range(2, 3):
 
         # the medoid will be used as centroid for the ARIMA analysis
         cluster_i = clusters[i]
@@ -122,14 +135,17 @@ def do_arima_forecast_cluster(args):
             # evaluate this ARIMA model
             # this can take some time, register the time as a performance metric
             t_start = time.time()
-            arima_result = arima.evaluate_forecast_errors_arima(cluster_i, arima_params,
-                                                                centroid=centroid_i)
+            arima_result = \
+                arima.evaluate_forecast_errors_arima(cluster_i, arima_params,
+                                                     centroid=centroid_i,
+                                                     parallel_workers=parallel_workers)
             (centroid, training_region, forecast_region_each, test_region, arima_models_each,
-                overall_errors) = arima_result
+                overall_errors, time_forecast) = arima_result
 
             t_stop = time.time()
 
             # prepare to save experiment result
+            t_forecast = '{:.3f}'.format(time_forecast)
             t_elapsed = '{:.3f}'.format(t_stop - t_start)
             (p, d, q) = arima_params
             failed = arima_models_each.missing_count
@@ -146,26 +162,21 @@ def do_arima_forecast_cluster(args):
             error_max = '{:.3f}'.format(overall_error_max)
 
             # save error and performance data for this experiment
-            arima_experiment = ArimaClusterResult(i, size_i, p, d, q, failed, t_elapsed,
-                                                  error_each, error_min, error_min_local,
-                                                  error_medoid, error_max)
-            arima_experiment_results.append(arima_experiment)
+            arima_experiment = ArimaClusterResult(i, size_i, p, d, q, failed, t_forecast,
+                                                  t_elapsed, error_each, error_min,
+                                                  error_min_local, error_medoid, error_max)
+
+            # partial results in CSV format
+            with open(csv_filename, 'a', newline='') as csv_file:
+                csv_writer = csv.writer(csv_file, delimiter=' ', quotechar='|',
+                                        quoting=csv.QUOTE_MINIMAL)
+                logger.info('Writing partial result: {}'.format(arima_experiment))
+                csv_writer.writerow(arima_experiment)
 
             if args.plot:
                 # plot forecast at Point(0, 0)
                 arima.plot_one_arima(training_region, forecast_region_each, test_region,
                                      arima_models_each)
-
-    # save results in CSV format
-    csv_filename = '{}.csv'.format(args.arima_clustering)
-    with open(csv_filename, 'w', newline='') as csv_file:
-        csv_writer = csv.writer(csv_file, delimiter=' ', quotechar='|',
-                                quoting=csv.QUOTE_MINIMAL)
-        # header
-        csv_writer.writerow(ArimaClusterResult._fields)
-
-        for result in arima_experiment_results:
-            csv_writer.writerow(result)
 
 
 if __name__ == '__main__':
