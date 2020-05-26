@@ -92,14 +92,14 @@ def main():
     random_seeds = (1,)
 
     metadata = silhouette.silhouette_default_metadata(ks, random_seeds, distance_measure)
-    best_k, _, best_medoids, best_labels = silhouette.do_silhouette_analysis(spt_region,
-                                                                             metadata)
+    best_k, _, best_medoids, best_membership = silhouette.do_silhouette_analysis(spt_region,
+                                                                                 metadata)
 
     # Show best results
     logger.info('Best k: {}'.format(best_k))
     logger.info('Best medoids: {}'.format(str(get_medoid_indices(best_medoids))))
-    logger.info('Best labels: {}'.format(str(best_labels)))
-    plot_util.plot_series_group_by_color(series_group, series_len, best_labels)
+    logger.info('Best membership: {}'.format(str(best_membership)))
+    plot_util.plot_series_group_by_color(series_group, series_len, best_membership)
 
 
 if __name__ == '__main__':

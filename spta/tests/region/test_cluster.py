@@ -27,8 +27,8 @@ class TestSpatioTemporalCluster(unittest.TestCase):
 
         # given
         mask = np.array([1, 0, 0, 1, 0, 1])
-        label = 0
-        mask_region = MaskRegionCrisp(mask.reshape((2, 3)), label)
+        cluster_index = 0
+        mask_region = MaskRegionCrisp(mask.reshape((2, 3)), cluster_index)
 
         # when
         spt_region = SpatioTemporalRegion(self.numpy_dataset)
@@ -38,15 +38,15 @@ class TestSpatioTemporalCluster(unittest.TestCase):
         self.assertIsNotNone(cluster)
         self.assertTrue(cluster.as_numpy is self.numpy_dataset)
         self.assertTrue(cluster.mask_region is mask_region)
-        self.assertEquals(cluster.label, label)
+        self.assertEquals(cluster.cluster_index, cluster_index)
         self.assertTrue(cluster.logger is not None)
 
     def test_series_at_point_in_mask(self):
 
         # given
         mask = np.array([1, 0, 0, 1, 0, 1])
-        label = 1
-        mask_region = MaskRegionCrisp(mask.reshape((2, 3)), label)
+        cluster_index = 1
+        mask_region = MaskRegionCrisp(mask.reshape((2, 3)), cluster_index)
         spt_region = SpatioTemporalRegion(self.numpy_dataset)
         cluster = SpatioTemporalCluster(spt_region, mask_region, None)
 
@@ -65,8 +65,8 @@ class TestSpatioTemporalCluster(unittest.TestCase):
 
         # given
         mask = np.array([1, 0, 0, 1, 0, 1])
-        label = 1
-        spatial_mask = MaskRegionCrisp(mask.reshape((2, 3)), label)
+        cluster_index = 1
+        spatial_mask = MaskRegionCrisp(mask.reshape((2, 3)), cluster_index)
         spt_region = SpatioTemporalRegion(self.numpy_dataset)
         cluster = SpatioTemporalCluster(spt_region, spatial_mask, None)
 
@@ -84,8 +84,8 @@ class TestSpatioTemporalCluster(unittest.TestCase):
 
         # given
         mask = np.array([1, 0, 0, 1, 0, 1])
-        label = 1
-        spatial_mask = MaskRegionCrisp(mask.reshape((2, 3)), label)
+        cluster_index = 1
+        spatial_mask = MaskRegionCrisp(mask.reshape((2, 3)), cluster_index)
         spt_region = SpatioTemporalRegion(self.numpy_dataset)
         cluster = SpatioTemporalCluster(spt_region, spatial_mask, None)
 
@@ -113,13 +113,14 @@ class TestSpatioTemporalCluster(unittest.TestCase):
         # given
         spt_region = SpatioTemporalRegion(self.numpy_dataset)
         members = np.array([2, 0, 1, 2, 0, 2])
-        label = 2
+        cluster_index = 2
 
         # when
-        cluster = SpatioTemporalCluster.from_crisp_clustering(spt_region, members, label, None)
+        cluster = SpatioTemporalCluster.from_crisp_clustering(spt_region, members, cluster_index,
+                                                              None)
 
         # then a proper cluster is obtained. with mask where members = 2
-        self.assertEquals(cluster.label, 2)
+        self.assertEquals(cluster.cluster_index, 2)
 
         # when asked for points in mask
         result_0_0 = cluster.series_at(Point(0, 0))

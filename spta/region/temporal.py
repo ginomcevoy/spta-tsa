@@ -374,23 +374,23 @@ class SpatioTemporalCluster(SpatialCluster, SpatioTemporalDecorator):
             return 'SpatioTemporalCluster {}'.format(self.shape)
 
     @classmethod
-    def from_crisp_clustering(cls, spt_region, members, label, centroids=None):
+    def from_crisp_clustering(cls, spt_region, members, cluster_index, centroids=None):
         '''
-        Given a clustering result and a label, create a new instance of spatio-temporal cluster.
-        A clustering algorithm with parameter k should create k clusters, with labels ranging
-        from 0 to k-1.
+        Given a clustering result and a cluster index, create a new instance of spatio-temporal
+        cluster. A clustering algorithm with parameter k should create k clusters, with cluster
+        indices ranging from 0 to k-1.
 
-        The members and label are used to select one of the clusters and to create the
+        The members and cluster index are used to select one of the clusters and to create the
         mask_region used as input of a the cluster instance.
 
         spt_region
             the spatio-temporal region that was clustered
 
         members
-            a 1-d array (not region!) of labels indicating the membership of a point to a cluster,
-            given the index position of the point.
+            a 1-d array (not region!) of labels indicating the membership of a point to a
+            cluster, given the index position of the point.
 
-        label
+        cluster index
             a value i from [0, k-1] that refers to the i-th cluster of a clustering result.
 
         centroids (optional)
@@ -403,20 +403,20 @@ class SpatioTemporalCluster(SpatialCluster, SpatioTemporalDecorator):
         assert members.ndim == 1
         assert members.shape[0] == x_len * y_len
 
-        assert isinstance(label, int)
-        assert label >= 0 and label <= np.max(members)
+        assert isinstance(cluster_index, int)
+        assert cluster_index >= 0 and cluster_index <= np.max(members)
 
-        # build mask_region from members and label
-        mask_region = MaskRegionCrisp.from_1d_labels(members, label, x_len, y_len)
-        mask_region.name = '{}->MaskRegion{}'.format(spt_region, label)
+        # build mask_region from members and cluster_index
+        mask_region = MaskRegionCrisp.from_membership_array(members, cluster_index, x_len, y_len)
+        mask_region.name = '{}->MaskRegion{}'.format(spt_region, cluster_index)
 
-        # build one cluster for this label
+        # build one cluster for this cluster_index
         cluster = SpatioTemporalCluster(spt_region, mask_region, None)
-        cluster.name = '{}->cluster{}'.format(spt_region, label)
+        cluster.name = '{}->cluster{}'.format(spt_region, cluster_index)
 
         # centroid available?
         if centroids is not None:
-            centroid_index = centroids[label]
+            centroid_index = centroids[cluster_index]
             i = int(centroid_index / y_len)
             j = centroid_index % y_len
             cluster.centroid = Point(i, j)

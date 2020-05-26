@@ -204,3 +204,26 @@ def run_kmedoids_from_metadata(X, kmediods_metadata):
                         kmediods_metadata.initial_medoids, kmediods_metadata.random_seed,
                         kmediods_metadata.max_iter, kmediods_metadata.tol,
                         kmediods_metadata.verbose)
+
+
+if __name__ == '__main__':
+    from spta.region import Region, SpatioTemporalRegion, SpatioTemporalRegionMetadata
+    from spta.util import log as log_util
+
+    log_util.setup_log('DEBUG')
+
+    # Run k=2 on sp_small dataset
+    nordeste_small_md = SpatioTemporalRegionMetadata('nordeste_small', Region(43, 50, 85, 95),
+                                                     series_len=365, ppd=1, last=True)
+    nordeste_small = SpatioTemporalRegion.from_metadata(nordeste_small_md)
+
+    # load pre-computed distances
+    distance_dtw = DistanceByDTW()
+    distance_dtw.load_distance_matrix_2d(nordeste_small_md.distances_filename,
+                                         nordeste_small_md.region)
+
+    X = nordeste_small.as_2d
+
+    k = 2
+    metadata = kmedoids_default_metadata(k, distance_measure=distance_dtw)
+    run_kmedoids_from_metadata(X, metadata)

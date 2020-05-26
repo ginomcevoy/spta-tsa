@@ -105,7 +105,8 @@ def do_arima_forecast_cluster(args):
     clusters = []
     for i in range(0, k):
         cluster_i = SpatioTemporalCluster.from_crisp_clustering(spt_region, kmedoids_result.labels,
-                                                                label=i, centroids=medoid_indices)
+                                                                cluster_index=i,
+                                                                centroids=medoid_indices)
         clusters.append(cluster_i)
 
     # save results in CSV format: write header now

@@ -249,15 +249,22 @@ class SpatialCluster(SpatialDecorator):
             a spatial region that is being decorated with cluster behavior
 
         mask_region
-            indicates membership to a cluster. must have a 'label' property that identifies
+            indicates membership to a cluster. must have a cluster index that identifies
             the cluster, and a 'cluster_len' property that gives the number of points.
         '''
         super(SpatialCluster, self).__init__(decorated_region, **kwargs)
 
         # cluster-specific
         self.mask_region = mask_region
-        self.label = self.mask_region.label
-        self.cluster_len = self.mask_region.cluster_len
+        self.cluster_index = self.mask_region.cluster_index
+
+    @property
+    def cluster_len(self):
+        '''
+        The size of the cluster (# of points).
+        '''
+        # ask the mask for the size
+        return self.mask_region.cluster_len
 
     def region_subset(self, region):
         error_msg = 'region_subset not allowed for {}!'
@@ -275,7 +282,7 @@ class SpatialCluster(SpatialDecorator):
 
     def empty_region_2d(self):
         '''
-        Returns an empty SpatialCluster with the same shape as this region, and same mask/label.
+        Returns an empty SpatialCluster with the same shape as this region, and same mask.
         '''
         empty_spatial_region = self.decorated_region.empty_region_2d()
         return SpatialCluster(decorated_region=empty_spatial_region,
