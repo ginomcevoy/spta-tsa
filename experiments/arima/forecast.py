@@ -3,9 +3,9 @@ Execute this program to perform ARIMA forecasting and error evaluation on an ent
 '''
 import argparse
 
-from spta.arima import arima
+from spta.arima.analysis import ArimaErrorAnalysis
 from spta.distance.dtw import DistanceByDTW
-from spta.region import SpatioTemporalRegion
+from spta.region import Point, SpatioTemporalRegion
 from spta.util import log as log_util
 
 from experiments.metadata.arima import predefined_arima_suites, arima_suite_by_name
@@ -26,6 +26,7 @@ def processRequest():
     arima_options = predefined_arima_suites().keys()
     parser.add_argument('region', help='Name of the region metadata', choices=region_options)
     parser.add_argument('arima', help='Name of the ARIMA experiment', choices=arima_options)
+    parser.add_argument('--parallel', help='number of parallel workers')
     parser.add_argument('--log', help='log level: WARN|INFO|DEBUG')
     parser.add_argument('--plot', help='add the plot of the ARIMA model result at Point(0, 0)?',
                         default=False, action='store_true')
@@ -43,37 +44,35 @@ def do_arima_forecast(args):
 
     # try to get a pre-calculated centroid, otherwise calculate it
     # TODO allow other distances
-    centroid = centroid_by_region_and_distance(args.region, DistanceByDTW())
+    spt_region.centroid = centroid_by_region_and_distance(args.region, DistanceByDTW())
+
+    # use parallelization?
+    parallel_workers = None
+    if args.parallel:
+        parallel_workers = int(args.parallel)
 
     # get the ARIMA suite
     arima_suite = arima_suite_by_name(args.arima)
     arima_results = {}
     for arima_params in arima_suite.arima_params_gen():
 
-        # evaluate this ARIMA model
-        arima_result = arima.evaluate_forecast_errors_arima(spt_region, arima_params,
-                                                            centroid=centroid)
-        (centroid, training_region, forecast_region_each, test_region, arima_models_each,
-            combined_errors, time_forecast) = arima_result
+        # do the analysis with current ARIMA hyper-parameters, only save errors
+        analysis = ArimaErrorAnalysis(arima_params, parallel_workers=parallel_workers)
+        _, overall_errors, _, _ = analysis.evaluate_forecast_errors(spt_region, 'MASE')
 
-        # save errors
-        arima_results[arima_params] = combined_errors
+        # ArimaErrors = namedtuple('ArimaErrors', ('minimum', 'min_local', 'centroid', 'maximum'))
+        arima_results[arima_params] = overall_errors
 
         if args.plot:
-            # plot forecast at Point(0, 0)
-            arima.plot_one_arima(training_region, forecast_region_each, test_region,
-                                 arima_models_each)
+            # plot forecast at Point (0, 0)
+            analysis.plot_one_arima(Point(0, 0))
 
     # print results
-    for (arima_params, combined_errors) in arima_results.items():
-
-        # all ARIMA errors
-        (overall_error_each, overall_error_min, overall_error_min_local,
-            overall_error_centroid, overall_error_max) = combined_errors
+    for (arima_params, overall_errors) in arima_results.items():
 
         result_line = '{} errors -> each={:.2f}, min_local={:.2f}, centroid={:.2f}'
-        print(result_line.format(arima_params, overall_error_each, overall_error_min_local,
-                                 overall_error_centroid))
+        print(result_line.format(arima_params, overall_errors.each, overall_errors.min_local,
+                                 overall_errors.centroid))
 
 
 if __name__ == '__main__':

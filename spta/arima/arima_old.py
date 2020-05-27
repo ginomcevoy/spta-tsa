@@ -1,3 +1,10 @@
+'''
+ARIMA forecasting and analysis of forecast error.
+
+TODO: separate analysis, allow returning spatial region of models and let error analysis be
+optional. This can speed up error calculations for centroid.
+'''
+
 import numpy as np
 import pandas as pd
 from functools import partial
@@ -8,7 +15,8 @@ import time
 from spta.distance.dtw import DistanceByDTW
 from spta.region import Point, train
 from spta.region.function import FunctionRegionScalar, FunctionRegionSeries
-from spta.region.forecast import ErrorRegionMASE, OverallErrorForEachForecast, error_single_model_mase
+from spta.region.forecast import ErrorRegionMASE, OverallErrorForEachForecast, \
+    error_single_model_mase
 
 from spta.distance.error_parallel import ParallelForecastError
 
@@ -17,8 +25,7 @@ from spta.util import log as log_util
 
 from . import ArimaParams
 
-# default number of data points to forecast and test
-FORECAST_LENGTH = 8
+
 
 
 class FailedArima(object):
@@ -60,16 +67,16 @@ def train_arima(arima_params, time_series):
     return model_fit
 
 
-class ArimaTrainingRegion(FunctionRegionScalar):
+class ArimaTrainer(FunctionRegionScalar):
     '''
     A FunctionRegion that uses the train_arima function to train an ARIMA model over a training
     region. Applying this FunctionRegion to the training spatio-temporal region will produce an
-    instance of ArimaModelRegion (which is also a SpatialRegion). The shape of ArimaTrainingRegion
+    instance of ArimaModelRegion (which is also a SpatialRegion). The shape of ArimaTrainer
     will be [x_len, y_len], where the training region has shape [train_len, x_len, y_len].
 
-    The ArimaModelRegion output is also a FunctionRegion, and it will contain a trained ARIMA model
+    The ArimaModelRegion is also a FunctionRegion, and it will contain a trained ARIMA model
     in each point P(i, j), trained with the training data at P(i, j) of the training region. The
-    ArimaModelRegion can later be applied to a ForecastLengthRegion to obtain the ForecastRegion
+    ArimaModelRegion can later be applied to another region to obtain the ForecastRegion
     (spatio-temporal region).
 
     This implementation assumes that the same ARIMA hyper-parameters (p, d, q) are used for all
@@ -88,7 +95,7 @@ class ArimaTrainingRegion(FunctionRegionScalar):
         ArimaModelRegion (a FunctionRegionSeries), and functions that output series (the forecast)
         need to know the output length in advance.
         '''
-        super(ArimaTrainingRegion, self).__init__(train_arima_np, dtype=object)
+        super(ArimaTrainer, self).__init__(train_arima_np, dtype=object)
         self.forecast_len = forecast_len
 
     def apply_to(self, spt_region):
@@ -100,7 +107,7 @@ class ArimaTrainingRegion(FunctionRegionScalar):
         has a trained model in each point.
         '''
         # get result from parent behavior
-        spatial_region = super(ArimaTrainingRegion, self).apply_to(spt_region)
+        spatial_region = super(ArimaTrainer, self).apply_to(spt_region)
 
         # count and log missing models, iterate to find them
         self.missing_count = 0
@@ -144,7 +151,7 @@ class ArimaTrainingRegion(FunctionRegionScalar):
         # hyperparameters over the training region
         train_arima_np = arrays_util.copy_value_as_matrix_elements(arima_with_params, x_len, y_len)
 
-        return ArimaTrainingRegion(train_arima_np, forecast_len)
+        return ArimaTrainer(train_arima_np, forecast_len)
 
 
 class ArimaModelRegion(FunctionRegionSeries):
@@ -261,22 +268,21 @@ def evaluate_forecast_errors_arima(spt_region, arima_params, forecast_len=FORECA
     #
 
     # a function region with produces trained models when applied to a training region
-    arima_trainings = ArimaTrainingRegion.from_training_region(training_region, arima_params,
-                                                               forecast_len)
+    arima_trainers = ArimaTrainer.from_training_region(training_region, arima_params, forecast_len)
 
-    # train the models: this returns an instance of statsmodels.tsa.arima.ARIMAResults in each
-    # point of the region
-    arima_models_each = arima_trainings.apply_to(training_region)
+    # train the models: this returns an instance of ArimaModelRegion, that has an instance of
+    # statsmodels.tsa.arima.ARIMAResults at each point
+    arima_models = arima_trainers.apply_to(training_region)
 
     # save the number of failed models... ugly but works
-    arima_models_each.missing_count = arima_trainings.missing_count
+    arima_models.missing_count = arima_trainers.missing_count
 
     # do a forecast: pass an (empty!) region. This region will control the iteration though.
     empty_region_2d = training_region.empty_region_2d()
 
     # use the ARIMA models to forecast for their respective points
     time_forecast_start = time.time()
-    forecast_region_each = arima_models_each.apply_to(empty_region_2d)
+    forecast_region_each = arima_models.apply_to(empty_region_2d)
     forecast_region_each.name = 'forecast_region_each'
     time_forecast_end = time.time()
     time_forecast = time_forecast_end - time_forecast_start
@@ -300,7 +306,7 @@ def evaluate_forecast_errors_arima(spt_region, arima_params, forecast_len=FORECA
         overall_error_region = parallel_error.operate(error_single_model_mase)
 
     #
-    # Best ARIMA model: the one that minimizes the overall error when it is uesd to forecast
+    # Best ARIMA model: the one that minimizes the overall error when it is used to forecast
     # the entire region
     #
     (point_overall_error_min, overall_error_min) = overall_error_region.find_minimum()
@@ -347,7 +353,7 @@ def evaluate_forecast_errors_arima(spt_region, arima_params, forecast_len=FORECA
 
     overall_errors = (overall_error_each, overall_error_min, overall_error_min_local,
                       overall_error_centroid, overall_error_max)
-    return (centroid, training_region, forecast_region_each, test_region, arima_models_each,
+    return (centroid, training_region, forecast_region_each, test_region, arima_models,
             overall_errors, time_forecast)
 
 

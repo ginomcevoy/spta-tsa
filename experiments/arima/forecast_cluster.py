@@ -5,9 +5,8 @@ forecasting and error evaluation on each cluster.
 import argparse
 import csv
 from collections import namedtuple
-import time
 
-from spta.arima import arima
+from spta.arima.analysis import ArimaErrorAnalysis
 from spta.distance.dtw import DistanceByDTW
 from spta.kmedoids import kmedoids
 from spta.region import SpatioTemporalRegion, SpatioTemporalCluster
@@ -25,10 +24,17 @@ following errors:
 
     error_each: RMSE of forecast MASE errors using ARIMA models trained in each point
 
+    error_min: RMSE of the forecast MASE errors when using a single ARIMA model to forecast the
+        entire region, such that the RMSE is minimized (overall best single ARIMA model)
+
     error_min_local: RMSE of forecast MASE errors using the ARIMA model that has the
-        minimum local error among all points
+        minimum local error among all points (best local ARIMA model)
 
     error_medoid: RMSE of forecast MASE errors using the ARIMA model trained at the cluster medoid
+        to forecast the entire region (representative ARIMA model)
+
+    error_max: RMSE of the forecast MASE errors when using a single ARIMA model to forecast the
+        entire region, such that the RMSE is maximized (overall worst single ARIMA model)
 '''
 ArimaClusterResult = namedtuple('ArimaClusterResult',
                                 ('cluster', 'size', 'p', 'd', 'q', 'failed', 't_forecast',
@@ -87,7 +93,7 @@ def do_arima_forecast_cluster(args):
                                          spt_region_metadata.region)
 
     # faster... (whole_brazil_1y_1ppd, k=8, seed=0)
-    #initial_medoids = [5816, 1163, 4295, 4905, 3156, 2648, 172, 3764]
+    # initial_medoids = [5816, 1163, 4295, 4905, 3156, 2648, 172, 3764]
     # initial_medoids = [3764, 2648, 5816, 4905, 4295, 172, 1163, 3156]
     initial_medoids = None
 
@@ -118,8 +124,8 @@ def do_arima_forecast_cluster(args):
         csv_writer.writerow(ArimaClusterResult._fields)
 
     # iterate the spatio-temporal clusters
-    for i in range(0, k):
     # for i in range(2, 3):
+    for i in range(0, k):
 
         # the medoid will be used as centroid for the ARIMA analysis
         cluster_i = clusters[i]
@@ -133,34 +139,23 @@ def do_arima_forecast_cluster(args):
         # iterate the ARIMA suite
         for arima_params in arima_suite.arima_params_gen():
 
-            # evaluate this ARIMA model
-            # this can take some time, register the time as a performance metric
-            t_start = time.time()
-            arima_result = \
-                arima.evaluate_forecast_errors_arima(cluster_i, arima_params,
-                                                     centroid=centroid_i,
-                                                     parallel_workers=parallel_workers)
-            (centroid, training_region, forecast_region_each, test_region, arima_models_each,
-                overall_errors, time_forecast) = arima_result
-
-            t_stop = time.time()
+            # do the analysis with current ARIMA hyper-parameters
+            analysis = ArimaErrorAnalysis(arima_params, parallel_workers=parallel_workers)
+            arima_forecasting, overall_errors, forecast_time, compute_time = \
+                analysis.evaluate_forecast_errors(cluster_i, 'MASE')
 
             # prepare to save experiment result
-            t_forecast = '{:.3f}'.format(time_forecast)
-            t_elapsed = '{:.3f}'.format(t_stop - t_start)
+            t_forecast = '{:.3f}'.format(forecast_time)
+            t_elapsed = '{:.3f}'.format(compute_time)
             (p, d, q) = arima_params
-            failed = arima_models_each.missing_count
+            failed = arima_forecasting.arima_models.missing_count
 
             # format all errors as nice strings
-            # TODO do a loop?
-            (overall_error_each, overall_error_min, overall_error_min_local,
-                overall_error_centroid, overall_error_max) = overall_errors
-
-            error_each = '{:.3f}'.format(overall_error_each)
-            error_min = '{:.3f}'.format(overall_error_min)
-            error_min_local = '{:.3f}'.format(overall_error_min_local)
-            error_medoid = '{:.3f}'.format(overall_error_centroid)
-            error_max = '{:.3f}'.format(overall_error_max)
+            error_each = '{:.3f}'.format(overall_errors.each)
+            error_min = '{:.3f}'.format(overall_errors.minimum)
+            error_min_local = '{:.3f}'.format(overall_errors.min_local)
+            error_medoid = '{:.3f}'.format(overall_errors.centroid)
+            error_max = '{:.3f}'.format(overall_errors.maximum)
 
             # save error and performance data for this experiment
             arima_experiment = ArimaClusterResult(i, size_i, p, d, q, failed, t_forecast,
@@ -175,9 +170,8 @@ def do_arima_forecast_cluster(args):
                 csv_writer.writerow(arima_experiment)
 
             if args.plot:
-                # plot forecast at Point(0, 0)
-                arima.plot_one_arima(training_region, forecast_region_each, test_region,
-                                     arima_models_each)
+                # plot forecast at centroid
+                analysis.plot_one_arima(centroid_i)
 
 
 if __name__ == '__main__':

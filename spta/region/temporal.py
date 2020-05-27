@@ -157,7 +157,7 @@ class SpatioTemporalRegion(DomainRegion):
         return SpatioTemporalRegion(repeated_series_np)
 
     def get_centroid(self, distance_measure=None):
-        if self.centroid is not None:
+        if self.has_centroid():
             return self.centroid
 
         elif distance_measure is None:
@@ -169,6 +169,12 @@ class SpatioTemporalRegion(DomainRegion):
             centroid_calc = centroid.CalculateCentroid(distance_measure)
             self.centroid = centroid_calc.find_point_with_least_distance(self)
             return self.centroid
+
+    def has_centroid(self):
+        '''
+        Returrns True iff the centroid has already been calculated.
+        '''
+        return self.centroid is not None
 
     @property
     def as_list(self):

@@ -15,6 +15,9 @@ ITERATIONS = 1000
 RESULT_OUTPUT = 'raw/performance.npy'
 
 
+# TODO make this work with updated ARIMA implementation!
+
+
 def evaluate_arima_performance(arima_params, training_region, test_region, forecast_len, centroid):
     '''
     Time the forecasting of an ARIMA model to establish a performance profile.
