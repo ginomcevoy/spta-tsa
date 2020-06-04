@@ -1,5 +1,6 @@
 import numpy as np
 
+from spta.util import arrays as arrays_util
 from .base import BaseRegion
 
 
@@ -108,6 +109,28 @@ class MaskRegionCrisp(MaskRegion):
         # reshape the array to get a membership matrix (shape of region)
         membership_2d = membership.reshape(x_len, y_len)
         return MaskRegionCrisp(membership_2d, cluster_index)
+
+    @classmethod
+    def with_square_partition(cls, k, cluster_index, x_len, y_len):
+        '''
+        Creates an instance of MaskRegionCrisp based on the number of clusters, so that each
+        cluster gets a square of (approximately) the same size.
+        The process is as follows:
+            - Compute the mcd of k, e.g. 12 -> 4. Then divide to obtain the second number, e.g. 3.
+            - Partition the (x_len, y_len)  using these two values to create the cluster labels,
+              e.g.
+                  0  0  0  1  1  1 ...  3  3  3
+                  0  0  0  1  1  1 ...  3  3  3
+                  .....................
+                  9  9  9 10 10 10 ..  11 11 11
+                  9  9  9 10 10 10 ..  11 11 11
+
+            - call from _membership_array with this membership matrix and corresponding
+              cluster_index
+        '''
+        # all clusters in the partition will have this same membership matrix
+        membership_squares = arrays_util.square_partitioning(x_len, y_len, k)
+        return cls.from_membership_array(membership_squares, cluster_index, x_len, y_len)
 
 
 class MaskRegionFuzzy(MaskRegion):

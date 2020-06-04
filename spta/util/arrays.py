@@ -1,5 +1,7 @@
 import numpy as np
 
+from . import maths as maths_util
+
 
 def copy_array_as_matrix_elements(array, m, n):
     '''
@@ -106,6 +108,101 @@ def distances_to_point_in_2d_region(i, j, x_len, y_len):
     single_point = [i, j]
     points_of_2d_region = list_of_2d_points(x_len, y_len)
     return np.linalg.norm(points_of_2d_region - single_point, axis=1)
+
+
+def square_partitioning(x_len, y_len, k):
+    '''
+    Given a 2-d region and a number of clusters k, create a membership matrix that can be used
+    to create clusters of (approximately) equal size.
+
+    The process is as follows:
+        - Compute the most balanced divisors of k, e.g. 12 -> 4 x 3.
+        - For simplicity, validate that x_len >= div_x and y_len >= div_y, the divisors
+        - Partition the (x_len, y_len)  using these two values to create the cluster labels, e.g.
+                  0  0  0  1  1  1 ...  3  3  3
+                  0  0  0  1  1  1 ...  3  3  3
+                  .....................
+                  9  9  9 10 10 10 ..  11 11 11
+                  9  9  9 10 10 10 ..  11 11 11
+
+        - Return this matrix
+    '''
+
+    # this finds 12 -> 3x4 or 24 -> 4x6. Use the largest to divide the largest of x_len, y_len
+    (div_1, div_2) = maths_util.find_two_balanced_divisors(k)
+
+    if x_len < y_len:
+        div_x, div_y = div_1, div_2
+    else:
+        div_x, div_y = div_2, div_1
+
+    # bounds check
+    if x_len < div_x or y_len < div_y:
+        raise ValueError('Region ({}, {}) too small for k={}!'.format(x_len, y_len, k))
+
+    # find the size of each partition here
+    # this division may be inexact
+    lines_per_row = int(x_len / div_x)
+    lines_per_col = int(y_len / div_y)
+
+    # handle inexact division
+    # two scenarios: residue is small ( < lines_per_* / 2) or large ( >= lines_per_* / 2)
+    # second scenario is handled below
+    residue_row = x_len % div_x
+    residue_col = y_len % div_y
+
+    # handle first scenario: add more lines per rows/columns as needed
+
+    # handle row here
+    if residue_row > lines_per_row / 2:
+        lines_per_row += 1
+
+        # recompute the residue as negative!
+        # this will be picked up by second scenario and shrink the last row/col
+        residue_row = x_len - lines_per_row * div_x
+
+    # same for column
+    if residue_col > lines_per_col / 2:
+        lines_per_col += 1
+        residue_col = y_len - lines_per_col * div_y
+
+    # prepare output, same shape as input region
+    matrix = np.zeros((x_len, y_len))
+
+    # iterate each cluster to set labels i in [0, k-1]
+    # do this by iterating rows and cols of partition
+    for row in range(0, div_x):
+        for col in range(0, div_y):
+
+            # the label for the current cluster
+            i = row * div_y + col
+
+            # the boundaries for the cluster
+            # exact for now
+            x_start = lines_per_row * row
+            y_start = lines_per_col * col
+
+            x_end = x_start + lines_per_row
+            y_end = y_start + lines_per_col
+
+            # handle residues here
+
+            # first scenario: small residues
+            # the second case degrades to the first case here... (we increased lines_per_col)
+            # so no need to check if residue_* < lines_per_* / 2
+            # exact case should also fall naturally on this one
+            if col == div_y - 1:
+                # handle small column-wise residues: add them to last column
+                y_end += residue_col
+
+            if row == div_x - 1:
+                # handle small row-wise residues: add them to last row
+                x_end += residue_row
+
+            # mark labels
+            matrix[x_start:x_end, y_start:y_end] = i
+
+    return matrix
 
 
 if __name__ == '__main__':
