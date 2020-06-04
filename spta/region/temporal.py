@@ -6,7 +6,7 @@ from spta.util import arrays as arrays_util
 
 from . import Point, Region
 from .spatial import SpatialDecorator, SpatialCluster, DomainRegion
-from .mask import MaskRegionCrisp
+from .mask import MaskRegionCrisp, MaskRegionFuzzy
 
 # SMALL_REGION = Region(55, 58, 50, 54)
 # SMALL_REGION = Region(0, 1, 0, 1)
@@ -414,11 +414,46 @@ class SpatioTemporalCluster(SpatialCluster, SpatioTemporalDecorator):
 
         # build mask_region from members and cluster_index
         mask_region = MaskRegionCrisp.from_membership_array(members, cluster_index, x_len, y_len)
-        mask_region.name = '{}->MaskRegion{}'.format(spt_region, cluster_index)
+        mask_region.name = '{}->MaskCrisp{}'.format(spt_region, cluster_index)
 
         # build one cluster for this cluster_index
         cluster = SpatioTemporalCluster(spt_region, mask_region, None)
         cluster.name = '{}->cluster{}'.format(spt_region, cluster_index)
+
+        # centroid available?
+        if centroids is not None:
+            centroid_index = centroids[cluster_index]
+            i = int(centroid_index / y_len)
+            j = centroid_index % y_len
+            cluster.centroid = Point(i, j)
+
+        return cluster
+
+    @classmethod
+    def from_fuzzy_clustering(cls, spt_region, uij, cluster_index, threshold, centroids=None):
+        '''
+        Similar to from_crisp_clustering, but for fuzzy clustering results.
+        uij is a 2-d membership array, threshold defines how the cluster can consider point
+        membership depending on its fuzzy membership values.
+
+        See MaskRegionFuzzy for more info.
+        '''
+        (_, x_len, y_len) = spt_region.shape
+
+        (N, k) = uij.shape
+        assert N == x_len * y_len
+
+        assert isinstance(cluster_index, int)
+        assert cluster_index >= 0 and cluster_index <= k
+
+        # build mask_region from uij, cluster_index and threshold
+        mask_region = MaskRegionFuzzy.from_uij_and_region(uij, x_len, y_len, cluster_index,
+                                                          threshold)
+        mask_region.name = '{}-MaskFuzzy{}'.format(spt_region, cluster_index)
+
+        # build one cluster for this cluster_index
+        cluster = SpatioTemporalCluster(spt_region, mask_region, None)
+        cluster.name = '{}-fcluster{}'.format(spt_region, cluster_index)
 
         # centroid available?
         if centroids is not None:

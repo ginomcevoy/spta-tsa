@@ -167,5 +167,34 @@ class TestMaskRegionFuzzy(unittest.TestCase):
         self.assertFalse(mask.is_member(Point(3, 3)))   # other medoid
         self.assertFalse(mask.is_member(Point(3, 4)))   # too far from cluster
 
+        # test iterator
         members = [point for point in mask]
         self.assertEquals(len(members), 15)
+
+        # test it again to ensure it can be iterated many times
+        members = [point for point in mask]
+        self.assertEquals(len(members), 15)
+
+    def test_varying_threshold(self):
+
+        # given a fuzzy cluster with initial threshold
+        cluster_index = 1
+        threshold = 0
+        mask = MaskRegionFuzzy(self.mask_np, cluster_index, threshold)
+
+        # when iterating over all points, varying threshold and iterating again, then reverting
+        members_1 = [point for point in mask]
+
+        mask.threshold = 0.10
+        members_2 = [point for point in mask]
+
+        mask.threshold = 0
+        members_3 = [point for point in mask]
+
+        # then all iterations work as expected
+        self.assertEquals(len(members_1), 9)
+        self.assertEquals(len(members_2), 15)
+        self.assertEquals(len(members_3), 9)
+
+
+

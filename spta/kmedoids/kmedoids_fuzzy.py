@@ -149,7 +149,7 @@ def compute_membership_fcm(X, m, medoids, distance_measure, tol):
     fuzzy_costs = np.zeros(k)
     for i in range(0, k):
         fuzzy_costs[i] = np.sum(uij[:, i] * dist_mat[:, i])
-    print('fuzzy costs', fuzzy_costs)
+    # print('fuzzy costs', fuzzy_costs)
 
     # compute the total cost, sum of each intra-cluster cost
     total_cost = np.sum(fuzzy_costs)
@@ -240,7 +240,7 @@ def show_report(result):
 
     # total samples
     total_points = result.uij.shape[0]
-    print(result.uij)
+    # print(result.uij)
 
     for i in range(0, result.k):
         # show info per cluster
