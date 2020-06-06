@@ -86,7 +86,7 @@ class DistanceByDTW(DistanceBetweenSeries):
 
                 # for point (i, j), calculate the distances to all other points
                 point = Point(i, j)
-                self.logger.debug('Calculating distances at point: {}...'.format(str(point)))
+                self.logger.debug('DTW at: {}...'.format(str(point)))
                 point_series = spatio_temporal_region.series_at(point)
                 distances_at_point = [
                     self.measure(point_series, other_series)

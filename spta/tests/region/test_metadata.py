@@ -1,6 +1,6 @@
 import unittest
 
-from spta.region import Region
+from spta.region import Point, Region
 from spta.region.temporal import SpatioTemporalRegionMetadata
 
 
@@ -49,12 +49,50 @@ class TestSptrMetadata(unittest.TestCase):
         self.assertEquals(rmd_1y_4ppd.distances_filename,
                           'raw/distances_sp_small_1y_4ppd_norm.npy')
 
-    def test_norm_min_filename_365_1ppd(self):
+    def test_norm_min_filename_365_1ppd_norm(self):
         rmd_1y_1ppd = SpatioTemporalRegionMetadata('sp_small', Region(40, 50, 50, 60), 365, 1,
                                                    normalized=True)
         self.assertEquals(rmd_1y_1ppd.norm_min_filename, 'raw/sp_small_1y_1ppd_norm_min.npy')
 
-    def test_norm_max_filename_365_1ppd(self):
+    def test_norm_max_filename_365_1ppd_norm(self):
         rmd_1y_1ppd = SpatioTemporalRegionMetadata('sp_small', Region(40, 50, 50, 60), 365, 1,
                                                    normalized=True)
         self.assertEquals(rmd_1y_1ppd.norm_max_filename, 'raw/sp_small_1y_1ppd_norm_max.npy')
+
+    def test_pickle_filename_365_1ppd_norm(self):
+        rmd_1y_1ppd = SpatioTemporalRegionMetadata('sp_small', Region(40, 50, 50, 60), 365, 1,
+                                                   normalized=True)
+        self.assertEquals(rmd_1y_1ppd.pickle_filename, 'pickle/sp_small_1y_1ppd_norm.pickle')
+
+    def test_index_to_absolute_points_index_0(self):
+        # given
+        sp_small_md = SpatioTemporalRegionMetadata('sp_small', Region(40, 50, 50, 60), 365, 1,
+                                                   normalized=True)
+
+        # when
+        point = sp_small_md.index_to_absolute_points(0)
+
+        # then
+        self.assertEquals(point, Point(40, 50))
+
+    def test_index_to_absolute_points_index_1(self):
+        # given
+        sp_small_md = SpatioTemporalRegionMetadata('sp_small', Region(40, 50, 50, 60), 365, 1,
+                                                   normalized=True)
+
+        # when
+        point = sp_small_md.index_to_absolute_points(1)
+
+        # then
+        self.assertEquals(point, Point(40, 51))
+
+    def test_index_to_absolute_points_index_85(self):
+        # given
+        sp_small_md = SpatioTemporalRegionMetadata('sp_small', Region(40, 50, 50, 60), 365, 1,
+                                                   normalized=True)
+
+        # when
+        point = sp_small_md.index_to_absolute_points(85)
+
+        # then 85 -> (8, 5) in subregion
+        self.assertEquals(point, Point(48, 55))

@@ -1,4 +1,5 @@
 import numpy as np
+import pickle
 
 from . import Point
 from spta.util import log as log_util
@@ -51,6 +52,14 @@ class BaseRegion(log_util.LoggerMixin):
         np.save(filename, ds_numpy)
         self.logger.info('Saved to {}: {}'.format(filename, ds_numpy.shape))
 
+    def pickle_to(self, filename):
+        '''
+        Uses pickle to dump the complete region to a file.
+        '''
+        with open(filename, 'wb') as f:
+            pickle.dump(self, f)
+        self.logger.info('Pickled to {}: {}'.format(filename, self.shape))
+
     def __iter__(self):
         '''
         Used for iterating over points
@@ -87,3 +96,18 @@ class BaseRegion(log_util.LoggerMixin):
             return self.name
         else:
             return 'Region {}'.format(self.shape)
+
+    @classmethod
+    def from_pickle(cls, filename):
+        '''
+        Loads a region from pickle.
+        '''
+        region = None
+        logger = log_util.logger_for_me(cls.from_pickle)
+
+        with open(filename, 'rb') as f:
+            region = pickle.load(f)
+
+        logger.info('Unpickled {}'.format(filename))
+
+        return region

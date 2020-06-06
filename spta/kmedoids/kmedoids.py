@@ -206,6 +206,19 @@ def run_kmedoids_from_metadata(X, kmediods_metadata):
                         kmediods_metadata.verbose)
 
 
+def kmedoids_suite_metadata(k_values, seed_values, distance_measure=DistanceByDTW(),
+                            initial_medoids=None, max_iter=1000, tol=0.001, verbose=True):
+    '''
+    Builds a list of KmedoidsMetadata based on the cartesian product of k_values and seed_values.
+    Can override default values for other parameters.
+    '''
+    for k in k_values:
+        for random_seed in seed_values:
+            yield KmedoidsMetadata(k=k, distance_measure=distance_measure,
+                                   initial_medoids=initial_medoids, random_seed=random_seed,
+                                   max_iter=max_iter, tol=tol, verbose=verbose)
+
+
 if __name__ == '__main__':
     from spta.region import Region
     from spta.region.temporal import SpatioTemporalRegion, SpatioTemporalRegionMetadata

@@ -3,6 +3,7 @@ import numpy as np
 
 from spta.dataset import temp_brazil
 from spta.util import arrays as arrays_util
+from spta.util import fs as fs_util
 
 from . import Point, Region
 from .spatial import SpatialDecorator, SpatialCluster, DomainRegion
@@ -33,7 +34,7 @@ class SpatioTemporalRegionMetadata(object):
     '''
 
     def __init__(self, name, region, series_len, ppd, last=True, centroid=None,
-                 normalized=True, dataset_dir='raw'):
+                 normalized=True, dataset_dir='raw', pickle_dir='pickle'):
         self.name = name
         self.region = region
         self.series_len = series_len
@@ -41,6 +42,26 @@ class SpatioTemporalRegionMetadata(object):
         self.last = last
         self.normalized = normalized
         self.dataset_dir = dataset_dir
+        self.pickle_dir = pickle_dir
+
+    def index_to_absolute_points(self, index):
+        '''
+        Given a 2d index, recover the original Point coordinates.
+        This is useful when applied to a medoid index, because it will give the medoid position
+        in the original dataset.
+
+        Assumes that the medoid index has been calculated from the region specified in this
+        metadata instance.
+        '''
+        y_len = self.region.y2 - self.region.y1
+
+        # get (i, j) position relative to the region
+        x_region = int(index / y_len)
+        y_region = index % y_len
+
+        # get the region offset and add to point
+        x_offset, y_offset = self.region.x1, self.region.y1
+        return Point(x_region + x_offset, y_region + y_offset)
 
     @property
     def years(self):
@@ -88,6 +109,13 @@ class SpatioTemporalRegionMetadata(object):
         Ex 'raw/sp_small_1y_4ppd_max.npy'
         '''
         return '{}/{}_max.npy'.format(self.dataset_dir, self)
+
+    @property
+    def pickle_filename(self):
+        '''
+        Ex 'pickle/sp_small_1y_4ppd_norm.pickle'
+        '''
+        return '{}/{}.pickle'.format(self.pickle_dir, self)
 
     def __str__(self):
         '''
@@ -210,6 +238,20 @@ class SpatioTemporalRegion(DomainRegion):
 
         # delegate
         self.save_to(self.region_metadata.dataset_filename)
+
+    def pickle(self):
+        '''
+        Pickles the object to the file designated by the metadata.
+        Raises ValueError if metadata is not available.
+        '''
+        if self.region_metadata is None:
+            raise ValueError('Need metadata to pickle this sptr!')
+
+        # ensure dir
+        fs_util.mkdir(self.region_metadata.pickle_dir)
+
+        # delegate
+        self.pickle_to(self.region_metadata.pickle_filename)
 
     @property
     def as_list(self):
@@ -643,7 +685,15 @@ if __name__ == '__main__':
     sp_small = SpatioTemporalRegion.from_metadata(sp_small_md)
     print('sp_small: ', sp_small.shape)
 
+    # save as npy
     sp_small.save()
+
+    # save as pickle
+    sp_small.pickle()
+
+    # retrieve from pickle
+    sp_small_pkl = SpatioTemporalRegion.from_pickle('pickle/sp_small_1y_4ppd_first_norm.pickle')
+    assert sp_small.shape == sp_small_pkl.shape
 
     t_end = time.time()
     elapsed = t_end - t_start

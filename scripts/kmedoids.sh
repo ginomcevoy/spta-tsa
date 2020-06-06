@@ -4,4 +4,4 @@
 SCRIPTS_DIR="$( cd "$( dirname "$0" )" && pwd )"
 
 cd $SCRIPTS_DIR/..
-PYTHONPATH=$PWD python3 -m experiments.clustering.silhouette $@
+PYTHONPATH=$PWD python3 -m experiments.clustering.kmedoids $@

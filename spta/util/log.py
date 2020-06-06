@@ -56,4 +56,6 @@ def setup_log_argparse(args, default_level='INFO'):
     elif hasattr(args, 'logger') and args.logger:
         log_level_str = args.logger
 
+    print(log_level_str)
+
     return setup_log(log_level_str)
