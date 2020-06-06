@@ -95,7 +95,7 @@ def plot_2d_clusters(cluster_labels, shape_2d, title='', subplot=None):
     x_len, y_len = shape_2d
 
     # import here to avoid any circular imports
-    from spta.region import SpatialRegion
+    from spta.region.spatial import SpatialRegion
     label_region = SpatialRegion.create_from_1d(cluster_labels, x_len, y_len)
     return plot_discrete_spatial_region(label_region, title, True, subplot)
 

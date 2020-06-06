@@ -5,7 +5,8 @@ import numpy as np
 import os
 import sys
 
-from spta.region import SpatialRegion, SpatioTemporalRegion
+from spta.region.spatial import SpatialRegion
+from spta.region.temporal import SpatioTemporalRegion
 from spta.util import plot as plot_util
 from spta.distance.dtw import DistanceByDTW
 
@@ -53,8 +54,8 @@ class KmedoidsWithSilhouette(object):
         # read the dataset to load the spatio-temporal region
         sptr = SpatioTemporalRegion.from_metadata(self.sptr_metadata)
 
-        # save it to a file
-        sptr.save(self.sptr_metadata.dataset_filename)
+        # save it to file given by metadata
+        sptr.save()
 
     def calculate_distance_matrix(self):
         '''
@@ -312,7 +313,8 @@ if __name__ == '__main__':
                         level=log_level, datefmt='%d-%b-%y %H:%M:%S')
 
     # Run with sp_small
-    from spta.region import Region, SpatioTemporalRegionMetadata
+    from spta.region import Region
+    from spta.region.temporal import SpatioTemporalRegionMetadata
 
     # use this region as example
     sp_small_md = SpatioTemporalRegionMetadata('sp_small', Region(40, 50, 50, 60), 1460, 4)

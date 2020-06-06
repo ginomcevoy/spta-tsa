@@ -32,12 +32,14 @@ class SpatioTemporalRegionMetadata(object):
             path where to load/store numpy files
     '''
 
-    def __init__(self, name, region, series_len, ppd, last=True, centroid=None, dataset_dir='raw'):
+    def __init__(self, name, region, series_len, ppd, last=True, centroid=None,
+                 normalized=True, dataset_dir='raw'):
         self.name = name
         self.region = region
         self.series_len = series_len
         self.ppd = ppd
         self.last = last
+        self.normalized = normalized
         self.dataset_dir = dataset_dir
 
     @property
@@ -62,22 +64,44 @@ class SpatioTemporalRegionMetadata(object):
     @property
     def dataset_filename(self):
         '''
-        Ex 'raw/sp_small_1y_4ppd.npy'
+        Ex 'raw/sp_small_1y_4ppd_norm.npy'
         '''
         return '{}/{}.npy'.format(self.dataset_dir, self)
 
     @property
     def distances_filename(self):
         '''
-        Ex raw/distances_sp_small_1y_4ppd.npy'
+        Ex raw/distances_sp_small_1y_4ppd_norm.npy'
         '''
         return '{}/distances_{}.npy'.format(self.dataset_dir, self)
 
+    @property
+    def norm_min_filename(self):
+        '''
+        Ex 'raw/sp_small_1y_4ppd_min.npy'
+        '''
+        return '{}/{}_min.npy'.format(self.dataset_dir, self)
+
+    @property
+    def norm_max_filename(self):
+        '''
+        Ex 'raw/sp_small_1y_4ppd_max.npy'
+        '''
+        return '{}/{}_max.npy'.format(self.dataset_dir, self)
+
     def __str__(self):
         '''
-        Ex sp_small_1y_4ppd'
+        Ex sp_small_1y_4ppd_norm'
         '''
-        return '{}_{}_{}ppd'.format(self.name, self.time_str, self.ppd)
+        norm_str = ''
+        if self.normalized:
+            norm_str = '_norm'
+
+        last_str = ''
+        if not self.last:
+            last_str = '_first'
+
+        return '{}_{}_{}ppd{}{}'.format(self.name, self.time_str, self.ppd, last_str, norm_str)
 
 
 class SpatioTemporalRegion(DomainRegion):
@@ -176,6 +200,17 @@ class SpatioTemporalRegion(DomainRegion):
         '''
         return self.centroid is not None
 
+    def save(self):
+        '''
+        Saves the dataset to the file designated by the metadata.
+        Raises ValueError if metadata is not available.
+        '''
+        if self.region_metadata is None:
+            raise ValueError('Need metadata to save this sptr!')
+
+        # delegate
+        self.save_to(self.region_metadata.dataset_filename)
+
     @property
     def as_list(self):
         '''
@@ -243,6 +278,10 @@ class SpatioTemporalRegion(DomainRegion):
         # save the metadata in the instance, can be useful later
         spt_region.region_metadata = sptr_metadata
 
+        if sptr_metadata.normalized:
+            # replace region with normalized version
+            spt_region = SpatioTemporalNormalized(spt_region, region_metadata=sptr_metadata)
+
         logger.info('Loaded dataset {}: {}'.format(sptr_metadata, sptr_metadata.region))
         return spt_region
 
@@ -268,6 +307,9 @@ class SpatioTemporalDecorator(SpatialDecorator, SpatioTemporalRegion):
         # the metadata parameter in SpatioTemporalCluster
         super(SpatioTemporalDecorator, self).__init__(decorated_region=decorated_region, **kwargs)
 
+        # keep metadata if provided
+        self.region_metadata = kwargs.get('region_metadata', None)
+
     def series_at(self, point):
         return self.decorated_region.series_at(point)
 
@@ -288,6 +330,9 @@ class SpatioTemporalDecorator(SpatialDecorator, SpatioTemporalRegion):
 
     def get_centroid(self, distance_measure=None):
         return self.decorated_region.get_centroid(distance_measure)
+
+    def save(self):
+        return self.decorated_region.save()
 
 
 class SpatioTemporalCluster(SpatialCluster, SpatioTemporalDecorator):
@@ -465,6 +510,94 @@ class SpatioTemporalCluster(SpatialCluster, SpatioTemporalDecorator):
         return cluster
 
 
+class SpatioTemporalNormalized(SpatioTemporalDecorator):
+    '''
+    A decorator that normalizes the temporal series by scaling all the series to values
+    between 0 and 1. This can be achieved by applying the formula to each series:
+
+    normalized_series = (series - min) / (max - min)
+
+    We store the min and max values, so that the series can be later recovered by using:
+
+    series = normalized_series (max - min) + min
+
+    The min and max values are valid for each series. These are stored in spatial regions
+    called normalization_min and normalization_max, respectively.
+
+    If min = max, then scaled is fixed to 0.
+    If the series is Nan, save the  series, and set min = max = 0.
+    '''
+    def __init__(self, decorated_region, **kwargs):
+
+        self.logger.debug('SpatioTemporalNormalized kwargs: {}'.format(kwargs))
+
+        (series_len, x_len, y_len) = decorated_region.shape
+
+        # moved here to avoid circular imports between FunctionRegion and SpatioTemporalRegion
+        from . import function as function_region
+
+        # calculate the min, max values for each series
+        # we will save these outputs to allow denormalization
+        minFunction = function_region.FunctionRegionScalarSame(np.nanmin, x_len, y_len)
+        self.normalization_min = minFunction.apply_to(decorated_region)
+
+        maxFunction = function_region.FunctionRegionScalarSame(np.nanmax, x_len, y_len)
+        self.normalization_max = maxFunction.apply_to(decorated_region)
+
+        # this function normalizes the series at each point independently of other points
+        def normalize(series):
+
+            # calculate min/max (again...)
+            series_min = np.nanmin(series)
+            series_max = np.nanmax(series)
+
+            # sanity checks
+            if np.isnan(series_min) or np.isnan(series_max):
+                return np.repeat(np.nan, repeats=series_len)
+
+            if series_min == series_max:
+                return np.zeros(series_len)
+
+            # normalize here
+            return (series - series_min) / (series_max - series_min)
+
+        # call the function
+        normalizing_function = function_region.FunctionRegionSeriesSame(normalize, x_len, y_len,
+                                                                        series_len)
+        normalized_region = normalizing_function.apply_to(decorated_region)
+        normalized_region.region_metadata = decorated_region.region_metadata
+
+        # use the normalized region here, all decorating functions from other decorators should be
+        # applied to this normalized region instead
+        super(SpatioTemporalNormalized, self).__init__(normalized_region, **kwargs)
+
+    def __next__(self):
+        '''
+        Don't use the default iterator here, which comes from SpatialDecorator.
+        Instead, iterate normally as the decorated region does.
+        '''
+        return self.decorated_region.__next__()
+
+    def save(self):
+        '''
+        In addition of saving the numpy dataset, also save the min/max regions.
+        Requires the metadata!
+        '''
+
+        # save dataset
+        super(SpatioTemporalNormalized, self).save()
+
+        # save min
+        min_filename = self.region_metadata.norm_min_filename
+        np.save(min_filename, self.normalization_min.numpy_dataset)
+        self.logger.info('Saved norm_min to {}'.format(min_filename))
+
+        # save max
+        max_filename = self.region_metadata.norm_max_filename
+        np.save(max_filename, self.normalization_max.numpy_dataset)
+        self.logger.info('Saved norm_max to {}'.format(max_filename))
+
+
 def average_4ppd_to_1ppd(sptr_numpy, logger=None):
     '''
     Given a spatio temporal region with the defaults of 4 points per day (ppd=4), average the
@@ -506,9 +639,11 @@ if __name__ == '__main__':
 
     # print('centroid %s' % str(small.centroid))
     sp_small_md = SpatioTemporalRegionMetadata('sp_small', Region(40, 50, 50, 60), 1460, 4,
-                                               last=False)
+                                               last=False, normalized=True)
     sp_small = SpatioTemporalRegion.from_metadata(sp_small_md)
     print('sp_small: ', sp_small.shape)
+
+    sp_small.save()
 
     t_end = time.time()
     elapsed = t_end - t_start

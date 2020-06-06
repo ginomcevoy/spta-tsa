@@ -66,6 +66,22 @@ class FunctionRegionScalar(FunctionRegion):
         return result_region
 
 
+class FunctionRegionScalarSame(FunctionRegionScalar):
+    '''
+    Function region that applies, at every point, the same provided function returning a scalar.
+    The region is built based on provided x_len and y_len.
+    '''
+    def __init__(self, function, x_len, y_len, dtype=np.float64):
+
+        # create the numpy dataset by reshaping an array of functions
+        function_list = [
+            function
+            for i in range(0, x_len * y_len)
+        ]
+        function_np = np.array(function_list).reshape((x_len, y_len))
+        super(FunctionRegionScalarSame, self).__init__(function_np, dtype)
+
+
 class FunctionRegionSeries(FunctionRegion):
     '''
     A FunctionRegion that returns a series for each point in the parameter region.
@@ -92,3 +108,19 @@ class FunctionRegionSeries(FunctionRegion):
         assert isinstance(result_region, spta.region.temporal.SpatioTemporalRegion)
 
         return result_region
+
+
+class FunctionRegionSeriesSame(FunctionRegionSeries):
+    '''
+    Function region that applies, at every point, the same provided function returning a series.
+    The region is built based on provided x_len and y_len.
+    '''
+    def __init__(self, function, x_len, y_len, output_len, dtype=np.float64):
+
+        # create the numpy dataset by reshaping an array of functions
+        function_list = [
+            function
+            for i in range(0, x_len * y_len)
+        ]
+        function_np = np.array(function_list).reshape((x_len, y_len))
+        super(FunctionRegionSeriesSame, self).__init__(function_np, output_len, dtype)

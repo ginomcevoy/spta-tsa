@@ -1,12 +1,10 @@
 import numpy as np
 
-from .base import BaseRegion
-from . import Point, Region, reshape_1d_to_2d
-
-from spta.util import arrays as arrays_util
+from . import base
+from . import Region, reshape_1d_to_2d
 
 
-class DomainRegion(BaseRegion):
+class DomainRegion(base.BaseRegion):
     '''
     A region that represents the domain of a function. This is a parent class for both
     SpatialRegion and SpatioTemporalRegion.
@@ -38,7 +36,7 @@ class DomainRegion(BaseRegion):
         # use internal iterator! this means we can't use this function inside another iteration...
         for (point, value) in self:
 
-            self.logger.debug('Iterating in {} at point {}'.format(self, point))
+            # self.logger.debug('Iterating in {} at point {}'.format(self, point))
 
             # get the function at the point (can vary!), apply it to get result at point
             function_at_point = function_region_scalar.function_at(point)
@@ -208,8 +206,8 @@ class SpatialDecorator(SpatialRegion):
     def empty_region_2d(self):
         return self.decorated_region.empty_region_2d()
 
-    def save(self, filename):
-        return self.decorated_region.save(filename)
+    def save_to(self, filename):
+        return self.decorated_region.save_to(filename)
 
     def __str__(self):
         return str(self.decorated)

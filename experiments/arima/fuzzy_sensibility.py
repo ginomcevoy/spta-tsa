@@ -7,7 +7,7 @@ import argparse
 from spta.arima.fuzzy_sensibility import ArimaFuzzySensibility
 from spta.distance.dtw import DistanceByDTW
 from spta.kmedoids import kmedoids_fuzzy, get_medoid_indices
-from spta.region import SpatioTemporalRegion, SpatioTemporalCluster
+from spta.region.temporal import SpatioTemporalRegion, SpatioTemporalCluster
 from spta.util import log as log_util
 
 from experiments.metadata.arima import arima_suite_by_name

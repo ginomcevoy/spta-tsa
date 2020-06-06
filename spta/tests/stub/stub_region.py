@@ -1,6 +1,6 @@
 import numpy as np
 
-from spta.region import SpatioTemporalRegion
+from spta.region.temporal import SpatioTemporalRegion
 from spta.region.function import FunctionRegionScalar, FunctionRegionSeries
 
 

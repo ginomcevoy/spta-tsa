@@ -74,7 +74,8 @@ if __name__ == '__main__':
     import numpy as np
     import logging
 
-    from spta.region import Region, SpatioTemporalRegion, SpatioTemporalRegionMetadata
+    from spta.region import Region
+    from spta.region.temporal import SpatioTemporalRegion, SpatioTemporalRegionMetadata
 
     logger = log_util.setup_log('DEBUG')
 

@@ -1,7 +1,6 @@
 import numpy as np
 
 from . import Point
-import spta.region.spatial
 from spta.util import log as log_util
 
 
@@ -39,9 +38,12 @@ class BaseRegion(log_util.LoggerMixin):
         Returns an empty SpatialRegion with the same shape as this region.
         '''
         empty_region_np = np.empty((self.x_len, self.y_len))
+
+        # move import here to avoid circular imports
+        import spta.region.spatial
         return spta.region.spatial.SpatialRegion(empty_region_np)
 
-    def save(self, filename):
+    def save_to(self, filename):
         '''
         Saves dataset to a file.
         '''

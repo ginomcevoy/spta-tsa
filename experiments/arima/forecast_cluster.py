@@ -9,7 +9,7 @@ from collections import namedtuple
 from spta.arima.analysis import ArimaErrorAnalysis
 from spta.distance.dtw import DistanceByDTW
 from spta.kmedoids import kmedoids
-from spta.region import SpatioTemporalRegion, SpatioTemporalCluster
+from spta.region.temporal import SpatioTemporalRegion, SpatioTemporalCluster
 from spta.util import log as log_util
 
 from experiments.metadata.arima import arima_suite_by_name

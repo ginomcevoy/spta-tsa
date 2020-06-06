@@ -207,7 +207,8 @@ def run_kmedoids_from_metadata(X, kmediods_metadata):
 
 
 if __name__ == '__main__':
-    from spta.region import Region, SpatioTemporalRegion, SpatioTemporalRegionMetadata
+    from spta.region import Region
+    from spta.region.temporal import SpatioTemporalRegion, SpatioTemporalRegionMetadata
     from spta.util import log as log_util
 
     log_util.setup_log('DEBUG')

@@ -11,8 +11,8 @@ def reshape_1d_to_2d(list_1d, x, y):
     return np.array(list_1d).reshape(x, y)
 
 # these are after the Point / Region / TimeInterval
-from .spatial import SpatialRegion, SpatialCluster
-from .temporal import SpatioTemporalRegion, SpatioTemporalRegionMetadata, SpatioTemporalCluster
+# from .spatial import SpatialRegion, SpatialCluster
+# from .temporal import SpatioTemporalRegion, SpatioTemporalRegionMetadata, SpatioTemporalCluster
 
 
 # def transpose_region(numpy_region_dataset):
@@ -26,7 +26,15 @@ from .temporal import SpatioTemporalRegion, SpatioTemporalRegionMetadata, Spatio
 #     return flattened.reshape(x_len, y_len, series_len)
 
 
-__all__ = [
-    'Point', 'Region', 'TimeInterval', 'reshape_1d_to_2d', 'SpatialRegion', 'SpatioTemporalRegion',
-    'SpatioTemporalRegionMetadata', 'SpatialCluster', 'SpatioTemporalCluster'
-]
+# Adding to __all__ is triggering this warning
+# best to avoid this and import from each submodule
+# /usr/lib64/python3.6/runpy.py:125: RuntimeWarning: 'spta.region.temporal' found in sys.modules
+# after import of package 'spta.region', but prior to execution of 'spta.region.temporal'; this
+# may result in unpredictable behaviour
+#   warn(RuntimeWarning(msg))
+
+
+# __all__ = [
+#     'Point', 'Region', 'TimeInterval', 'reshape_1d_to_2d', 'SpatialRegion', 'SpatioTemporalRegion',
+#     'SpatioTemporalRegionMetadata', 'SpatialCluster', 'SpatioTemporalCluster'
+# ]

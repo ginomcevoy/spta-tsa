@@ -5,7 +5,8 @@ import argparse
 
 from spta.arima.analysis import ArimaErrorAnalysis
 from spta.distance.dtw import DistanceByDTW
-from spta.region import Point, SpatioTemporalRegion
+from spta.region import Point
+from spta.region.temporal import SpatioTemporalRegion
 from spta.util import log as log_util
 
 from experiments.metadata.arima import predefined_arima_suites, arima_suite_by_name

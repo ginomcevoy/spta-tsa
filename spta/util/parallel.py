@@ -83,12 +83,13 @@ class InterPointsOperation(object):
     Useful for parallel calculation of the distance matrix with DTW.
     '''
 
-    def __init__(self, num_proc, spt_region):
+    def __init__(self, num_proc, spt_region, chunksize=50):
         self.num_proc = num_proc
 
         (series_len, x_len, y_len) = self.__init_input(spt_region)
         self.__init_output(x_len, y_len)
         self.__init_shape(series_len, x_len, y_len)
+        self.chunksize = chunksize
 
     def __init_input(self, spt_region):
         '''
@@ -151,7 +152,7 @@ class InterPointsOperation(object):
 
             # put the processes to work
             # no need to store result of map, since we are writing to shared array
-            pool.map(inter_points_task_wrapper, k_with_task)
+            pool.map(inter_points_task_wrapper, k_with_task, chunksize=self.chunksize)
 
         # return 2D representation of the shared output array
         return self.output_2d

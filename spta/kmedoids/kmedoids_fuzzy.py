@@ -272,7 +272,8 @@ def run_kmedoids_fuzzy_from_params(X, kfuzzy_params):
 
 
 if __name__ == '__main__':
-    from spta.region import Region, SpatioTemporalRegion, SpatioTemporalRegionMetadata
+    from spta.region import Region
+    from spta.region.temporal import SpatioTemporalRegion, SpatioTemporalRegionMetadata
     from spta.util import log as log_util
 
     log_util.setup_log('DEBUG')

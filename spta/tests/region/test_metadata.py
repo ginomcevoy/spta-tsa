@@ -1,6 +1,7 @@
 import unittest
 
-from spta.region import Region, SpatioTemporalRegionMetadata
+from spta.region import Region
+from spta.region.temporal import SpatioTemporalRegionMetadata
 
 
 class TestSptrMetadata(unittest.TestCase):
@@ -27,16 +28,33 @@ class TestSptrMetadata(unittest.TestCase):
 
     def test_dataset_filename_365_1ppd(self):
         rmd_1y_1ppd = SpatioTemporalRegionMetadata('sp_small', Region(40, 50, 50, 60), 365, 1)
-        self.assertEquals(rmd_1y_1ppd.dataset_filename, 'raw/sp_small_1y_1ppd.npy')
+        self.assertEquals(rmd_1y_1ppd.dataset_filename, 'raw/sp_small_1y_1ppd_norm.npy')
 
     def test_dataset_filename_1460_4ppd(self):
         rmd_1y_4ppd = SpatioTemporalRegionMetadata('sp_small', Region(40, 50, 50, 60), 1460, 4)
-        self.assertEquals(rmd_1y_4ppd.dataset_filename, 'raw/sp_small_1y_4ppd.npy')
+        self.assertEquals(rmd_1y_4ppd.dataset_filename, 'raw/sp_small_1y_4ppd_norm.npy')
+
+    def test_dataset_filename_365_1ppd_not_normalized(self):
+        rmd_1y_1ppd = SpatioTemporalRegionMetadata('sp_small', Region(40, 50, 50, 60), 365, 1,
+                                                   normalized=False)
+        self.assertEquals(rmd_1y_1ppd.dataset_filename, 'raw/sp_small_1y_1ppd.npy')
 
     def test_distances_filename_365_1ppd(self):
         rmd_1y_1ppd = SpatioTemporalRegionMetadata('sp_small', Region(40, 50, 50, 60), 365, 1)
-        self.assertEquals(rmd_1y_1ppd.distances_filename, 'raw/distances_sp_small_1y_1ppd.npy')
+        self.assertEquals(rmd_1y_1ppd.distances_filename,
+                          'raw/distances_sp_small_1y_1ppd_norm.npy')
 
     def test_distances_filename_1460_4ppd(self):
         rmd_1y_4ppd = SpatioTemporalRegionMetadata('sp_small', Region(40, 50, 50, 60), 1460, 4)
-        self.assertEquals(rmd_1y_4ppd.distances_filename, 'raw/distances_sp_small_1y_4ppd.npy')
+        self.assertEquals(rmd_1y_4ppd.distances_filename,
+                          'raw/distances_sp_small_1y_4ppd_norm.npy')
+
+    def test_norm_min_filename_365_1ppd(self):
+        rmd_1y_1ppd = SpatioTemporalRegionMetadata('sp_small', Region(40, 50, 50, 60), 365, 1,
+                                                   normalized=True)
+        self.assertEquals(rmd_1y_1ppd.norm_min_filename, 'raw/sp_small_1y_1ppd_norm_min.npy')
+
+    def test_norm_max_filename_365_1ppd(self):
+        rmd_1y_1ppd = SpatioTemporalRegionMetadata('sp_small', Region(40, 50, 50, 60), 365, 1,
+                                                   normalized=True)
+        self.assertEquals(rmd_1y_1ppd.norm_max_filename, 'raw/sp_small_1y_1ppd_norm_max.npy')

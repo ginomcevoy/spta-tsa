@@ -1,8 +1,8 @@
 import numpy as np
 
 from spta.distance.dtw import DistanceByDTW
-from spta.region import SpatioTemporalRegion
 from spta.region.function import FunctionRegionScalar
+from spta.region.temporal import SpatioTemporalRegion
 
 from spta.util import log as log_util
 from spta.util import arrays as arrays_util

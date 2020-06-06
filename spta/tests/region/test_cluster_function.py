@@ -1,7 +1,9 @@
 import numpy as np
 import unittest
 
-from spta.region import Point, SpatialCluster, SpatioTemporalCluster
+from spta.region import Point
+from spta.region.spatial import SpatialCluster
+from spta.region.temporal import SpatioTemporalCluster
 from spta.tests.stub import stub_region
 
 '''
