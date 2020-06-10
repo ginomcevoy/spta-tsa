@@ -2,6 +2,8 @@
 K-Medoids Fuzzy implementation
 Based on http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.41.2622&rep=rep1&type=pdf
 and https://github.com/shenxudeu/K_Medoids/blob/master/k_medoids.py
+
+See also https://www.sciencedirect.com/science/article/pii/S1877050915000940 for silhouette
 '''
 
 import logging
@@ -223,7 +225,8 @@ def run_kmedoids_fuzzy(X, k, m, distance_measure, initial_medoids=None, random_s
             break
         cc += 1
 
-    result = KmedoidsFuzzyResult(k, m, random_seed, medoids, uij, costs, tot_cost)
+    result = KmedoidsFuzzyResult(k, m, random_seed, get_medoid_indices(medoids), uij, costs,
+                                 tot_cost)
     show_report(result)
 
     return result
@@ -231,7 +234,7 @@ def run_kmedoids_fuzzy(X, k, m, distance_measure, initial_medoids=None, random_s
 
 def show_report(result):
 
-    medoids = get_medoid_indices(result.medoids)
+    medoids = result.medoids
 
     logger.info('----------------------------')
     logger.info('K-medoids for k={}, seed={}'.format(result.k, result.random_seed))

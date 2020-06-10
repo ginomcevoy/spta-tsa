@@ -1,5 +1,9 @@
-# big data files
+# spatio-temporal input/output
 raw/
+plots/
+csv/
+pickle
+results/
 
 .ipynb_checkpoints/
 

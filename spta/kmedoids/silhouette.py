@@ -10,7 +10,7 @@ from spta.region.temporal import SpatioTemporalRegion
 from spta.util import plot as plot_util
 from spta.distance.dtw import DistanceByDTW
 
-from . import kmedoids, get_medoid_indices
+from . import kmedoids
 
 # logging: avoid showing library outputs
 logger = logging.getLogger()
@@ -91,7 +91,7 @@ class KmedoidsWithSilhouette(object):
         # Show best results
         logger.info('Best k: {}'.format(best_k))
         logger.info('Best seed: {}'.format(best_seed))
-        logger.info('Best medoids: {}'.format(str(get_medoid_indices(best_medoids))))
+        logger.info('Best medoids: {}'.format(str(best_medoids)))
         logger.info('Best labels: {}'.format(str(best_labels)))
 
         # print results for best k

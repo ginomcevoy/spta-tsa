@@ -111,12 +111,12 @@ class MaskRegionCrisp(MaskRegion):
         return MaskRegionCrisp(membership_2d, cluster_index)
 
     @classmethod
-    def with_square_partition(cls, k, cluster_index, x_len, y_len):
+    def with_regular_partition(cls, k, cluster_index, x_len, y_len):
         '''
         Creates an instance of MaskRegionCrisp based on the number of clusters, so that each
-        cluster gets a square of (approximately) the same size.
+        cluster gets a rectangle of (approximately) the same size.
         The process is as follows:
-            - Compute the mcd of k, e.g. 12 -> 4. Then divide to obtain the second number, e.g. 3.
+            - Compute the most balanced divisors of k, e.g. 12 -> 4 x 3.
             - Partition the (x_len, y_len)  using these two values to create the cluster labels,
               e.g.
                   0  0  0  1  1  1 ...  3  3  3
@@ -129,8 +129,8 @@ class MaskRegionCrisp(MaskRegion):
               cluster_index
         '''
         # all clusters in the partition will have this same membership matrix
-        membership_squares = arrays_util.square_partitioning(x_len, y_len, k)
-        return cls.from_membership_array(membership_squares, cluster_index, x_len, y_len)
+        membership_regular = arrays_util.regular_partitioning(x_len, y_len, k)
+        return cls.from_membership_array(membership_regular, cluster_index, x_len, y_len)
 
 
 class MaskRegionFuzzy(MaskRegion):

@@ -64,35 +64,35 @@ class TestSptrMetadata(unittest.TestCase):
                                                    normalized=True)
         self.assertEquals(rmd_1y_1ppd.pickle_filename, 'pickle/sp_small_1y_1ppd_norm.pickle')
 
-    def test_index_to_absolute_points_index_0(self):
+    def test_index_to_absolute_point_index_0(self):
         # given
         sp_small_md = SpatioTemporalRegionMetadata('sp_small', Region(40, 50, 50, 60), 365, 1,
                                                    normalized=True)
 
         # when
-        point = sp_small_md.index_to_absolute_points(0)
+        point = sp_small_md.index_to_absolute_point(0)
 
         # then
         self.assertEquals(point, Point(40, 50))
 
-    def test_index_to_absolute_points_index_1(self):
+    def test_index_to_absolute_point_index_1(self):
         # given
         sp_small_md = SpatioTemporalRegionMetadata('sp_small', Region(40, 50, 50, 60), 365, 1,
                                                    normalized=True)
 
         # when
-        point = sp_small_md.index_to_absolute_points(1)
+        point = sp_small_md.index_to_absolute_point(1)
 
         # then
         self.assertEquals(point, Point(40, 51))
 
-    def test_index_to_absolute_points_index_85(self):
+    def test_index_to_absolute_point_index_85(self):
         # given
         sp_small_md = SpatioTemporalRegionMetadata('sp_small', Region(40, 50, 50, 60), 365, 1,
                                                    normalized=True)
 
         # when
-        point = sp_small_md.index_to_absolute_points(85)
+        point = sp_small_md.index_to_absolute_point(85)
 
         # then 85 -> (8, 5) in subregion
         self.assertEquals(point, Point(48, 55))

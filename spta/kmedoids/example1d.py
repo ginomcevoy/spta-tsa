@@ -9,7 +9,6 @@ from spta.util import plot as plot_util
 from spta.util import log as log_util
 
 from . import kmedoids
-from . import get_medoid_indices
 
 
 def alternating_functions_1d(series_n, series_len, function_options):
@@ -62,7 +61,7 @@ def main():
     kmedoids_result = kmedoids.run_kmedoids(series_group, k, distance_measure, random_seed=1,
                                             max_iter=1000, tol=0.001, verbose=True)
 
-    logger.info('Medoids: {}'.format(str(get_medoid_indices(kmedoids_result.medoids))))
+    logger.info('Medoids: {}'.format(str(kmedoids_result.medoids)))
     logger.info('Labels: {}'.format(str(kmedoids_result.labels)))
     plot_util.plot_series_group_by_color(series_group, series_len, kmedoids_result.labels)
 

@@ -1,6 +1,6 @@
 '''
-Execute this program to run K-medoids on a dataset, save the medoids as CSV and save
-the clusters as npy objects.
+Execute this program to run K-medoids on a dataset, save medoid info as CSV and create variance
+plots.
 '''
 import argparse
 import csv
@@ -10,8 +10,9 @@ from experiments.metadata.kmedoids import kmedoids_suites
 # from spta.kmedoids.silhouette import KmedoidsWithSilhouette
 
 from spta.distance.dtw import DistanceByDTW
-from spta.kmedoids import kmedoids, get_medoid_indices
-from spta.region.temporal import SpatioTemporalRegion
+from spta.distance import variance
+from spta.kmedoids import kmedoids, medoids_to_absolute_coordinates
+from spta.region.temporal import SpatioTemporalRegion, SpatioTemporalCluster
 
 from spta.util import log as log_util
 
@@ -20,8 +21,8 @@ def processRequest():
 
     # parses the arguments
     desc = 'Run k-medoids on a spatio temporal region with different k/seeds'
-    usage = '%(prog)s [-h] <region> <kmedoids_id>'
-    parser = argparse.ArgumentParser(prog='kmedoids', description=desc, usage=usage)
+    usage = '%(prog)s [-h] <region> <kmedoids_id> [--variance] [--log LOG]'
+    parser = argparse.ArgumentParser(prog='cluster-kmedoids', description=desc, usage=usage)
 
     # need name of region metadata and the ID of the kmedoids
     region_options = predefined_regions().keys()
@@ -30,6 +31,8 @@ def processRequest():
     kmedoids_options = kmedoids_suites().keys()
     parser.add_argument('kmedoids_id', help='ID of the kmedoids analysis',
                         choices=kmedoids_options)
+    parser.add_argument('--variance', help='Perform variance analysis and plot clusters',
+                        action='store_true')
     parser.add_argument('--log', help='log level: WARN|INFO|DEBUG')
 
     args = parser.parse_args()
@@ -48,12 +51,12 @@ def do_kmedoids(args, logger):
 
     # prepare the CSV output now (header)
     # name is built based on region and kmedoids IDs
-    csv_filename = '{}_{}.csv'.format(args.region, args.kmedoids_id)
+    csv_filename = 'cluster_kmedoids_{}_{}.csv'.format(args.region, args.kmedoids_id)
     with open(csv_filename, 'w', newline='') as csv_file:
         csv_writer = csv.writer(csv_file, delimiter=' ', quotechar='|',
                                 quoting=csv.QUOTE_MINIMAL)
         # header
-        csv_writer.writerow(['k', 'seed', 'medoids', 'total_cost'])
+        csv_writer.writerow(['k', 'seed', 'total_cost', 'medoids'])
 
     # retrieve the kmedoids suite
     kmedoids_suite = kmedoids_suites()[args.kmedoids_id]
@@ -72,11 +75,12 @@ def do_kmedoids(args, logger):
         kmedoids_metadata.distance_measure.distance_matrix = distance_dtw.distance_matrix
 
         # run K-medoids, this generates a KmedoidsResult namedtuple
-        result = kmedoids.run_kmedoids_from_metadata(series_group, kmedoids_metadata)
+        kmedoids_result = kmedoids.run_kmedoids_from_metadata(series_group, kmedoids_metadata)
+        k, random_seed = kmedoids_metadata.k, kmedoids_metadata.random_seed
 
-        total_cost = '{:.3f}'.format(result.total_cost)
-        medoid_coords = medoids_to_absolute_coordinates(spt_region, result.medoids)
-        partial_result = [result.k, result.random_seed, medoid_coords, total_cost]
+        total_cost = '{:.3f}'.format(kmedoids_result.total_cost)
+        medoid_coords = medoids_to_absolute_coordinates(spt_region, kmedoids_result.medoids)
+        partial_result = [k, random_seed, total_cost, medoid_coords]
 
         # write partial result
         with open(csv_filename, 'a', newline='') as csv_file:
@@ -85,26 +89,35 @@ def do_kmedoids(args, logger):
             logger.info('Writing partial result: {}'.format(partial_result))
             csv_writer.writerow(partial_result)
 
+        # do variance analysis and plots?
+        if args.variance:
+            do_variance_analysis(spt_region, distance_dtw, kmedoids_metadata, kmedoids_result)
 
-def medoids_to_absolute_coordinates(spt_region, medoids):
-    '''
-    Given Medoid instances, return the absolute coordinates from the original dataset.
-    Uses the metadata to recover the subregion that was used to slice the original dataset.
-    Returns a list of Point instances.
-    '''
-    # the indices, relative to the subregion
-    medoid_indices = get_medoid_indices(medoids)
 
-    # metadata is used to recover original coordinates
-    spt_metadata = spt_region.region_metadata
+def do_variance_analysis(spt_region, distance_measure, kmedoids_metadata, kmedoids_result):
 
-    # iterate to get coordinates
-    coordinates = []
-    for medoid_index in medoid_indices:
-        medoid_point = spt_metadata.index_to_absolute_points(medoid_index)
-        coordinates.append('({}, {})'.format(medoid_point.x, medoid_point.y))
+    # create spatio-temporal clusters with the labels obtained by k-medoids
+    clusters = []
+    k, random_seed = kmedoids_metadata.k, kmedoids_metadata.random_seed
+    members, centroids = kmedoids_result.labels, kmedoids_result.medoids
 
-    return coordinates
+    # short name for plot
+    # be nice and pad with zeros if needed
+    padding = int(k / 10) + 1
+    cluster_name_str = 'cluster{{:0{}d}}'.format(padding)
+
+    for i in range(0, k):
+        cluster_i = SpatioTemporalCluster.from_crisp_clustering(spt_region, members, i,
+                                                                centroids=centroids)
+        cluster_i.name = cluster_name_str.format(i)
+        clusters.append(cluster_i)
+
+    # build a suitable name for the current plot: need info on region, k, seed
+    plot_name = 'plots/variance_kmedoids_{}_{}_{}.pdf'.format(spt_region.region_metadata,
+                                                              k, random_seed)
+
+    # perform the variance analysis
+    variance.variance_analysis_clusters(clusters, distance_measure, plot_name=plot_name)
 
 
 if __name__ == '__main__':

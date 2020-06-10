@@ -22,9 +22,10 @@ class DistanceByDTW(DistanceBetweenSeries):
         '''
         Given many distances, combine them to provide a single metric for the distance between
         one series and a list of series.
-        For DTW, we use the Root Mean Squared.
+        For DTW, add the distances.
         '''
-        return arrays_util.root_mean_squared(distances_for_point)
+        # return arrays_util.root_mean_squared(distances_for_point)
+        return np.sum(distances_for_point)
 
     def compute_distance_matrix(self, temporal_data):
         '''

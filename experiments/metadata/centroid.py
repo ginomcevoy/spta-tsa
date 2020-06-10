@@ -11,7 +11,8 @@ def precalculated_centroids():
     Key is (sptr_name, classname_of_distance_measure)
     '''
     precalculated_centroids = {
-        ('nordeste_small_1y_1ppd', 'DistanceByDTW'): Point(5, 4),
+        ('nordeste_small_1y_1ppd', 'DistanceByDTW'): Point(4, 6),   # (5, 4) if using rms...
+        ('nordeste_small_1y_1ppd_norm', 'DistanceByDTW'): Point(4, 6),
     }
     return precalculated_centroids
 
@@ -44,7 +45,7 @@ def centroid_by_region_and_distance(sptr_name, distance_measure):
         assert distance_measure.__class__.__name__ == 'DistanceByDTW'
 
         spt_region_metadata = predefined_regions()[sptr_name]
-        centroid = CalculateCentroid.for_sptr_metadata(spt_region_metadata, distance_measure)
+        centroid, _ = CalculateCentroid.for_sptr_metadata(spt_region_metadata, distance_measure)
 
     return centroid
 

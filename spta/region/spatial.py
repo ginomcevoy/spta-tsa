@@ -210,7 +210,7 @@ class SpatialDecorator(SpatialRegion):
         return self.decorated_region.save_to(filename)
 
     def __str__(self):
-        return str(self.decorated)
+        return str(self.decorated_region)
 
     # code below is wrong, we don't want to use the decorated function which will use the
     # decorated iterator, instead of a more useful iterator in decorating overrides

@@ -110,7 +110,7 @@ def distances_to_point_in_2d_region(i, j, x_len, y_len):
     return np.linalg.norm(points_of_2d_region - single_point, axis=1)
 
 
-def square_partitioning(x_len, y_len, k):
+def regular_partitioning(x_len, y_len, k):
     '''
     Given a 2-d region and a number of clusters k, create a membership matrix that can be used
     to create clusters of (approximately) equal size.
@@ -129,12 +129,7 @@ def square_partitioning(x_len, y_len, k):
     '''
 
     # this finds 12 -> 3x4 or 24 -> 4x6. Use the largest to divide the largest of x_len, y_len
-    (div_1, div_2) = maths_util.find_two_balanced_divisors(k)
-
-    if x_len < y_len:
-        div_x, div_y = div_1, div_2
-    else:
-        div_x, div_y = div_2, div_1
+    (div_x, div_y) = maths_util.two_balanced_divisors_order_x_y(k, x_len, y_len)
 
     # bounds check
     if x_len < div_x or y_len < div_y:

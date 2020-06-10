@@ -6,7 +6,7 @@ import argparse
 
 from spta.arima.fuzzy_sensibility import ArimaFuzzySensibility
 from spta.distance.dtw import DistanceByDTW
-from spta.kmedoids import kmedoids_fuzzy, get_medoid_indices
+from spta.kmedoids import kmedoids_fuzzy
 from spta.region.temporal import SpatioTemporalRegion, SpatioTemporalCluster
 from spta.util import log as log_util
 
@@ -76,8 +76,6 @@ def do_arima_fuzzy_sensibility(args):
     kfuzzy_result = kmedoids_fuzzy.run_kmedoids_fuzzy_from_params(spt_region.as_2d,
                                                                   kfuzzy_params)
 
-    medoid_indices = get_medoid_indices(kfuzzy_result.medoids)
-
     # build the spatio-temporal clusters
     clusters = []
     for i in range(0, k):
@@ -85,7 +83,7 @@ def do_arima_fuzzy_sensibility(args):
         # force threshold = 0 here, we will vary it later
         cluster_i = SpatioTemporalCluster.from_fuzzy_clustering(spt_region, kfuzzy_result.uij,
                                                                 cluster_index=i, threshold=0,
-                                                                centroids=medoid_indices)
+                                                                centroids=kfuzzy_result.medoids)
         clusters.append(cluster_i)
 
     # iterate the spatio-temporal clusters

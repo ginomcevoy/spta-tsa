@@ -105,14 +105,13 @@ def do_arima_forecast_cluster(args):
     # run k-medoids
     # KmedoidsResult(k, random_seed, medoids, labels, costs, tot_cost, dist_mat)
     kmedoids_result = kmedoids.run_kmedoids_from_metadata(spt_region.as_2d, kmedoids_metadata)
-    medoid_indices = kmedoids.get_medoid_indices(kmedoids_result.medoids)
 
     # build the spatio-temporal clusters
     clusters = []
     for i in range(0, k):
         cluster_i = SpatioTemporalCluster.from_crisp_clustering(spt_region, kmedoids_result.labels,
                                                                 cluster_index=i,
-                                                                centroids=medoid_indices)
+                                                                centroids=kmedoids_result.medoids)
         clusters.append(cluster_i)
 
     # save results in CSV format: write header now

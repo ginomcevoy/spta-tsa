@@ -162,7 +162,8 @@ def run_kmedoids(X, k, distance_measure, initial_medoids=None, random_seed=1, ma
             break
         cc += 1
 
-    result = KmedoidsResult(k, random_seed, medoids, labels, costs, tot_cost, dist_mat)
+    result = KmedoidsResult(k, random_seed, get_medoid_indices(medoids), labels, costs, tot_cost,
+                            dist_mat)
     show_report(result)
 
     return result
@@ -170,7 +171,7 @@ def run_kmedoids(X, k, distance_measure, initial_medoids=None, random_seed=1, ma
 
 def show_report(result):
 
-    medoids = get_medoid_indices(result.medoids)
+    medoids = result.medoids
 
     logger.info('----------------------------')
     logger.info('K-medoids for k={}, seed={}'.format(result.k, result.random_seed))

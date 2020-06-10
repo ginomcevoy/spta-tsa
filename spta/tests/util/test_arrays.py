@@ -10,10 +10,10 @@ from spta.util import arrays as arrays_util
 
 class TestSquarePartitioning(unittest.TestCase):
     '''
-    Unit tests for spta.util.arrays.square_partitioning function.
+    Unit tests for spta.util.arrays.regular_partitioning function.
     '''
 
-    def test_square_partitioning_region_too_small(self):
+    def test_regular_partitioning_region_too_small(self):
         # given k = 4*3, x_len < 3
         x_len = 2
         y_len = 20
@@ -21,16 +21,16 @@ class TestSquarePartitioning(unittest.TestCase):
 
         # then fail because too small
         with self.assertRaises(ValueError):
-            arrays_util.square_partitioning(x_len, y_len, k)
+            arrays_util.regular_partitioning(x_len, y_len, k)
 
-    def test_square_partitioning_exact(self):
+    def test_regular_partitioning_exact(self):
         # when region can be exactly partitioned
         x_len = 20
         y_len = 12
         k = 12
 
         # when
-        matrix = arrays_util.square_partitioning(x_len, y_len, k)
+        matrix = arrays_util.regular_partitioning(x_len, y_len, k)
 
         # then we get 12 regions each of size (20/4) x (12/3) = (5x4)
 
@@ -58,7 +58,7 @@ class TestSquarePartitioning(unittest.TestCase):
         expected_11 = np.repeat(11, 20).reshape(5, 4)
         self.assertIsNone(np.testing.assert_array_equal(matrix_11, expected_11))
 
-    def test_square_partitioning_y_len_a_bit_larger(self):
+    def test_regular_partitioning_y_len_a_bit_larger(self):
 
         # when region cannot be exactly partitioned because y_len is a bit too large
         x_len = 20
@@ -66,7 +66,7 @@ class TestSquarePartitioning(unittest.TestCase):
         k = 12
 
         # when
-        matrix = arrays_util.square_partitioning(x_len, y_len, k)
+        matrix = arrays_util.regular_partitioning(x_len, y_len, k)
 
         # then we get 12 regions, but the last column is a bit wider...
 
@@ -92,7 +92,7 @@ class TestSquarePartitioning(unittest.TestCase):
         expected_11 = np.repeat(11, 25).reshape(5, 5)
         self.assertIsNone(np.testing.assert_array_equal(matrix_11, expected_11))
 
-    def test_square_partitioning_x_len_a_bit_larger(self):
+    def test_regular_partitioning_x_len_a_bit_larger(self):
 
         # when region cannot be exactly partitioned because x_len is a bit too large
         x_len = 21
@@ -100,7 +100,7 @@ class TestSquarePartitioning(unittest.TestCase):
         k = 12
 
         # when
-        matrix = arrays_util.square_partitioning(x_len, y_len, k)
+        matrix = arrays_util.regular_partitioning(x_len, y_len, k)
 
         # then we get 12 regions, but the last row is a bit taller...
 
@@ -126,7 +126,7 @@ class TestSquarePartitioning(unittest.TestCase):
         expected_11 = np.repeat(11, 24).reshape(6, 4)
         self.assertIsNone(np.testing.assert_array_equal(matrix_11, expected_11))
 
-    def test_square_partitioning_both_a_bit_larger(self):
+    def test_regular_partitioning_both_a_bit_larger(self):
 
         # when region cannot be exactly partitioned because x_len and y_len are a bit too large
         x_len = 21
@@ -134,7 +134,7 @@ class TestSquarePartitioning(unittest.TestCase):
         k = 12
 
         # when
-        matrix = arrays_util.square_partitioning(x_len, y_len, k)
+        matrix = arrays_util.regular_partitioning(x_len, y_len, k)
 
         # then we get 12 regions, but the last row is a bit taller and last col a bit wider
 
@@ -160,7 +160,7 @@ class TestSquarePartitioning(unittest.TestCase):
         expected_11 = np.repeat(11, 30).reshape(6, 5)
         self.assertIsNone(np.testing.assert_array_equal(matrix_11, expected_11))
 
-    def test_square_partitioning_y_len_a_bit_shorter(self):
+    def test_regular_partitioning_y_len_a_bit_shorter(self):
 
         # when region cannot be exactly partitioned because y_len is a bit too small
         x_len = 20
@@ -168,7 +168,7 @@ class TestSquarePartitioning(unittest.TestCase):
         k = 12
 
         # when
-        matrix = arrays_util.square_partitioning(x_len, y_len, k)
+        matrix = arrays_util.regular_partitioning(x_len, y_len, k)
 
         # then we get 12 regions, but the last column is less wide...
 

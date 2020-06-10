@@ -14,7 +14,6 @@ from spta.util import plot as plot_util
 from spta.util import log as log_util
 
 from . import silhouette
-from . import get_medoid_indices
 
 
 def alternating_functions_2d(spatial_region, series_len, function_options):
@@ -97,7 +96,7 @@ def main():
 
     # Show best results
     logger.info('Best k: {}'.format(best_k))
-    logger.info('Best medoids: {}'.format(str(get_medoid_indices(best_medoids))))
+    logger.info('Best medoids: {}'.format(str(best_medoids)))
     logger.info('Best membership: {}'.format(str(best_membership)))
     plot_util.plot_series_group_by_color(series_group, series_len, best_membership)
 

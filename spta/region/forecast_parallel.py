@@ -147,6 +147,7 @@ class ParallelForecastError(object):
         decorated_region = self.forecast_region.empty_region_2d()
 
         # we need to write inside the array
-        # trying to assign output_2d to the decorated region does not work...
+        # trying to assign output_2d to the decorated region does not work,
+        # because it is shared memory
         np.copyto(decorated_region.as_numpy, output_2d)
         return ErrorRegion(decorated_region)

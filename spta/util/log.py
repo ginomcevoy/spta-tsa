@@ -34,11 +34,14 @@ def setup_log(log_level_str):
     Configure the logger given a log string, e.g. 'INFO' or 'DEBUG'.
     '''
     log_level = getattr(logging, log_level_str)
+
+    # add "%(name)s: " to see where logger comes from
     logging.basicConfig(format='%(asctime)s - %(levelname)6s | %(message)s',
                         level=log_level, datefmt='%d-%b-%y %H:%M:%S')
 
     # disable library logging
     logging.getLogger('matplotlib.backends.backend_ps').disabled = True
+    logging.getLogger('matplotlib.backends.backend_pdf').disabled = True
     logging.getLogger('matplotlib.font_manager').disabled = True
 
     # a main method may have use for this
@@ -47,7 +50,7 @@ def setup_log(log_level_str):
 
 def setup_log_argparse(args, default_level='INFO'):
     '''
-    Configure the logger when using argparse. Defaults to 'DEBUG'.
+    Configure the logger when using argparse. Defaults to default_level parameter.
     '''
     log_level_str = default_level
     if hasattr(args, 'log') and args.log:
@@ -55,7 +58,5 @@ def setup_log_argparse(args, default_level='INFO'):
 
     elif hasattr(args, 'logger') and args.logger:
         log_level_str = args.logger
-
-    print(log_level_str)
 
     return setup_log(log_level_str)

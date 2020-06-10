@@ -16,3 +16,15 @@ def mase(forecast_series, observation_series, training_series):
         sum_Yi += np.abs(training_series[i] - training_series[i - 1])
     qt = et / (sum_Yi / (n - 1))
     return np.mean(np.abs(qt))
+
+
+def smape(forecast_series, observation_series):
+    '''
+    Calculates sMAPE:
+
+    pt = 200 * (abs(et) / forecast_series + observation_series)
+    sMAPE = mean(pt)
+    '''
+    et = forecast_series - observation_series
+    pt = 200 * (np.abs(et) / (forecast_series + observation_series))
+    return np.mean(pt)

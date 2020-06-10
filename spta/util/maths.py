@@ -33,3 +33,18 @@ def find_two_balanced_divisors(n):
             break
 
     return [int(quotient), int(div)]
+
+
+def two_balanced_divisors_order_x_y(n, x_len, y_len):
+    '''
+    Similar to find_two_balanced_divisors, but orders the divisors in the same order as the
+    sizes of (x_len, y_len).
+    '''
+    (div_1, div_2) = find_two_balanced_divisors(n)
+
+    if x_len < y_len:
+        div_x, div_y = div_1, div_2
+    else:
+        div_x, div_y = div_2, div_1
+
+    return (div_x, div_y)

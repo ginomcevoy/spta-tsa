@@ -225,4 +225,4 @@ class ArimaForecasting(log_util.LoggerMixin):
             raise ValueError('Forecast requested but models not trained!')
 
         if error_type not in FORECAST_ERROR_TYPES:
-            raise ValueError('Error type not supported: {}!'.format(error_type))
+            raise ValueError('Error function not supported: {}!'.format(error_type))

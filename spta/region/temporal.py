@@ -44,7 +44,7 @@ class SpatioTemporalRegionMetadata(object):
         self.dataset_dir = dataset_dir
         self.pickle_dir = pickle_dir
 
-    def index_to_absolute_points(self, index):
+    def index_to_absolute_point(self, index):
         '''
         Given a 2d index, recover the original Point coordinates.
         This is useful when applied to a medoid index, because it will give the medoid position
@@ -59,9 +59,18 @@ class SpatioTemporalRegionMetadata(object):
         x_region = int(index / y_len)
         y_region = index % y_len
 
+        # add region offset like this
+        return self.absolute_position_of_point(Point(x_region, y_region))
+
+    def absolute_position_of_point(self, point):
+        '''
+        Given a point, recover its original coordinates.
+        Assumes that the provided point has been calculated from the region specified in this
+        metadata instance.
+        '''
         # get the region offset and add to point
         x_offset, y_offset = self.region.x1, self.region.y1
-        return Point(x_region + x_offset, y_region + y_offset)
+        return Point(point.x + x_offset, point.y + y_offset)
 
     @property
     def years(self):
@@ -140,6 +149,7 @@ class SpatioTemporalRegion(DomainRegion):
     def __init__(self, numpy_dataset, region_metadata=None):
         super(SpatioTemporalRegion, self).__init__(numpy_dataset)
         self.region_metadata = region_metadata
+        self.centroid = None
 
     def __next__(self):
         '''
@@ -216,10 +226,10 @@ class SpatioTemporalRegion(DomainRegion):
             raise ValueError('No pre-calculated centroid, and no distance_measure provided!')
 
         else:
-            # calculate the centroid, eww
+            # calculate the centroid, ugly but works...
             from . import centroid
             centroid_calc = centroid.CalculateCentroid(distance_measure)
-            self.centroid = centroid_calc.find_point_with_least_distance(self)
+            self.centroid, _ = centroid_calc.find_centroid_and_cost(self)
             return self.centroid
 
     def has_centroid(self):
@@ -252,6 +262,18 @@ class SpatioTemporalRegion(DomainRegion):
 
         # delegate
         self.pickle_to(self.region_metadata.pickle_filename)
+
+    @property
+    def all_point_indices(self):
+        '''
+        Returns an array containing all indices in this region. Useful when applying some function
+        that iterates over all points, but cannot be implemented well with a FunctionRegion.
+        Important when restricting the available points, e.g. with clusters.
+
+        Example usage: subsetting the distance_matrix with all points.
+        '''
+        # just return all possible point indices
+        return np.arange(self.x_len * self.y_len)
 
     @property
     def as_list(self):
@@ -370,11 +392,26 @@ class SpatioTemporalDecorator(SpatialDecorator, SpatioTemporalRegion):
     def repeat_point(self, point):
         return self.decorated_region.repeat_point(point)
 
+    def has_centroid(self):
+        # if a centroid has been set at parent, honor it
+        if self.centroid is not None:
+            return True
+        else:
+            return self.decorated_region.has_centroid()
+
     def get_centroid(self, distance_measure=None):
-        return self.decorated_region.get_centroid(distance_measure)
+        # if a centroid has been set at parent, honor it
+        if self.centroid is not None:
+            return self.centroid
+        else:
+            return self.decorated_region.get_centroid(distance_measure)
 
     def save(self):
         return self.decorated_region.save()
+
+    @property
+    def all_point_indices(self):
+        return self.decorated_region.all_point_indices
 
 
 class SpatioTemporalCluster(SpatialCluster, SpatioTemporalDecorator):
@@ -444,6 +481,21 @@ class SpatioTemporalCluster(SpatialCluster, SpatioTemporalDecorator):
         self.logger.debug('{} repeat_point'.format(self))
         repeated_region = self.decorated_region.repeat_point(point)
         return SpatioTemporalCluster(repeated_region, self.mask_region, self.region_metadata)
+
+    @property
+    def all_point_indices(self):
+        '''
+        Returns an array containing all indices in this region.
+        For clusters, need to iterate each point using the mask iterator.
+        For improved performance in crisp regions, ask the mask for the cluster length.
+        '''
+        assert hasattr(self.mask_region, 'cluster_len')
+
+        all_point_indices = np.zeros(self.mask_region.cluster_len, dtype=np.int8)
+        for i, (point, _) in enumerate(self):
+            all_point_indices[i] = point.x * self.y_len + point.y
+
+        return all_point_indices
 
     def __next__(self):
         '''
@@ -613,13 +665,6 @@ class SpatioTemporalNormalized(SpatioTemporalDecorator):
         # applied to this normalized region instead
         super(SpatioTemporalNormalized, self).__init__(normalized_region, **kwargs)
 
-    def __next__(self):
-        '''
-        Don't use the default iterator here, which comes from SpatialDecorator.
-        Instead, iterate normally as the decorated region does.
-        '''
-        return self.decorated_region.__next__()
-
     def save(self):
         '''
         In addition of saving the numpy dataset, also save the min/max regions.
@@ -638,6 +683,13 @@ class SpatioTemporalNormalized(SpatioTemporalDecorator):
         max_filename = self.region_metadata.norm_max_filename
         np.save(max_filename, self.normalization_max.numpy_dataset)
         self.logger.info('Saved norm_max to {}'.format(max_filename))
+
+    def __next__(self):
+        '''
+        Don't use the default iterator here, which comes from SpatialDecorator.
+        Instead, iterate like a spatio-temporal region, as the decorated region does.
+        '''
+        return self.decorated_region.__next__()
 
 
 def average_4ppd_to_1ppd(sptr_numpy, logger=None):

@@ -1,5 +1,5 @@
 '''
-Calculate the centroid of a spatio-temporal region. Requires a distance matrix.
+Calculate the centroid of a spatio-temporal region.
 To save the centroid, add it manually to experiments.metadata.centroid
 '''
 
@@ -38,6 +38,7 @@ def calculate_centroid_with_args(args):
     spt_region_metadata = predefined_regions()[args.region]
 
     # TODO allow other distance measures
+    # TODO use saved distance matrix?
     distance_measure = DistanceByDTW()
 
     # calculate centroid

@@ -5,11 +5,12 @@ Handle distances between series, in particular using Dynamic Time Warping (DTW).
 import logging
 import numpy as np
 
+from spta.util import log as log_util
 
-class DistanceBetweenSeries:
+
+class DistanceBetweenSeries(log_util.LoggerMixin):
 
     def __init__(self):
-        self.logger = logging.getLogger()
         self.distance_matrix = None
 
     def measure(self, first_series, second_series):
@@ -73,3 +74,66 @@ class DistanceBetweenSeries:
         '''
         return self.load_distance_matrix_2d(sptr_metadata.distances_filename,
                                             sptr_metadata.region)
+
+    def distances_to_point(self, spt_region, point, all_point_indices, use_distance_matrix=True):
+        '''
+        Given a spatio-temporal region and a point in the region, compute the distances between
+        each point in the region and the specified point.
+
+        Need to know all points in the region, to subset the distance_matrix appropriately.
+        This is a non-issue for normal regions, but needs to be done using all_point_indices to
+        support cluster iteration.
+
+        all_point_indices is required here so that it will not be called within this code.
+        Attempting to call spt_region.all_point_indices now will fail (nested loop with same
+        iterator!) if this method is within an external loop. Example: when calculating the
+        centroid by looping over points.
+
+        If use_distance_matrix = True, will try to load a pre-computed distance matrix if possible.
+        If matrix is not available, it will compute it using subclass-specific behavior.
+        Using use_distance_matrix requires region metadata.
+
+        TODO: support use_distance_matrix = False!
+        NOTE: Don't reimplement this in subclasses!
+        '''
+        if not use_distance_matrix:
+            raise NotImplementedError('use_distance_matrix=False not supported yet!')
+
+        if self.distance_matrix is None:
+
+            try:
+                # can we load a saved distance matrix?
+                # this requires the metadata of the region
+                self.load_distance_matrix_md(spt_region.region_metadata)
+
+            except Exception as err:
+                log_msg = 'Calculating distances because saved distances not available: {}'
+                self.logger.warn(log_msg.format(err))
+
+                # if distance matrix is not available, go ahead and calculate it
+                self.compute_distance_matrix(spt_region)
+
+        # use the distance matrix to calculate distances to the point
+        return self._distances_to_point_with_matrix(spt_region, point, all_point_indices)
+
+    def _distances_to_point_with_matrix(self, spt_region, point, all_point_indices):
+        '''
+        Given a spatio-temporal region and a point in the region, compute the distances between
+        each point in the region and the specified point.
+
+        Uses pre-computed distance matrix to obtain the distances.
+
+        all_point_indices is required here so that it will not be called within this code.
+        Attempting to call spt_region.all_point_indices now will fail (nested loop with same
+        iterator!) if this method is within an external loop. Example: when calculating the
+        centroid by looping over points.
+        '''
+        assert self.distance_matrix is not None
+
+        _, _, y_len = spt_region.shape
+
+        # subset the matrix using the point index and the indices of the points in the region
+        point_index = point.x * y_len + point.y
+        distances_to_point = self.distance_matrix[point_index, all_point_indices]
+
+        return distances_to_point
