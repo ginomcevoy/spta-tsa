@@ -208,15 +208,23 @@ class SpatioTemporalRegion(DomainRegion):
             self.numpy_dataset[ti.t1:ti.t2, region.x1:region.x2, region.y1:region.y2]
         return SpatioTemporalRegion(numpy_region_subset)
 
+    def repeat_series(self, series):
+        '''
+        Creates a new spatio-temporal region with this same shape, where all the series are
+        the same provided series.
+        '''
+        repeated_series_np = arrays_util.copy_array_as_matrix_elements(series, self.x_len,
+                                                                       self.y_len)
+        return SpatioTemporalRegion(repeated_series_np)
+
     def repeat_point(self, point):
         '''
         Creates a new spatio-temporal region with this same shape, where all the series are the
         same series as in the provided point.
         '''
+        # reuse repeat_series
         series_at_point = self.series_at(point)
-        repeated_series_np = arrays_util.copy_array_as_matrix_elements(series_at_point, self.x_len,
-                                                                       self.y_len)
-        return SpatioTemporalRegion(repeated_series_np)
+        return self.repeat_series(series_at_point)
 
     def get_centroid(self, distance_measure=None):
         if self.has_centroid():
@@ -389,6 +397,9 @@ class SpatioTemporalDecorator(SpatialDecorator, SpatioTemporalRegion):
     def subset(self, region, ti):
         return self.decorated_region.subset(region, ti)
 
+    def repeat_series(self, series):
+        return self.decorated_region.repeat_series(series)
+
     def repeat_point(self, point):
         return self.decorated_region.repeat_point(point)
 
@@ -470,16 +481,19 @@ class SpatioTemporalCluster(SpatialCluster, SpatioTemporalDecorator):
         else:
             raise ValueError('Point not in cluster mask: {}'.format(point))
 
-    def repeat_point(self, point):
+    def repeat_series(self, series):
         '''
         Creates a new spatio-temporal cluster with this same shape, where all the series are the
-        same series as in the provided point.
+        same as the provided series.
 
         The series is repeated over all points for simplicity, but calling series_at on points
         outside the mask should remain forbidden.
+
+        NOTE: no need to reimplement repeat_point, it should correctly use this method
+        polymorphically to create a SpatioTemporalCluster.
         '''
-        self.logger.debug('{} repeat_point'.format(self))
-        repeated_region = self.decorated_region.repeat_point(point)
+        self.logger.debug('{} repeat_series'.format(self))
+        repeated_region = self.decorated_region.repeat_series(series)
         return SpatioTemporalCluster(repeated_region, self.mask_region, self.region_metadata)
 
     @property

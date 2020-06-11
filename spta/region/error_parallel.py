@@ -22,8 +22,6 @@ import multiprocessing as mp
 import os
 import sys
 
-from spta.region.forecast import ErrorRegion
-
 # will be shared among processes
 global_var_dict = {}
 
@@ -112,7 +110,7 @@ class ParallelForecastError(object):
         '''
         Execute the error_function in parallel.
         The signature of error_function must be as follows:
-        error_function(forecast_series, observation_region, training_region)
+        error_function(point, forecast_series, observation_region, training_region)
         '''
 
         # initialize the pool, the 'init_process' function will be called with supplied args
@@ -150,4 +148,7 @@ class ParallelForecastError(object):
         # trying to assign output_2d to the decorated region does not work,
         # because it is shared memory
         np.copyto(decorated_region.as_numpy, output_2d)
+
+        # to avoid circular imports
+        from spta.region.error import ErrorRegion
         return ErrorRegion(decorated_region)

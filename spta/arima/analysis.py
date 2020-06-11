@@ -56,9 +56,10 @@ class ArimaErrorAnalysis(log_util.LoggerMixin):
         # delegate tasks to this implementation
         self.arima_forecasting = ArimaForecasting(arima_params, forecast_len, parallel_workers)
 
-    def evaluate_forecast_errors(self, spt_region, error_type='MASE'):
+    def evaluate_forecast_errors(self, spt_region, error_type):
         '''
         Performs the main analysis, logs progress and returns the results.
+        See spta.region.error.get_error_func for available error types.
         '''
 
         # orchestrate the tasks of ArimaForecasting to achieve the requested results
@@ -97,7 +98,7 @@ class ArimaErrorAnalysis(log_util.LoggerMixin):
         # This is the model that yields the minimum error when forecasting its own series.
         # The error computed is the error when using *that* model to forecast the entire region.
         #
-        point_min_local_error = error_region_each.point_with_min_error()
+        (point_min_local_error, _) = error_region_each.find_minimum()
         overall_error_min_local = overall_error_region.value_at(point_min_local_error)
 
         log_msg = 'Error from ARIMA model with min local error at {}: {}'

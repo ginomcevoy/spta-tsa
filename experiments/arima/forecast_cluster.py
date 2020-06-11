@@ -9,7 +9,11 @@ from collections import namedtuple
 from spta.arima.analysis import ArimaErrorAnalysis
 from spta.distance.dtw import DistanceByDTW
 from spta.kmedoids import kmedoids
+
+from spta.region.error import error_functions
 from spta.region.temporal import SpatioTemporalRegion, SpatioTemporalCluster
+
+from spta.util import fs as fs_util
 from spta.util import log as log_util
 
 from experiments.metadata.arima import arima_suite_by_name
@@ -51,10 +55,17 @@ def processRequest():
 
     # for now, need name of region metadata and id of arima_clustering
     region_options = predefined_regions().keys()
-    arima_clustering_options = arima_clustering_experiments().keys()
     parser.add_argument('region', help='Name of the region metadata', choices=region_options)
+
+    arima_clustering_options = arima_clustering_experiments().keys()
     parser.add_argument('arima_clustering', help='ID of arima clustering experiment',
                         choices=arima_clustering_options)
+
+    # need a specific error function
+    error_options = error_functions().keys()
+    parser.add_argument('error', help='Error type', choices=error_options)
+
+    # optional arguments
     parser.add_argument('--parallel', help='number of parallel workers')
     parser.add_argument('--log', help='log level: WARN|INFO|DEBUG')
     parser.add_argument('--plot', help='add the plot of the ARIMA model result at Point(0, 0)?',
@@ -114,8 +125,13 @@ def do_arima_forecast_cluster(args):
                                                                 centroids=kmedoids_result.medoids)
         clusters.append(cluster_i)
 
+    # ensure output dir
+    output_dir = 'csv'
+    fs_util.mkdir(output_dir)
+
     # save results in CSV format: write header now
-    csv_filename = '{}.csv'.format(args.arima_clustering)
+    csv_filename = '{}/arima_{}_{}_{}.csv'.format(output_dir, args.region, args.arima_clustering,
+                                                  args.error)
     with open(csv_filename, 'w', newline='') as csv_file:
         csv_writer = csv.writer(csv_file, delimiter=' ', quotechar='|',
                                 quoting=csv.QUOTE_MINIMAL)
@@ -141,7 +157,7 @@ def do_arima_forecast_cluster(args):
             # do the analysis with current ARIMA hyper-parameters
             analysis = ArimaErrorAnalysis(arima_params, parallel_workers=parallel_workers)
             arima_forecasting, overall_errors, forecast_time, compute_time = \
-                analysis.evaluate_forecast_errors(cluster_i, 'MASE')
+                analysis.evaluate_forecast_errors(cluster_i, args.error)
 
             # prepare to save experiment result
             t_forecast = '{:.3f}'.format(forecast_time)
@@ -171,6 +187,8 @@ def do_arima_forecast_cluster(args):
             if args.plot:
                 # plot forecast at centroid
                 analysis.plot_one_arima(centroid_i)
+
+    logger.info('CSV output at: {}'.format(csv_filename))
 
 
 if __name__ == '__main__':

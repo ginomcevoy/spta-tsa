@@ -36,7 +36,7 @@ class DomainRegion(base.BaseRegion):
         # use internal iterator! this means we can't use this function inside another iteration...
         for (point, value) in self:
 
-            # self.logger.debug('Iterating in {} at point {}'.format(self, point))
+            self.logger.debug('Iterating in {} at point {}'.format(self, point))
 
             # get the function at the point (can vary!), apply it to get result at point
             function_at_point = function_region_scalar.function_at(point)
@@ -320,7 +320,7 @@ class SpatialCluster(SpatialDecorator):
 
         # return a SpatialCluster instead!
         # Notice that the calling function is not aware of the change
-        # (visitor is not aware of how the visited element is of a differnt subclass)
+        # (visitor is not aware of how the visited element is of a different subclass)
         return SpatialCluster(spatial_region, self.mask_region)
 
     def apply_function_series(self, function_region_series):

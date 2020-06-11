@@ -11,8 +11,7 @@ import time
 
 from spta.region.function import FunctionRegionSeries
 from spta.region.train import SplitTrainingAndTestLast
-from spta.region.forecast_parallel import ParallelForecastError
-from spta.region import forecast
+from spta.region.error import ErrorAnalysis
 
 from spta.util import log as log_util
 
@@ -73,7 +72,11 @@ class ArimaForecasting(log_util.LoggerMixin):
         self.forecast_len = forecast_len
         self.parallel_workers = parallel_workers
 
+        # created when training
         self.arima_models = None
+        self.error_analysis = None
+
+        # created when calling forecast_at_each_point
         self.forecast_region_each = None
 
     def train_models(self, spt_region):
@@ -106,20 +109,24 @@ class ArimaForecasting(log_util.LoggerMixin):
         # save models in instance for later forecasting
         self.arima_models = arima_models
 
+        # prepare the error analysis
+        self.error_analysis = ErrorAnalysis(self.test_region, self.training_region,
+                                            self.parallel_workers)
+
         return arima_models
 
-    def forecast_at_each_point(self, error_type='MASE'):
+    def forecast_at_each_point(self, error_type):
         '''
         Create a forecast region, using the trained ARIMA model at each point to forecast the
         series at that point. Also, compute the forecast error using the test data as observation.
 
-        Requires a string indicating the type of forecast error to be used. Right now, only MASE is
-        supported.
+        Requires a string indicating the type of forecast error to be used.
+        See spta.region.error.get_error_func for available error functions.
 
         Returns the forecast region, the error region and the time it took to compute the forecast.
         '''
-        # sanity checks
-        self.check_forecast_request(error_type)
+        # check conditions
+        self.check_forecast_request()
 
         # prepare a forecast: create an empty region.
         # This region will control the iteration though, and it will be of the same subclass
@@ -136,14 +143,13 @@ class ArimaForecasting(log_util.LoggerMixin):
         # save the forecast region with each model
         self.forecast_region_each = forecast_region_each
 
-        # calculate the error
-        # currently only MASE supported
-        error_region_each = forecast.ErrorRegionMASE(forecast_region_each, self.test_region,
-                                                     self.training_region)
+        # calculate the error for this forecast region
+        error_region_each = self.error_analysis.with_forecast_region(forecast_region_each,
+                                                                     error_type)
 
         return forecast_region_each, error_region_each, time_forecast
 
-    def forecast_whole_region_with_single_model(self, point, error_type='MASE'):
+    def forecast_whole_region_with_single_model(self, point, error_type):
         '''
         Using the ARIMA model that was trained at the specified point, forecast the entire region,
         and calculate the error.
@@ -155,74 +161,62 @@ class ArimaForecasting(log_util.LoggerMixin):
         at the cetroid, and then replicate that forecast over the entire region, effectively using
         a single model for the entire region.
 
+        See spta.region.error.get_error_func for available error functions.
+
         Returns the error region.
         '''
-        # sanity checks
-        self.check_forecast_request(error_type)
+        # check conditions
+        self.check_forecast_request()
 
         # reuse the forecast at each point
         # if not available, calculate it now
         if self.forecast_region_each is None:
             self.forecast_at_each_point(error_type)
 
-        # create a forecast region that is made of the forecast series created by the single model,
-        # repeated all over the region
-        forecast_region_repeated = self.forecast_region_each.repeat_point(point)
+        # now we should have the forecast region
+        # use the forecast series at the specified point, and do corresponding error analyis
+        assert self.forecast_region_each is not None
+        forecast_series = self.forecast_region_each.series_at(point)
 
-        # error for the entire region using that ARIMA model
-        # use MASE to calculate the forecast error at each point
-        error_region = forecast.ErrorRegionMASE(forecast_region_repeated, self.test_region,
-                                                self.training_region)
+        error_region_with_repeated_forecast = \
+            self.error_analysis.with_repeated_forecast(forecast_series, error_type)
 
-        return error_region
+        return error_region_with_repeated_forecast
 
-    def forecast_whole_region_with_all_models(self, error_type='MASE'):
+    def forecast_whole_region_with_all_models(self, error_type):
         '''
         Consider ARIMA models at different points as representatives of the region. For a given
         point, use the forecast made by the model at *that* point, and use it to predict the
         observed values in the entire region. Obtain the MASE errors for each point, then compute
         the overall error made by combining the errors (RMSE).
 
-        This means that for each point, the resulting error region will represent a measurement
-        of the prediction error when using the model at that point to forecast the entire region.
-
-        Example: the value of the result at the centroid will be the overall error computed, when
-        using the forecasted series at the centroid to forecast the entire region.
+        See see spta.region.error.OverallErrorForEachForecast for details.
+        See spta.region.error.get_overall_error_func for available error functions.
         '''
-        # sanity checks
-        self.check_forecast_request(error_type)
+        # check conditions
+        self.check_forecast_request()
 
         # reuse the forecast at each point
         # if not available, calculate it now
         if self.forecast_region_each is None:
             self.forecast_at_each_point(error_type)
 
-        if self.parallel_workers is None:
-            # calculate the prediction error when using each ARIMA model to forecast the
-            # entire region
-            # the output is a spatial region that has the overall error in each point P(i, j),
-            # corresponding to the overall error when using the ARIMA model at P(i, j)
-            error_func = forecast.OverallErrorForEachForecast(self.test_region,
-                                                              self.training_region)
-            overall_error_region = error_func.apply_to(self.forecast_region_each)
+        # now we should have the forecast region
+        assert self.forecast_region_each is not None
 
-        else:
-            # same as above but use a parallel implementation with the number of workers supplied
-            # need to pass the function used by OverallErrorForEachForecast internally
-            workers = int(self.parallel_workers)
-            parallel = ParallelForecastError(workers, self.forecast_region_each,
-                                             self.test_region, self.training_region)
-            overall_error_region = parallel.operate(forecast.error_single_model_mase)
+        # call appropriate error analysis
+        overall_error_region = \
+            self.error_analysis.overall_with_each_forecast(self.forecast_region_each, error_type)
 
         return overall_error_region
 
-    def check_forecast_request(self, error_type):
+    def check_forecast_request(self):
         '''
         Sanity checking for any forecast. Checks that the models have been trained, and that
-        the error type is known.
+        the error analysis is available
         '''
         if self.arima_models is None:
             raise ValueError('Forecast requested but models not trained!')
 
-        if error_type not in FORECAST_ERROR_TYPES:
-            raise ValueError('Error function not supported: {}!'.format(error_type))
+        if self.error_analysis is None:
+            raise ValueError('ErrorAnalysis not available!')

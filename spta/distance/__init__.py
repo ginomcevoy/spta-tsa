@@ -63,7 +63,7 @@ class DistanceBetweenSeries(log_util.LoggerMixin):
         self.distance_matrix = distance_matrix
 
         log_msg = 'Loaded distance matrix for region {} using: {}'
-        self.logger.debug(log_msg.format(str(expected_region), filename))
+        self.logger.info(log_msg.format(str(expected_region), filename))
         return self.distance_matrix
 
     def load_distance_matrix_md(self, sptr_metadata):
