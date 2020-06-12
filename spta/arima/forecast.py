@@ -6,78 +6,50 @@ Forecasting with ARIMA models. Contains:
 
 - ArimaForecasting, a class that orchestrates the training and forecasting of ARIMA models.
 '''
-import numpy as np
 import time
 
-from spta.region.function import FunctionRegionSeries
+from spta.region import Point
+from spta.region.forecast import ForecastModelRegion
 from spta.region.train import SplitTrainingAndTestLast
 from spta.region.error import ErrorAnalysis
 
 from spta.util import log as log_util
 
-from .training import ArimaTrainer
+from .training import ArimaTrainer, ExtractAicFromArima, ExtractPDQFromAutoArima
 
 # types of forecasting errors supported
 FORECAST_ERROR_TYPES = ['MASE']
 
 
-class ArimaModelRegion(FunctionRegionSeries):
+class ArimaModelRegion(ForecastModelRegion):
     '''
     A FunctionRegion that uses the arima_forecast function to create a forecast region using
-    ARIMA models. This means that applying this FunctionRegion to a region with another region,
-    the result will be a spatio-temporal region, where each point (i, j) is a forecast series of
-    the model at (i, j).
+    ARIMA models.
 
-    The instance of this class already has a trained model, and already has the forecast length.
-    This means that the region to which it is applied does not need any particular information.
-    It can be an empty SpatialRegion, the value at each point will not be used. The points of the
-    SpatialRegion are still used for iteration.
+    See ForecastModelRegion for more details.
     '''
 
-    def function_at(self, point):
+    def forecast_from_model(self, model_at_point, forecast_len, value_at_point, point):
         '''
-        Override the method that returns the function at each point (i, j). This is needed because
-        this function region does not really store a function, it stores a model object.
+        Creates a forecast from a trained ARIMA model.
 
-        We want to have the model object to inspect some properties, the model is still
-        retrievable using value_at(point).
+        When using statsmodels.tsa.arima_model.ARIMA:
+            return model_at_point.forecast(forecast_len)[0]
+
+        When using pmdarima.arima.ARIMA:
+            return model_at_point.predict(forecast_len)
         '''
-        # the region stores the models at (i, j), extract it and return the forecast result.
-        model_at_point = self.value_at(point)
-
-        # wrap the call to ARIMA forecast, to match the signature expected by the input region.
-
-        # TODO this could be refactored to a wrapping model class, making the code more
-        # generic when SVM comes! (a wrapper subclass for ARIMA, a wrapper subclass for SVM)
-        def forecast_from_model(value):
-            # ignore the value of the input region, we already have forecast_len available
-            if model_at_point is None:
-                # no model, return array of NaNs
-                # note that we require forecast_len, which is provided only when the function is
-                # applied! Hence the decoration of apply_to() method below.
-                return np.repeat(np.nan, repeats=self.forecast_len)
-            else:
-                # return a forecast array, [0] because the forecast function returns an array
-                # with the forecast array at index 0.
-                return model_at_point.forecast(self.forecast_len)[0]
-
-        return forecast_from_model
-
-    def apply_to(self, empty_region, output_len):
-        '''
-        Decorate to get the forecast series length from output_len, used by function_at.
-        '''
-        self.forecast_len = output_len
-        return super(ArimaModelRegion, self).apply_to(empty_region, output_len)
+        return model_at_point.forecast(forecast_len)[0]
 
 
 class ArimaForecasting(log_util.LoggerMixin):
     '''
     Manages the training and forecasting of ARIMA models.
+    Base class for using both specified p,d,q hyperparameters and auto_arima.
     '''
 
-    def __init__(self, arima_params, parallel_workers=None):
-        self.arima_params = arima_params
+    def __init__(self, arima_params_obj, parallel_workers=None):
+        self.arima_params_obj = arima_params_obj
         self.parallel_workers = parallel_workers
 
         # created when training
@@ -100,32 +72,26 @@ class ArimaForecasting(log_util.LoggerMixin):
         series!
         '''
 
-        self.logger.info('Using (p, d, q) = {}'.format(self.arima_params))
-
         # create training/test regions, where the test region has the same series length as the
         # expected forecast.
         splitter = SplitTrainingAndTestLast(test_len)
         (self.training_region, self.test_region) = splitter.split(spt_region)
         self.test_len = test_len
 
-        # a function region with produces trained models when applied to a training region
-        arima_trainers = ArimaTrainer.from_training_region(self.training_region, self.arima_params)
-
-        # train the models: this returns an instance of ArimaModelRegion, that has an instance of
-        # statsmodels.tsa.arima.ARIMAResults at each point
-        arima_models = arima_trainers.apply_to(self.training_region)
-
-        # save the number of failed models... ugly but works
-        arima_models.missing_count = arima_trainers.missing_count
-
-        # save models in instance for later forecasting
-        self.arima_models = arima_models
+        # call specific ARIMA training implementation
+        self.arima_models = self.train_models_impl(self.training_region, self.arima_params_obj)
 
         # prepare the error analysis
         self.error_analysis = ErrorAnalysis(self.test_region, self.training_region,
                                             self.parallel_workers)
 
-        return arima_models
+        return self.arima_models
+
+    def train_models_impl(self, training_region, arima_params_obj):
+        '''
+        Subclasses must specify how ARIMA models are trained, e.g. using p,d,q or auto_arima.
+        '''
+        raise NotImplementedError
 
     def forecast_at_each_point(self, forecast_len, error_type):
         '''
@@ -244,3 +210,80 @@ class ArimaForecasting(log_util.LoggerMixin):
 
         if self.error_analysis is None:
             raise ValueError('ErrorAnalysis not available!')
+
+
+class ArimaForecastingPDQ(ArimaForecasting):
+    '''
+    Manages the training and forecasting of ARIMA models when using p, d, q hyperparameters.
+    See ArimaForecasting for full implementation.
+    '''
+
+    def train_models_impl(self, training_region, arima_hyperparams):
+        '''
+        Train ARIMA models where the same (p, d, q) hyperparameters are used over the entire
+        training region.
+        '''
+        self.logger.info('Using (p, d, q) = {}'.format(arima_hyperparams))
+
+        _, x_len, y_len = training_region.shape
+
+        # a function region with produces trained models when applied to a training region
+        # using p, d, q
+        arima_trainers = ArimaTrainer.with_hyperparameters(arima_hyperparams, x_len, y_len)
+
+        # train the models: this returns an instance of ArimaModelRegion, that has an instance of
+        # statsmodels.tsa.arima.ARIMAResults at each point
+        arima_models = arima_trainers.apply_to(training_region)
+
+        # save the number of failed models... ugly but works
+        arima_models.missing_count = arima_trainers.missing_count
+
+        # create a spatial region with AIC values and store it inside the arima_models object.
+        extract_aic = ExtractAicFromArima(x_len, y_len)
+        arima_models.aic_region = extract_aic.apply_to(arima_models)
+
+        aic_0_0 = arima_models.aic_region.value_at(Point(0, 0))
+        self.logger.debug('AIC at (0, 0) = {}'.format(aic_0_0))
+
+        return arima_models
+
+
+class ArimaForecastingAutoArima(ArimaForecasting):
+    '''
+    Manages the training and forecasting of ARIMA models when using auto_arima.
+    See ArimaForecasting for full implementation.
+    '''
+
+    def train_models_impl(self, training_region, auto_arima_params):
+        '''
+        Train ARIMA models using auto_arima, which may choose different (p, d, q) hyperparameters
+        throughout the training region.
+        '''
+        _, x_len, y_len = training_region.shape
+
+        # a function region with produces trained models when applied to a training region
+        # using auto_arima
+        arima_trainers = ArimaTrainer.with_auto_arima(auto_arima_params, x_len, y_len)
+
+        # train the models: this returns an instance of ArimaModelRegion, that has an instance of
+        # SARIMAXResults at each point
+        arima_models = arima_trainers.apply_to(training_region)
+
+        # save the number of failed models... ugly but works
+        arima_models.missing_count = arima_trainers.missing_count
+
+        # create a spatial region with AIC values and store it inside the arima_models object.
+        extract_aic = ExtractAicFromArima(x_len, y_len)
+        arima_models.aic_region = extract_aic.apply_to(arima_models)
+
+        # create a spatio-temporal region with (p, d, q) values and store it inside arima_models.
+        extract_pdq = ExtractPDQFromAutoArima(x_len, y_len)
+        arima_models.pdq_region = extract_pdq.apply_to(arima_models, 3)
+
+        aic_0_0 = arima_models.aic_region.value_at(Point(0, 0))
+        self.logger.debug('AIC at (0, 0) = {}'.format(aic_0_0))
+
+        pdq_0_0 = arima_models.pdq_region.series_at(Point(0, 0))
+        self.logger.debug('(p, d, q) at (0, 0) = {}'.format(pdq_0_0))
+
+        return arima_models

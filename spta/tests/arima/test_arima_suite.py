@@ -1,6 +1,6 @@
 import unittest
 
-from spta.arima import ArimaParams, ArimaSuiteParams
+from spta.arima import ArimaPDQ, ArimaSuiteParams
 
 
 class TestArimaSuiteParams(unittest.TestCase):
@@ -18,5 +18,5 @@ class TestArimaSuiteParams(unittest.TestCase):
 
         # then all instances are created
         self.assertEquals(len(experiments), 63)
-        self.assertEquals(experiments[0], ArimaParams(0, 0, 0))
-        self.assertEquals(experiments[62], ArimaParams(10, 2, 2))
+        self.assertEquals(experiments[0], ArimaPDQ(0, 0, 0))
+        self.assertEquals(experiments[62], ArimaPDQ(10, 2, 2))

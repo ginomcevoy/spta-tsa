@@ -6,6 +6,7 @@ import argparse
 import csv
 from collections import namedtuple
 
+from spta.arima.forecast import ArimaForecastingPDQ
 from spta.arima.analysis import ArimaErrorAnalysis
 from spta.distance.dtw import DistanceByDTW
 from spta.kmedoids import kmedoids
@@ -155,9 +156,11 @@ def do_arima_forecast_cluster(args):
         for arima_params in arima_suite.arima_params_gen():
 
             # do the analysis with current ARIMA hyper-parameters
+            forecasting_pdq = ArimaForecastingPDQ(parallel_workers)
+            analysis_pdq = ArimaErrorAnalysis(forecasting_pdq, arima_params)
             analysis = ArimaErrorAnalysis(arima_params, parallel_workers=parallel_workers)
             arima_forecasting, overall_errors, forecast_time, compute_time = \
-                analysis.evaluate_forecast_errors(cluster_i, args.error)
+                analysis_pdq.evaluate_forecast_errors(cluster_i, args.error)
 
             # prepare to save experiment result
             t_forecast = '{:.3f}'.format(forecast_time)

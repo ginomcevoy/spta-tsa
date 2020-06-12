@@ -6,9 +6,7 @@ import time
 
 from spta.util import log as log_util
 
-from . import ArimaParams
-from .forecast import ArimaForecasting
-
+from . import ArimaPDQ, AutoArimaParams
 
 # default forecast length
 FORECAST_LENGTH = 8
@@ -46,15 +44,12 @@ class ArimaErrorAnalysis(log_util.LoggerMixin):
 
     The centroid should be provided in the spatio-temporal region as spt_region.centroid
     (it does not depend on ARIMA, only on the dataset). If not provided, error is np.nan.
-
-    If parallel_workers is supplied, use a parallel implementation of OverallErrorForEachForecast
-    to speed up MASE calculations.
     '''
 
-    def __init__(self, arima_params, parallel_workers=None):
+    def __init__(self, arima_forecasting):
 
         # delegate tasks to this implementation
-        self.arima_forecasting = ArimaForecasting(arima_params, parallel_workers)
+        self.arima_forecasting = arima_forecasting
 
     def evaluate_forecast_errors(self, spt_region, error_type, forecast_len=FORECAST_LENGTH):
         '''
@@ -74,7 +69,8 @@ class ArimaErrorAnalysis(log_util.LoggerMixin):
         (_, error_region_each, forecast_time) = each_result
 
         overall_error_each = error_region_each.overall_error
-        self.logger.info('Combined error from all ARIMAs: {}'.format(overall_error_each))
+        log_msg = 'Combined {} error from all ARIMAs: {}'
+        self.logger.info(log_msg.format(error_type, overall_error_each))
 
         # find the errors when using each model to forecast the entire region
         # see ArimaForecasting for details
@@ -90,8 +86,8 @@ class ArimaErrorAnalysis(log_util.LoggerMixin):
         # the entire region
         #
         (point_overall_error_min, overall_error_min) = overall_error_region.find_minimum()
-        log_msg = 'Minimum overall error with single ARIMA at {}: {}'
-        self.logger.info(log_msg.format(point_overall_error_min, overall_error_min))
+        log_msg = 'Minimum overall {} error with single ARIMA at {}: {}'
+        self.logger.info(log_msg.format(error_type, point_overall_error_min, overall_error_min))
 
         #
         # ARIMA using the model with minimum local error
@@ -101,8 +97,9 @@ class ArimaErrorAnalysis(log_util.LoggerMixin):
         (point_min_local_error, _) = error_region_each.find_minimum()
         overall_error_min_local = overall_error_region.value_at(point_min_local_error)
 
-        log_msg = 'Error from ARIMA model with min local error at {}: {}'
-        self.logger.info(log_msg.format(point_min_local_error, overall_error_min_local))
+        log_msg = '{} error from ARIMA model with min local error at {}: {}'
+        self.logger.info(log_msg.format(error_type, point_min_local_error,
+                                        overall_error_min_local))
 
         #
         # ARIMA using the model at the centroid
@@ -116,16 +113,16 @@ class ArimaErrorAnalysis(log_util.LoggerMixin):
             overall_error_centroid = np.nan
             self.logger.warn('Centroid was not pre-calculated!')
 
-        log_msg = 'Error from ARIMA model at centroid {}: {}'
-        self.logger.info(log_msg.format(centroid, overall_error_centroid))
+        log_msg = '{} error from ARIMA model at centroid {}: {}'
+        self.logger.info(log_msg.format(error_type, centroid, overall_error_centroid))
 
         #
         # Worst ARIMA model: the one that maximizes the overall error when it is used to
         # to forecast the entire region
         #
         (point_overall_error_max, overall_error_max) = overall_error_region.find_maximum()
-        log_msg = 'Maximum overall error with single ARIMA at {}: {}'
-        self.logger.info(log_msg.format(point_overall_error_max, overall_error_max))
+        log_msg = 'Maximum overall {} error with single ARIMA at {}: {}'
+        self.logger.info(log_msg.format(error_type, point_overall_error_max, overall_error_max))
 
         # gather all errors
         overall_errors = ArimaErrors(overall_error_each, overall_error_min,
@@ -153,8 +150,11 @@ class ArimaErrorAnalysis(log_util.LoggerMixin):
         train_series = pd.Series(train_point)
         forecast_series = pd.Series(forecast_point, index=test_index)
         test_series = pd.Series(test_point, index=test_index)
-
         model_point = arima_region.value_at(point)
+        print(model_point.__class__.__name__)
+        print(dir(model_point))
+
+        # FIXME arima_model.ArimaResults vs arima.model.ArimaResults
         model_point.plot_predict(dynamic=False)
         plt.show()
 
@@ -177,6 +177,8 @@ if __name__ == '__main__':
     # get region from metadata
     from spta.region import Point, Region
     from spta.region.temporal import SpatioTemporalRegion, SpatioTemporalRegionMetadata
+    from .forecast import ArimaForecastingPDQ, ArimaForecastingAutoArima
+
     nordeste_small_md = SpatioTemporalRegionMetadata(
         'nordeste_small', Region(43, 50, 85, 95), series_len=365, ppd=1, last=True)
     spt_region = SpatioTemporalRegion.from_metadata(nordeste_small_md)
@@ -185,12 +187,23 @@ if __name__ == '__main__':
     spt_region.centroid = Point(5, 4)
 
     # use these parameters for ARIMA analysis
-    arima_params = ArimaParams(1, 1, 1)
+    arima_params = ArimaPDQ(1, 1, 1)
     forecast_len = 8
     parallel_workers = 4
 
-    analysis = ArimaErrorAnalysis(arima_params, parallel_workers)
-    analysis.evaluate_forecast_errors(spt_region, 'MASE', forecast_len)
+    forecasting_pdq = ArimaForecastingPDQ(arima_params, parallel_workers)
+    analysis_pdq = ArimaErrorAnalysis(forecasting_pdq)
+    analysis_pdq.evaluate_forecast_errors(spt_region, 'MASE', forecast_len)
 
     # check forecast at centroid
-    analysis.plot_one_arima(Point(5, 4))
+    # FIXME plot_predict does not work with pmdarima or new arima.model.ARIMA
+    # analysis_pdq.plot_one_arima(Point(5, 4))
+
+    auto_arima_params = AutoArimaParams(1, 1, 3, 3, 1, True)
+    forecasting_auto = ArimaForecastingAutoArima(auto_arima_params, parallel_workers)
+    analysis_auto = ArimaErrorAnalysis(forecasting_auto)
+    analysis_auto.evaluate_forecast_errors(spt_region, 'MASE', forecast_len)
+
+    # check forecast at centroid
+    # FIXME plot_predict does not work with pmdarima or new arima.model.ARIMA
+    # analysis_auto.plot_one_arima(Point(5, 4))

@@ -1,11 +1,13 @@
 from collections import namedtuple
 
-ArimaParams = namedtuple('ArimaParams', 'p d q')
+ArimaPDQ = namedtuple('ArimaPDQ', 'p d q')
+
+AutoArimaParams = namedtuple('AutoArimaParams', 'start_p start_q max_p max_q d stepwise')
 
 
 class ArimaSuiteParams(object):
     '''
-    Generates a list of ArimaParams instances with (p, d, q) tuples, by sweeping the values
+    Generates a list of ArimaPDQ instances with (p, d, q) tuples, by sweeping the values
     in the lists for p, d, q.
 
     E.g.
@@ -22,9 +24,9 @@ class ArimaSuiteParams(object):
 
     def arima_params_gen(self):
         '''
-        Generator pattern to return the next instance of ArimaParams
+        Generator pattern to return the next instance of ArimaPDQ
         '''
         for p in self.p_values:
             for d in self.d_values:
                 for q in self.q_values:
-                    yield ArimaParams(p, d, q)
+                    yield ArimaPDQ(p, d, q)

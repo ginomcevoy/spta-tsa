@@ -36,7 +36,7 @@ class DomainRegion(base.BaseRegion):
         # use internal iterator! this means we can't use this function inside another iteration...
         for (point, value) in self:
 
-            self.logger.debug('Iterating in {} at point {}'.format(self, point))
+            # self.logger.debug('Iterating in {} at point {}'.format(self, point))
 
             # get the function at the point (can vary!), apply it to get result at point
             function_at_point = function_region_scalar.function_at(point)

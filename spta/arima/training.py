@@ -6,17 +6,18 @@ Training of ARIMA models. Contains:
 '''
 import functools
 import numpy as np
-from statsmodels.tsa.arima_model import ARIMA
+# from statsmodels.tsa.arima_model import ARIMA
+from statsmodels.tsa.arima.model import ARIMA
+# from pmdarima.arima import ARIMA
+from pmdarima.arima import auto_arima
 
-from spta.region.function import FunctionRegionScalar
-
-from spta.util import arrays as arrays_util
+from spta.region.function import FunctionRegionScalarSame, FunctionRegionSeriesSame
 from spta.util import log as log_util
 
-from . import forecast
+from . import ArimaPDQ, forecast
 
 
-def train_arima(arima_params, time_series):
+def train_arima_pdq(arima_pdq, training_series):
     '''
     Run ARIMA on a time series using order(p, d, q) -> hyper parameters
 
@@ -27,24 +28,72 @@ def train_arima(arima_params, time_series):
     Returns a trained ARIMA model than can be used for forecasting (model fit).
     If the evaluation fails, return None instead of the model fit.
     '''
-    log = log_util.logger_for_me(train_arima)
-    log.debug('Training ARIMA with: %s' % str(arima_params))
+    logger = log_util.logger_for_me(train_arima_pdq)
+    logger.debug('Training ARIMA with: %s' % str(arima_pdq))
 
     try:
-        model = ARIMA(time_series, order=(arima_params.p, arima_params.d, arima_params.q))
-        model_fit = model.fit(disp=0)
+        # for statsmodels.tsa.arima.model.ARIMA:
+        p, d, q = arima_pdq.p, arima_pdq.d, arima_pdq.q
+        arima_model = ARIMA(training_series,
+                            order=(p, d, q),
+                            seasonal_order=(0, 0, 0, 0))
+        fitted_model = arima_model.fit()
+
+        # for pmdarima.arima.ARIMA
+        # arima_model = ARIMA(order=(arima_params.p, arima_params.d, arima_params.q),
+        #                     suppress_warnings=True)
+        # fitted_model = arima_model.fit(training_series, disp=0)
+
     except ValueError as err:
-        log.warn('ARIMA {} failed with ValueError: {}'.format(arima_params, err))
-        model_fit = None
+        logger.warn('ARIMA {} failed with ValueError: {}'.format(arima_pdq, err))
+        fitted_model = None
     except np.linalg.LinAlgError as err:
         # the "SVD did not converge" can create an error
-        log.warn('ARIMA {} failed with LinAlgError: {}'.format(arima_params, err))
-        model_fit = None
+        logger.warn('ARIMA {} failed with LinAlgError: {}'.format(arima_pdq, err))
+        fitted_model = None
 
-    return model_fit
+    return fitted_model
 
 
-class ArimaTrainer(FunctionRegionScalar):
+def train_auto_arima(auto_arima_params, training_series):
+    '''
+    run pyramid.arima.auto_arima to discover "optimal" p, d, q for a training_series, and fit the
+    resulting model with the same training data.
+    '''
+    logger = log_util.logger_for_me(train_auto_arima)
+    logger.debug('Running auto_arima...')
+
+    try:
+        # find p, d, q with auto_arima, get a model
+        sarimax_model = auto_arima(training_series,
+                                   start_p=auto_arima_params.start_p,
+                                   start_q=auto_arima_params.start_q,
+                                   max_p=auto_arima_params.max_p,
+                                   max_q=auto_arima_params.max_q,
+                                   d=auto_arima_params.d,
+                                   stepwise=auto_arima_params.stepwise,
+                                   seasonal=False,
+                                   suppress_warnings=True)
+
+        # create a new ARIMA model based on the order obtained from auto_arima
+        # do this because pmdarima gives us a SARIMAX with no seasonality, instead of ARIMA.
+        p, d, q = sarimax_model.order
+        arima_params = ArimaPDQ(p, d, q)
+        fitted_model = train_arima_pdq(arima_params, training_series)
+
+    except ValueError as err:
+        logger.warn('ARIMA failed with ValueError: {}'.format(err))
+        fitted_model = None
+
+    except np.linalg.LinAlgError as err:
+        # the "SVD did not converge" can create an error
+        logger.warn('ARIMA failed with LinAlgError: {}'.format(err))
+        fitted_model = None
+
+    return fitted_model
+
+
+class ArimaTrainer(FunctionRegionScalarSame):
     '''
     A FunctionRegion that uses the train_arima function to train an ARIMA model over a training
     region. Applying this FunctionRegion to the training spatio-temporal region will produce an
@@ -59,28 +108,32 @@ class ArimaTrainer(FunctionRegionScalar):
     This implementation assumes that the same ARIMA hyper-parameters (p, d, q) are used for all
     the ARIMA models.
 
-    To create an instance of this class by using a training region, use the from_training_region()
+    To create an instance of this class by using a training region, use either:
+
+        - with_pdq(): Create ARIMA models with the same supplied hyperparameters
+        - auto_arima()
+
     class method. This will produce a different ARIMA model in each point.
     '''
 
-    def __init__(self, train_arima_np):
+    def __init__(self, arima_training_function, x_len, y_len):
         '''
         Initializes an instance of this function region, which is made of partial calls to
         train_arima(). Since the output of those calls is an object (an ARIMA model), the dtype
         needs to be set to object.
         '''
-        super(ArimaTrainer, self).__init__(train_arima_np, dtype=object)
+        super(ArimaTrainer, self).__init__(arima_training_function, x_len, y_len, dtype=object)
 
-    def apply_to(self, spt_region):
+    def apply_to(self, training_region):
         '''
-        Decorate the default behavior of FunctionRegionScalar.
+        Apply this function to train ARIMA models over a training region.
 
         The ouput of the parent behavior is to create a SpatialRegion, but we want to create an
-        ArimaModelRegion instance. This method will build on the previous result, which already
-        has a trained model in each point.
+        ArimaModelRegion instance. The SpatialRegion output already contains a trained model in
+        each point of the training region, so this method is decorated to produce ArimaModelRegion.
         '''
         # get result from parent behavior
-        spatial_region = super(ArimaTrainer, self).apply_to(spt_region)
+        spatial_region = super(ArimaTrainer, self).apply_to(training_region)
 
         # count and log missing models, iterate to find them
         self.missing_count = 0
@@ -101,25 +154,87 @@ class ArimaTrainer(FunctionRegionScalar):
         return forecast.ArimaModelRegion(spatial_region.as_numpy)
 
     @classmethod
-    def from_training_region(cls, training_region, arima_params):
+    def with_hyperparameters(cls, arima_params, x_len, y_len):
         '''
-        Creates an instance of this class. This will produce a different ARIMA model in each point.
+        Creates an instance of this class, a function region. When applied to a training region,
+        this function region will produce a different ARIMA model in each point of the training
+        region.
 
-        training_region
-            spatio-temporal region used as training dataset
         arima_params
-            ArimaParams hyper-parameters
-        '''
+            ArimaPDQ (p, d, q) hyper-parameters
 
-        # output shape is given by training shape
-        (_, x_len, y_len) = training_region.shape
+        '''
+        # the function signature to be handled by regions can only receive a series
+        # so we need to use partial here
+        arima_with_params = functools.partial(train_arima_pdq, arima_params)
+        return ArimaTrainer(arima_with_params, x_len, y_len)
+
+    @classmethod
+    def with_auto_arima(cls, auto_arima_params, x_len, y_len):
+        '''
+        Creates an instance of this class based on AutoARIMA. When applied to a training region,
+        this function region will run pyramid.arima.auto_arima to discover "optimal" p, d, q
+        hyperparameters for each point of the training region, and fit the resulting model.
+
+        Note that we can reuse ArimaTrainer for both train_arima_pdq and train_auto_arima, *ONLY*
+        because they create models with the same signature!
+
+        auto_arima_params
+            AutoArimaParams (start_p, start_q, max_p, max_q, d, stepwise)
+        '''
 
         # the function signature to be handled by regions can only receive a series
         # so we need to use partial here
-        arima_with_params = functools.partial(train_arima, arima_params)
+        auto_arima_with_params = functools.partial(train_auto_arima, auto_arima_params)
+        return ArimaTrainer(auto_arima_with_params, x_len, y_len)
 
-        # the function is applied over all the region, to train models with the same
-        # hyperparameters over the training region
-        train_arima_np = arrays_util.copy_value_as_matrix_elements(arima_with_params, x_len, y_len)
 
-        return ArimaTrainer(train_arima_np)
+class ExtractAicFromArima(FunctionRegionScalarSame):
+    '''
+    Get the AIC value that was obtained while fitting an ARIMA model. This function should be
+    applied to an ArimaModelRegion instance (output of applying ArimaTrainer to a training region).
+    '''
+
+    def __init__(self, x_len, y_len):
+
+        def extract_aic(fitted_arima_at_point):
+            '''
+            The function applied to each point of an ArimaModelRegion instance.
+            Extracts the aic value.
+            '''
+            # Problem: ArimaModelRegion is always a full spatial region, so it does not iterate
+            # like a cluster if it was generated for a cluster.
+            # In points outside of the cluster, the 'value' (fitted_arima_at_point) is 0.
+            if fitted_arima_at_point == 0:
+                return np.nan
+            else:
+                return fitted_arima_at_point.aic
+
+        super(ExtractAicFromArima, self).__init__(extract_aic, x_len, y_len)
+
+
+class ExtractPDQFromAutoArima(FunctionRegionSeriesSame):
+    '''
+    In the context of auto_arima analysis, extract the (p, d, q) order obtained, and store it
+    as a... SpatioTemporalRegion?
+    '''
+
+    def __init__(self, x_len, y_len):
+
+        def extract_pdq(fitted_arima_at_point):
+            '''
+            The function applied to each point of an ArimaModelRegion instance.
+            Extracts the (p, d, q) order and returns it as a series, so that it can be stored
+            in the resulting SpatioTemporalRegion
+            '''
+            # Problem: ArimaModelRegion is always a full spatial region, so it does not iterate
+            # like a cluster if it was generated for a cluster.
+            # In points outside of the cluster, the 'value' (fitted_arima_at_point) is 0.
+            if fitted_arima_at_point == 0:
+                (p, d, q) = (-1, -1, -1)
+            else:
+                (p, d, q) = fitted_arima_at_point.model.order
+
+            return np.array([p, d, q])
+
+        super(ExtractPDQFromAutoArima, self).__init__(extract_pdq, x_len, y_len, dtype=np.int8)
