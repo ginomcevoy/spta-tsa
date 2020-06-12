@@ -114,9 +114,9 @@ class DistanceBetweenSeries(log_util.LoggerMixin):
                 self.compute_distance_matrix(spt_region)
 
         # use the distance matrix to calculate distances to the point
-        return self._distances_to_point_with_matrix(spt_region, point, all_point_indices)
+        return self.distances_to_point_with_matrix(spt_region, point, all_point_indices)
 
-    def _distances_to_point_with_matrix(self, spt_region, point, all_point_indices):
+    def distances_to_point_with_matrix(self, spt_region, point, all_point_indices):
         '''
         Given a spatio-temporal region and a point in the region, compute the distances between
         each point in the region and the specified point.
