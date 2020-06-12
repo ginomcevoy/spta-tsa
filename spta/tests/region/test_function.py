@@ -143,10 +143,10 @@ class TestFunctionRegionSeries(unittest.TestCase):
         ]
 
         sum_and_mean_np = np.array(sum_and_mean_list).reshape((2, 3))
-        sum_and_mean_region = FunctionRegionSeries(sum_and_mean_np, output_len=2)
+        sum_and_mean_region = FunctionRegionSeries(sum_and_mean_np)
 
         # apply the function
-        output_region = sum_and_mean_region.apply_to(spt_region)
+        output_region = sum_and_mean_region.apply_to(spt_region, output_len=2)
 
         # test values
         result_0_0 = output_region.series_at(Point(0, 0))
@@ -190,11 +190,10 @@ class TestFunctionRegionSeriesSame(unittest.TestCase):
             result = np.array((np.sum(series), np.mean(series)))
             return result
 
-        sum_and_mean_region = FunctionRegionSeriesSame(sum_and_mean, shape[1], shape[2],
-                                                       output_len=2)
+        sum_and_mean_region = FunctionRegionSeriesSame(sum_and_mean, shape[1], shape[2])
 
         # apply the function
-        output_region = sum_and_mean_region.apply_to(spt_region)
+        output_region = sum_and_mean_region.apply_to(spt_region, output_len=2)
 
         # test values
         result_0_0 = output_region.series_at(Point(0, 0))

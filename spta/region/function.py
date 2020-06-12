@@ -86,23 +86,21 @@ class FunctionRegionSeries(FunctionRegion):
     '''
     A FunctionRegion that returns a series for each point in the parameter region.
     The result should be a SpatioTemporalRegion (!)
-
-    The length of the result must be known.
     '''
-    def __init__(self, numpy_dataset, output_len, dtype=np.float64):
+    def __init__(self, numpy_dataset, dtype=np.float64):
         super(FunctionRegionSeries, self).__init__(numpy_dataset, dtype)
-        self.output_len = output_len
 
-    def apply_to(self, domain_region):
+    def apply_to(self, domain_region, output_len):
         '''
         Apply this function to a domain region, to get a SpatioTemporalRegion as result.
+        The length of the resulting series must be known in order to create the numpy object.
 
         Lets the parameter region handle the call by default. This enables outputs that are
         subclasses of SpatioTemporalRegion, without the function knowing about the polymorphism.
         '''
         # the function passes itself, delegates computation to the region
         # visitor pattern: visitor.visitElementB(this)
-        result_region = domain_region.apply_function_series(self)
+        result_region = domain_region.apply_function_series(self, output_len)
 
         # should be SpatioTemporalRegion otherwise we should have used a different function
         assert isinstance(result_region, spta.region.temporal.SpatioTemporalRegion)
@@ -115,7 +113,7 @@ class FunctionRegionSeriesSame(FunctionRegionSeries):
     Function region that applies, at every point, the same provided function returning a series.
     The region is built based on provided x_len and y_len.
     '''
-    def __init__(self, function, x_len, y_len, output_len, dtype=np.float64):
+    def __init__(self, function, x_len, y_len, dtype=np.float64):
 
         # create the numpy dataset by reshaping an array of functions
         function_list = [
@@ -123,4 +121,4 @@ class FunctionRegionSeriesSame(FunctionRegionSeries):
             for i in range(0, x_len * y_len)
         ]
         function_np = np.array(function_list).reshape((x_len, y_len))
-        super(FunctionRegionSeriesSame, self).__init__(function_np, output_len, dtype)
+        super(FunctionRegionSeriesSame, self).__init__(function_np, dtype)

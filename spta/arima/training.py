@@ -62,18 +62,14 @@ class ArimaTrainer(FunctionRegionScalar):
     To create an instance of this class by using a training region, use the from_training_region()
     class method. This will produce a different ARIMA model in each point.
     '''
-    def __init__(self, train_arima_np, forecast_len):
+
+    def __init__(self, train_arima_np):
         '''
         Initializes an instance of this function region, which is made of partial calls to
         train_arima(). Since the output of those calls is an object (an ARIMA model), the dtype
         needs to be set to object.
-
-        The forecast length needs to be known now, because apply_to will create an instance of
-        ArimaModelRegion (a FunctionRegionSeries), and functions that output series (the forecast)
-        need to know the output length in advance.
         '''
         super(ArimaTrainer, self).__init__(train_arima_np, dtype=object)
-        self.forecast_len = forecast_len
 
     def apply_to(self, spt_region):
         '''
@@ -99,15 +95,13 @@ class ArimaTrainer(FunctionRegionScalar):
         else:
             self.logger.info('ARIMA was trained in all points successfully.')
 
-        # return ArimaModelRegion instead of SpatialRegion, in order to create forecasts
-        # Since ArimaModelRegion is a FunctionRegionSeries, it requires the length of its output
-        # series, that is forecast_len.
-
+        # return ArimaModelRegion (a FunctionRegionSeries) instead of a plain SpatialRegion,
+        # so that it can be applied to another region and produce forecasts over that region.
         # TODO: should ArimaModelRegion be a SpatialCluster?
-        return forecast.ArimaModelRegion(spatial_region.as_numpy, output_len=self.forecast_len)
+        return forecast.ArimaModelRegion(spatial_region.as_numpy)
 
     @classmethod
-    def from_training_region(cls, training_region, arima_params, forecast_len):
+    def from_training_region(cls, training_region, arima_params):
         '''
         Creates an instance of this class. This will produce a different ARIMA model in each point.
 
@@ -128,4 +122,4 @@ class ArimaTrainer(FunctionRegionScalar):
         # hyperparameters over the training region
         train_arima_np = arrays_util.copy_value_as_matrix_elements(arima_with_params, x_len, y_len)
 
-        return ArimaTrainer(train_arima_np, forecast_len)
+        return ArimaTrainer(train_arima_np)

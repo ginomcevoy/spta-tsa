@@ -670,9 +670,8 @@ class SpatioTemporalNormalized(SpatioTemporalDecorator):
             return (series - series_min) / (series_max - series_min)
 
         # call the function
-        normalizing_function = function_region.FunctionRegionSeriesSame(normalize, x_len, y_len,
-                                                                        series_len)
-        normalized_region = normalizing_function.apply_to(decorated_region)
+        normalizing_function = function_region.FunctionRegionSeriesSame(normalize, x_len, y_len)
+        normalized_region = normalizing_function.apply_to(decorated_region, series_len)
         normalized_region.region_metadata = decorated_region.region_metadata
 
         # use the normalized region here, all decorating functions from other decorators should be

@@ -53,13 +53,22 @@ class ArimaModelRegion(FunctionRegionSeries):
             # ignore the value of the input region, we already have forecast_len available
             if model_at_point is None:
                 # no model, return array of NaNs
-                return np.repeat(np.nan, repeats=self.output_len)
+                # note that we require forecast_len, which is provided only when the function is
+                # applied! Hence the decoration of apply_to() method below.
+                return np.repeat(np.nan, repeats=self.forecast_len)
             else:
                 # return a forecast array, [0] because the forecast function returns an array
                 # with the forecast array at index 0.
-                return model_at_point.forecast(self.output_len)[0]
+                return model_at_point.forecast(self.forecast_len)[0]
 
         return forecast_from_model
+
+    def apply_to(self, empty_region, output_len):
+        '''
+        Decorate to get the forecast series length from output_len, used by function_at.
+        '''
+        self.forecast_len = output_len
+        return super(ArimaModelRegion, self).apply_to(empty_region, output_len)
 
 
 class ArimaForecasting(log_util.LoggerMixin):
@@ -67,9 +76,8 @@ class ArimaForecasting(log_util.LoggerMixin):
     Manages the training and forecasting of ARIMA models.
     '''
 
-    def __init__(self, arima_params, forecast_len, parallel_workers=None):
+    def __init__(self, arima_params, parallel_workers=None):
         self.arima_params = arima_params
-        self.forecast_len = forecast_len
         self.parallel_workers = parallel_workers
 
         # created when training
@@ -79,25 +87,29 @@ class ArimaForecasting(log_util.LoggerMixin):
         # created when calling forecast_at_each_point
         self.forecast_region_each = None
 
-    def train_models(self, spt_region):
+    def train_models(self, spt_region, test_len):
         '''
         Separate a spatio-temporal region in training region and observation region.
         Then, build one ARIMA model for each point, using its training series.
 
         Returns a spatial region that contains, for each point an ARIMA model that can be
         later used for forecasting.
+
+        NOTE: this implementation assumes that each time series is split into training and
+        test series, where the length of the test series is equal to the length of the forecast
+        series!
         '''
 
         self.logger.info('Using (p, d, q) = {}'.format(self.arima_params))
 
         # create training/test regions, where the test region has the same series length as the
         # expected forecast.
-        splitter = SplitTrainingAndTestLast(self.forecast_len)
+        splitter = SplitTrainingAndTestLast(test_len)
         (self.training_region, self.test_region) = splitter.split(spt_region)
+        self.test_len = test_len
 
         # a function region with produces trained models when applied to a training region
-        arima_trainers = ArimaTrainer.from_training_region(self.training_region, self.arima_params,
-                                                           self.forecast_len)
+        arima_trainers = ArimaTrainer.from_training_region(self.training_region, self.arima_params)
 
         # train the models: this returns an instance of ArimaModelRegion, that has an instance of
         # statsmodels.tsa.arima.ARIMAResults at each point
@@ -115,18 +127,23 @@ class ArimaForecasting(log_util.LoggerMixin):
 
         return arima_models
 
-    def forecast_at_each_point(self, error_type):
+    def forecast_at_each_point(self, forecast_len, error_type):
         '''
         Create a forecast region, using the trained ARIMA model at each point to forecast the
-        series at that point. Also, compute the forecast error using the test data as observation.
+        series at that point, with the given forecast length. Also, compute the forecast error
+        using the test data as observation.
 
         Requires a string indicating the type of forecast error to be used.
         See spta.region.error.get_error_func for available error functions.
 
         Returns the forecast region, the error region and the time it took to compute the forecast.
+
+        NOTE: this implementation assumes that each time series is split into training and
+        test series, where the length of the test series is equal to the length of the forecast
+        series!
         '''
         # check conditions
-        self.check_forecast_request()
+        self.check_forecast_request(forecast_len)
 
         # prepare a forecast: create an empty region.
         # This region will control the iteration though, and it will be of the same subclass
@@ -134,8 +151,9 @@ class ArimaForecasting(log_util.LoggerMixin):
         empty_region_2d = self.training_region.empty_region_2d()
 
         # use the ARIMA models to forecast for their respective points, measure time
+        # TODO put the timing code inside arima_models
         time_forecast_start = time.time()
-        forecast_region_each = self.arima_models.apply_to(empty_region_2d)
+        forecast_region_each = self.arima_models.apply_to(empty_region_2d, forecast_len)
         forecast_region_each.name = 'forecast_region_each'
         time_forecast_end = time.time()
         time_forecast = time_forecast_end - time_forecast_start
@@ -149,10 +167,10 @@ class ArimaForecasting(log_util.LoggerMixin):
 
         return forecast_region_each, error_region_each, time_forecast
 
-    def forecast_whole_region_with_single_model(self, point, error_type):
+    def forecast_whole_region_with_single_model(self, point, forecast_len, error_type):
         '''
-        Using the ARIMA model that was trained at the specified point, forecast the entire region,
-        and calculate the error.
+        Using the ARIMA model that was trained at the specified point, forecast the entire region
+        with the specified forecast length, and calculate the error.
 
         The forecast is the same for each point, since only depends on how the particular model
         was trained.
@@ -166,12 +184,12 @@ class ArimaForecasting(log_util.LoggerMixin):
         Returns the error region.
         '''
         # check conditions
-        self.check_forecast_request()
+        self.check_forecast_request(forecast_len)
 
         # reuse the forecast at each point
         # if not available, calculate it now
         if self.forecast_region_each is None:
-            self.forecast_at_each_point(error_type)
+            self.forecast_at_each_point(forecast_len, error_type)
 
         # now we should have the forecast region
         # use the forecast series at the specified point, and do corresponding error analyis
@@ -183,7 +201,7 @@ class ArimaForecasting(log_util.LoggerMixin):
 
         return error_region_with_repeated_forecast
 
-    def forecast_whole_region_with_all_models(self, error_type):
+    def forecast_whole_region_with_all_models(self, forecast_len, error_type):
         '''
         Consider ARIMA models at different points as representatives of the region. For a given
         point, use the forecast made by the model at *that* point, and use it to predict the
@@ -194,12 +212,13 @@ class ArimaForecasting(log_util.LoggerMixin):
         See spta.region.error.get_overall_error_func for available error functions.
         '''
         # check conditions
-        self.check_forecast_request()
+        self.check_forecast_request(forecast_len)
 
         # reuse the forecast at each point
         # if not available, calculate it now
+        # TODO: this assumes same forecast length!
         if self.forecast_region_each is None:
-            self.forecast_at_each_point(error_type)
+            self.forecast_at_each_point(forecast_len, error_type)
 
         # now we should have the forecast region
         assert self.forecast_region_each is not None
@@ -210,11 +229,16 @@ class ArimaForecasting(log_util.LoggerMixin):
 
         return overall_error_region
 
-    def check_forecast_request(self):
+    def check_forecast_request(self, forecast_len):
         '''
         Sanity checking for any forecast. Checks that the models have been trained, and that
-        the error analysis is available
+        the error analysis is available.
+
+        Also checks that the forecast length is equal to the test length that was used during
+        training...
         '''
+        assert forecast_len == self.test_len
+
         if self.arima_models is None:
             raise ValueError('Forecast requested but models not trained!')
 

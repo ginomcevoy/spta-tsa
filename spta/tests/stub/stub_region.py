@@ -45,7 +45,7 @@ def stub_mean_function_scalar():
 def stub_reverse_function_series():
     '''
     A FunctionRegionSeries that reverses the order of each series (creates a new series array)
-    Works for series of length 3.
+    Works on 2x3 regions.
     '''
     def reverse_function(series):
         rev_view = series[::-1]
@@ -56,4 +56,4 @@ def stub_reverse_function_series():
         for i in range(0, 6)
     ]
     reverse_function_np = np.array(reverse_function_list).reshape((2, 3))
-    return FunctionRegionSeries(reverse_function_np, output_len=3)
+    return FunctionRegionSeries(reverse_function_np)

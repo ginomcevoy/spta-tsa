@@ -64,7 +64,7 @@ class TestFunctionRegionOnSpatioTemporalCluster(unittest.TestCase):
         # when getting cluster with cluster index 2 and applying the function to it
         cluster_2 = SpatioTemporalCluster.from_crisp_clustering(spt_region, members,
                                                                 cluster_index=2)
-        reversed_cluster = reverse_function_region.apply_to(cluster_2)
+        reversed_cluster = reverse_function_region.apply_to(cluster_2, output_len=3)
 
         # then result is a SpatialTemporalCluster
         self.assertTrue(isinstance(reversed_cluster, SpatioTemporalCluster))

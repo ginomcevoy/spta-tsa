@@ -46,7 +46,7 @@ class DomainRegion(base.BaseRegion):
 
         return result
 
-    def apply_function_series(self, function_region_series):
+    def apply_function_series(self, function_region_series, output_len):
         '''
         Applies an instance of FunctionRegionSeries on this region, to get a
         SpatioTemporalRegion as a result.
@@ -59,7 +59,7 @@ class DomainRegion(base.BaseRegion):
         assert self.y_len == function_region_series.y_len
 
         # the length and dtype of the result series is given by the function
-        result_np = np.zeros((function_region_series.output_len, self.x_len, self.y_len),
+        result_np = np.zeros((output_len, self.x_len, self.y_len),
                              dtype=function_region_series.dtype)
 
         # ugly import to avoid circular imports
@@ -323,7 +323,7 @@ class SpatialCluster(SpatialDecorator):
         # (visitor is not aware of how the visited element is of a different subclass)
         return SpatialCluster(spatial_region, self.mask_region)
 
-    def apply_function_series(self, function_region_series):
+    def apply_function_series(self, function_region_series, output_len):
         '''
         Applies an instance of FunctionRegionSeries on this cluster region, to get a
         SpatioTemporalCluster as a result.
@@ -338,7 +338,8 @@ class SpatialCluster(SpatialDecorator):
 
         # call the parent code (SpatialRegion)
         # since the iterator is overridden, this should only iterate over points in the mask
-        spt_region = super(SpatialCluster, self).apply_function_series(function_region_series)
+        spt_region = super(SpatialCluster, self).apply_function_series(function_region_series,
+                                                                       output_len)
 
         # return a SpatioTemporalCluster instead!
         # Notice that the calling function is not aware of the change

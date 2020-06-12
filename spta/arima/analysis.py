@@ -51,12 +51,12 @@ class ArimaErrorAnalysis(log_util.LoggerMixin):
     to speed up MASE calculations.
     '''
 
-    def __init__(self, arima_params, forecast_len=FORECAST_LENGTH, parallel_workers=None):
+    def __init__(self, arima_params, parallel_workers=None):
 
         # delegate tasks to this implementation
-        self.arima_forecasting = ArimaForecasting(arima_params, forecast_len, parallel_workers)
+        self.arima_forecasting = ArimaForecasting(arima_params, parallel_workers)
 
-    def evaluate_forecast_errors(self, spt_region, error_type):
+    def evaluate_forecast_errors(self, spt_region, error_type, forecast_len=FORECAST_LENGTH):
         '''
         Performs the main analysis, logs progress and returns the results.
         See spta.region.error.get_error_func for available error types.
@@ -67,10 +67,10 @@ class ArimaErrorAnalysis(log_util.LoggerMixin):
         time_start = time.time()
 
         # train
-        self.arima_forecasting.train_models(spt_region)
+        self.arima_forecasting.train_models(spt_region, forecast_len)
 
         # forecast using ARIMA model at each point
-        each_result = self.arima_forecasting.forecast_at_each_point(error_type)
+        each_result = self.arima_forecasting.forecast_at_each_point(forecast_len, error_type)
         (_, error_region_each, forecast_time) = each_result
 
         overall_error_each = error_region_each.overall_error
@@ -79,7 +79,7 @@ class ArimaErrorAnalysis(log_util.LoggerMixin):
         # find the errors when using each model to forecast the entire region
         # see ArimaForecasting for details
         overall_error_region = self.arima_forecasting.forecast_whole_region_with_all_models(
-            error_type)
+            forecast_len, error_type)
 
         # forecast computations finish here
         time_end = time.time()
@@ -189,8 +189,8 @@ if __name__ == '__main__':
     forecast_len = 8
     parallel_workers = 4
 
-    analysis = ArimaErrorAnalysis(arima_params, forecast_len, parallel_workers)
-    analysis.evaluate_forecast_errors(spt_region, 'MASE')
+    analysis = ArimaErrorAnalysis(arima_params, parallel_workers)
+    analysis.evaluate_forecast_errors(spt_region, 'MASE', forecast_len)
 
     # check forecast at centroid
     analysis.plot_one_arima(Point(5, 4))

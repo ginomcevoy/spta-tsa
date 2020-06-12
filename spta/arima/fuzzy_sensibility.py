@@ -25,13 +25,13 @@ class ArimaFuzzySensibility(log_util.LoggerMixin):
       - Plot the RMSE errors against T.
     '''
 
-    def __init__(self, arima_params, forecast_len=FORECAST_LENGTH):
+    def __init__(self, arima_params):
 
         # delegate ARIMA tasks to this implementation
         self.arima_params = arima_params
-        self.forecast_len = forecast_len
+        self.arima_forecasting = ArimaForecasting(self.arima_params, None)
 
-    def plot_error_vs_threshold(self, spt_cluster, threshold_max=1,
+    def plot_error_vs_threshold(self, spt_cluster, threshold_max=1, forecast_len=FORECAST_LENGTH,
                                 threshold_steps=THRESHOLD_STEPS, error_type='MASE'):
 
         # sanity check
@@ -52,12 +52,12 @@ class ArimaFuzzySensibility(log_util.LoggerMixin):
             spt_cluster.mask_region.threshold = threshold
 
             # train from scratch
-            arima_forecasting = ArimaForecasting(self.arima_params, self.forecast_len, None)
-            arima_forecasting.train_models(spt_cluster)
+            self.arima_forecasting.train_models(spt_cluster, forecast_len)
 
             # forecast using cluster centroid (medoid)
-            error_region = arima_forecasting.\
-                forecast_whole_region_with_single_model(spt_cluster.centroid, error_type)
+            error_region = self.arima_forecasting.\
+                forecast_whole_region_with_single_model(spt_cluster.centroid, forecast_len,
+                                                        error_type)
 
             # RMSE error to get a single error value for entire cluster
             errors_by_threshold[index] = error_region.overall_error
