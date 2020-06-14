@@ -1,3 +1,4 @@
+import numpy as np
 from math import sqrt
 
 
@@ -48,3 +49,25 @@ def two_balanced_divisors_order_x_y(n, x_len, y_len):
         div_x, div_y = div_2, div_1
 
     return (div_x, div_y)
+
+
+def random_integers_with_blacklist(n, min_value, max_value, blacklist=[]):
+    '''
+    Given a max value and a blacklist, find n different random integers (uniformly distributed),
+    located between [min_value, max_value] (inclusive) but that do not match any integers provided
+    in the blacklist. Outputs a numpy array of integers size n. Will fail if there are not enough
+    points available for sampling!
+
+    n
+        number of random integers to produce
+
+    min_value, max value
+        integers that determine the [min_value, max_value] integer
+
+    blacklist
+        array with integers that are blacklisted from search
+    '''
+    all_values = range(min_value, max_value + 1)
+    allowed = set(all_values).difference(set(blacklist))
+    allowed = list(allowed)
+    return np.random.choice(allowed, size=n, replace=False)

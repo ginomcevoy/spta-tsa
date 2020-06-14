@@ -10,10 +10,11 @@ from experiments.metadata.kmedoids import kmedoids_suites
 # from spta.kmedoids.silhouette import KmedoidsWithSilhouette
 
 from spta.distance.dtw import DistanceByDTW
-from spta.distance import variance
+from spta.distance.variance import DistanceHistogramClusters
 from spta.kmedoids import kmedoids, medoids_to_absolute_coordinates
 from spta.region.temporal import SpatioTemporalRegion, SpatioTemporalCluster
 
+from spta.util import fs as fs_util
 from spta.util import log as log_util
 
 
@@ -21,7 +22,7 @@ def processRequest():
 
     # parses the arguments
     desc = 'Run k-medoids on a spatio temporal region with different k/seeds'
-    usage = '%(prog)s [-h] <region> <kmedoids_id> [--variance] [--log LOG]'
+    usage = '%(prog)s [-h] <region> <kmedoids_id> [--variance] [--random] [--bins] [--log LOG]'
     parser = argparse.ArgumentParser(prog='cluster-kmedoids', description=desc, usage=usage)
 
     # need name of region metadata and the ID of the kmedoids
@@ -31,11 +32,24 @@ def processRequest():
     kmedoids_options = kmedoids_suites().keys()
     parser.add_argument('kmedoids_id', help='ID of the kmedoids analysis',
                         choices=kmedoids_options)
+
+    # variance analysis: --variance to create histograms, --random to add random points
+    # bins to specify bins, default='auto'
     parser.add_argument('--variance', help='Perform variance analysis and plot clusters',
                         action='store_true')
+    help_msg = 'Add N random points outside each cluster in variance analysis, =0 for auto N'
+    parser.add_argument('--random', help=help_msg)
+    help_msg = 'bins argument for plt.hist(), (default: %(default)s)'
+    parser.add_argument('--bins', help=help_msg, default='auto')
+
     parser.add_argument('--log', help='log level: WARN|INFO|DEBUG')
 
     args = parser.parse_args()
+
+    # --random requires --variance
+    if 'random' in vars(args) and 'variance' not in vars(args):
+        parser.error('--random optional argument requires --variance')
+
     logger = log_util.setup_log_argparse(args)
     do_kmedoids(args, logger)
 
@@ -51,7 +65,8 @@ def do_kmedoids(args, logger):
 
     # prepare the CSV output now (header)
     # name is built based on region and kmedoids IDs
-    csv_filename = 'cluster_kmedoids_{}_{}.csv'.format(args.region, args.kmedoids_id)
+    fs_util.mkdir('csv')
+    csv_filename = 'csv/cluster_kmedoids_{}_{}.csv'.format(args.region, args.kmedoids_id)
     with open(csv_filename, 'w', newline='') as csv_file:
         csv_writer = csv.writer(csv_file, delimiter=' ', quotechar='|',
                                 quoting=csv.QUOTE_MINIMAL)
@@ -91,10 +106,20 @@ def do_kmedoids(args, logger):
 
         # do variance analysis and plots?
         if args.variance:
-            do_variance_analysis(spt_region, distance_dtw, kmedoids_metadata, kmedoids_result)
+
+            # random points as integer, None means no random points are added
+            random_points = None
+            if args.random:
+                random_points = int(args.random)
+
+            do_variance_analysis(spt_region, distance_dtw, kmedoids_metadata, kmedoids_result,
+                                 random_points, args.bins)
+
+    logger.info('CSV output at: {}'.format(csv_filename))
 
 
-def do_variance_analysis(spt_region, distance_measure, kmedoids_metadata, kmedoids_result):
+def do_variance_analysis(spt_region, distance_measure, kmedoids_metadata, kmedoids_result,
+                         random_points, bins):
 
     # create spatio-temporal clusters with the labels obtained by k-medoids
     clusters = []
@@ -117,7 +142,14 @@ def do_variance_analysis(spt_region, distance_measure, kmedoids_metadata, kmedoi
                                                               k, random_seed)
 
     # perform the variance analysis
-    variance.variance_analysis_clusters(clusters, distance_measure, plot_name=plot_name)
+    DistanceHistogramClusters.cluster_histograms(clusters=clusters,
+                                                 distance_measure=distance_measure,
+                                                 random_points=random_points,
+                                                 bins=bins,
+                                                 with_statistics=True,
+                                                 plot_name=plot_name,
+                                                 alpha=0.5)
+    # variance.variance_analysis_clusters(clusters, distance_measure, plot_name=plot_name)
 
 
 if __name__ == '__main__':
