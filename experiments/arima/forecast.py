@@ -3,6 +3,7 @@ Execute this program to perform ARIMA forecasting and error evaluation on an ent
 '''
 import argparse
 
+from spta.arima.forecast import ArimaForecastingPDQ
 from spta.arima.analysis import ArimaErrorAnalysis
 from spta.distance.dtw import DistanceByDTW
 from spta.region import Point
@@ -29,8 +30,6 @@ def processRequest():
     parser.add_argument('arima', help='Name of the ARIMA experiment', choices=arima_options)
     parser.add_argument('--parallel', help='number of parallel workers')
     parser.add_argument('--log', help='log level: WARN|INFO|DEBUG')
-    parser.add_argument('--plot', help='add the plot of the ARIMA model result at Point(0, 0)?',
-                        default=False, action='store_true')
 
     args = parser.parse_args()
     log_util.setup_log_argparse(args)
@@ -58,15 +57,12 @@ def do_arima_forecast(args):
     for arima_params in arima_suite.arima_params_gen():
 
         # do the analysis with current ARIMA hyper-parameters, only save errors
-        analysis = ArimaErrorAnalysis(arima_params, parallel_workers=parallel_workers)
-        _, overall_errors, _, _ = analysis.evaluate_forecast_errors(spt_region, 'MASE')
+        forecasting_pdq = ArimaForecastingPDQ(arima_params, parallel_workers=parallel_workers)
+        analysis_pdq = ArimaErrorAnalysis(forecasting_pdq)
+        _, overall_errors, _, _ = analysis_pdq.evaluate_forecast_errors(spt_region, 'MASE')
 
         # ArimaErrors = namedtuple('ArimaErrors', ('minimum', 'min_local', 'centroid', 'maximum'))
         arima_results[arima_params] = overall_errors
-
-        if args.plot:
-            # plot forecast at Point (0, 0)
-            analysis.plot_one_arima(Point(0, 0))
 
     # print results
     for (arima_params, overall_errors) in arima_results.items():

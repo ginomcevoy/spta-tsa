@@ -51,7 +51,7 @@ def processRequest():
     # parses the arguments
     desc = 'Perform clustering on a spatial-region, ' \
         'then call arima.evaluate_forecast_errors_arima on each cluster'
-    usage = '%(prog)s [-h] <region> <arima_clustering_experiment> [--log=log_level]'
+    usage = '%(prog)s [-h] <region> <arima_clustering_experiment> <error> [--log=log_level]'
     parser = argparse.ArgumentParser(prog='arima_forecast_cluster', description=desc, usage=usage)
 
     # for now, need name of region metadata and id of arima_clustering
@@ -69,8 +69,6 @@ def processRequest():
     # optional arguments
     parser.add_argument('--parallel', help='number of parallel workers')
     parser.add_argument('--log', help='log level: WARN|INFO|DEBUG')
-    parser.add_argument('--plot', help='add the plot of the ARIMA model result at Point(0, 0)?',
-                        default=False, action='store_true')
 
     args = parser.parse_args()
     log_util.setup_log_argparse(args)
@@ -156,9 +154,9 @@ def do_arima_forecast_cluster(args):
         for arima_params in arima_suite.arima_params_gen():
 
             # do the analysis with current ARIMA hyper-parameters
-            forecasting_pdq = ArimaForecastingPDQ(parallel_workers)
-            analysis_pdq = ArimaErrorAnalysis(forecasting_pdq, arima_params)
-            analysis = ArimaErrorAnalysis(arima_params, parallel_workers=parallel_workers)
+            forecasting_pdq = ArimaForecastingPDQ(arima_params, parallel_workers=parallel_workers)
+            analysis_pdq = ArimaErrorAnalysis(forecasting_pdq)
+
             arima_forecasting, overall_errors, forecast_time, compute_time = \
                 analysis_pdq.evaluate_forecast_errors(cluster_i, args.error)
 
@@ -186,10 +184,6 @@ def do_arima_forecast_cluster(args):
                                         quoting=csv.QUOTE_MINIMAL)
                 logger.info('Writing partial result: {}'.format(arima_experiment))
                 csv_writer.writerow(arima_experiment)
-
-            if args.plot:
-                # plot forecast at centroid
-                analysis.plot_one_arima(centroid_i)
 
     logger.info('CSV output at: {}'.format(csv_filename))
 
