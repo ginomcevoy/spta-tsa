@@ -8,7 +8,7 @@ import csv
 from collections import namedtuple
 
 from spta.arima.forecast import ArimaForecastingAutoArima
-from spta.arima.analysis import ArimaErrorAnalysis
+from spta.arima import analysis as arima_analysis
 from spta.distance.dtw import DistanceByDTW
 from spta.kmedoids import kmedoids
 
@@ -72,6 +72,8 @@ def processRequest():
 
     # optional arguments
     parser.add_argument('--parallel', help='number of parallel workers')
+    parser.add_argument('--plots', help='create relevant plots (distances vs errors)',
+                        default=False, action='store_true')
     parser.add_argument('--log', help='log level: WARN|INFO|DEBUG')
 
     args = parser.parse_args()
@@ -111,10 +113,12 @@ def do_auto_arima_forecast_cluster(args, logger):
         # run K-medoids, this generates a KmedoidsResult namedtuple
         # analyze this particular partition
         kmedoids_result = kmedoids.run_kmedoids_from_metadata(series_group, kmedoids_metadata)
-        analyze_kmedoids_partition(spt_region, kmedoids_result, experiment, args, logger)
+        analyze_kmedoids_partition(spt_region, kmedoids_result, experiment, distance_dtw,
+                                   args, logger)
 
 
-def analyze_kmedoids_partition(spt_region, kmedoids_result, experiment, args, logger):
+def analyze_kmedoids_partition(spt_region, kmedoids_result, experiment, distance_measure,
+                               args, logger):
 
     k, random_seed = kmedoids_result.k, kmedoids_result.random_seed
     auto_arima_params = predefined_auto_arima()[experiment.auto_arima_id]
@@ -146,11 +150,13 @@ def analyze_kmedoids_partition(spt_region, kmedoids_result, experiment, args, lo
     for i in range(0, k):
 
         cluster_i = clusters[i]
-        analyze_auto_arima_for_cluster(cluster_i, i, auto_arima_params, csv_filename, args, logger)
+        analyze_auto_arima_for_cluster(cluster_i, i, kmedoids_result, auto_arima_params,
+                                       distance_measure, csv_filename, args, logger)
 
     logger.info('CSV output of k={}, seed={} at: {}'.format(k, random_seed, csv_filename))
 
-def analyze_auto_arima_for_cluster(spt_cluster, i, auto_arima_params, csv_filename, args, logger):
+def analyze_auto_arima_for_cluster(spt_cluster, i, kmedoids_result, auto_arima_params,
+                                   distance_measure, csv_filename, args, logger):
 
     cluster_medoid = spt_cluster.centroid
 
@@ -166,7 +172,7 @@ def analyze_auto_arima_for_cluster(spt_cluster, i, auto_arima_params, csv_filena
 
     # do the analysis using auto_arima
     forecasting_auto = ArimaForecastingAutoArima(auto_arima_params, parallel_workers)
-    analysis_auto = ArimaErrorAnalysis(forecasting_auto)
+    analysis_auto = arima_analysis.ArimaErrorAnalysis(forecasting_auto)
 
     arima_forecasting, overall_errors, forecast_time, compute_time = \
         analysis_auto.evaluate_forecast_errors(spt_cluster, args.error)
@@ -217,6 +223,33 @@ def analyze_auto_arima_for_cluster(spt_cluster, i, auto_arima_params, csv_filena
                                 quoting=csv.QUOTE_MINIMAL)
         logger.info('Writing partial result: {}'.format(experiment_result))
         csv_writer.writerow(experiment_result)
+
+    # plot distances to medoid vs forecast errors using medoid model?
+    if args.plots:
+
+        plot_name, plot_desc = plot_info_distances_vs_errors(kmedoids_result, p_medoid, d_medoid,
+                                                             q_medoid, spt_cluster, args)
+        arima_forecasting.plot_distances_vs_errors(cluster_medoid,
+                                                   arima_analysis.FORECAST_LENGTH,
+                                                   args.error,
+                                                   distance_measure,
+                                                   plot_name=plot_name,
+                                                   plot_desc=plot_desc)
+
+
+def plot_info_distances_vs_errors(kmedoids_result, p, d, q, cluster, args):
+    '''
+    Name and description about distances vs errors plot
+    '''
+
+    k, random_seed = kmedoids_result.k, kmedoids_result.random_seed
+
+    plot_name_str = 'plots/auto_arima_distance_error_{}_k{}_seed{}_{}_pdq{}-{}-{}_{}.pdf'
+    plot_name = plot_name_str.format(args.region, k, random_seed, cluster.name, p, d, q,
+                                     args.error)
+
+    plot_desc = 'k-medoids: k={} seed={}'.format(k, random_seed)
+    return plot_name, plot_desc
 
 
 if __name__ == '__main__':

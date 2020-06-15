@@ -562,8 +562,9 @@ class SpatioTemporalCluster(SpatialCluster, SpatioTemporalDecorator):
         assert members.ndim == 1
         assert members.shape[0] == x_len * y_len
 
+        k = np.max(members) + 1
         assert isinstance(cluster_index, int)
-        assert cluster_index >= 0 and cluster_index <= np.max(members)
+        assert cluster_index >= 0 and cluster_index < k
 
         # build mask_region from members and cluster_index
         mask_region = MaskRegionCrisp.from_membership_array(members, cluster_index, x_len, y_len)
@@ -571,7 +572,12 @@ class SpatioTemporalCluster(SpatialCluster, SpatioTemporalDecorator):
 
         # build one cluster for this cluster_index
         cluster = SpatioTemporalCluster(spt_region, mask_region, None)
-        cluster.name = '{}->cluster{}'.format(spt_region, cluster_index)
+
+        # short name for cluster
+        # be nice and pad with zeros if needed
+        padding = int(k / 10) + 1
+        cluster_name_str = 'cluster{{:0{}d}}'.format(padding)
+        cluster.name = cluster_name_str.format(cluster_index)
 
         # centroid available?
         if centroids is not None:

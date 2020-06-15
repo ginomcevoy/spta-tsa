@@ -17,9 +17,6 @@ from spta.util import log as log_util
 
 from .training import ArimaTrainer, ExtractAicFromArima, ExtractPDQFromAutoArima
 
-# types of forecasting errors supported
-FORECAST_ERROR_TYPES = ['MASE']
-
 
 class ArimaModelRegion(ForecastModelRegion):
     '''
@@ -71,6 +68,8 @@ class ArimaForecasting(log_util.LoggerMixin):
         test series, where the length of the test series is equal to the length of the forecast
         series!
         '''
+        # save the region for future reference
+        self.spt_region = spt_region
 
         # create training/test regions, where the test region has the same series length as the
         # expected forecast.
@@ -195,6 +194,67 @@ class ArimaForecasting(log_util.LoggerMixin):
 
         return overall_error_region
 
+    def plot_distances_vs_errors(self, point_of_interest, forecast_len, error_type,
+                                 distance_measure, plot_name=None, plot_desc=''):
+        '''
+        Use the model at a single point to create a forecast of the entire region, then plot the
+        forecast errors against the distances of each point in the region to the specified point.
+        Assumes that a distance matrix is present and obtainable via region metadata.
+        '''
+        # check conditions
+        self.check_forecast_request(forecast_len)
+
+        # get the distances of each point in the region to the specified point
+        # assumes that a distance matrix is present and obtainable via region metadata.
+        distances_to_point = distance_measure.distances_to_point(self.spt_region,
+                                                                 point_of_interest,
+                                                                 self.spt_region.all_point_indices,
+                                                                 use_distance_matrix=True)
+
+        # use the model at the specified point to get a forecast for the entire region
+        # and get the error
+        error_region = self.forecast_whole_region_with_single_model(point_of_interest,
+                                                                    forecast_len, error_type)
+
+        # get the error values for the region, this also works on clusters
+        forecast_errors = [
+            forecast_error
+            for _, forecast_error
+            in error_region
+        ]
+
+        # convert to arrays and plot distances vs errors
+        from matplotlib import pyplot as plt
+        _, subplot = plt.subplots(1, 1, figsize=(7, 5))
+        subplot.plot(distances_to_point, forecast_errors, 'bo')
+
+        # get ARIMA order at point of interest
+        fitted_arima_at_point = self.arima_models.value_at(point_of_interest)
+        arima_order = fitted_arima_at_point.model.order
+
+        # title
+        title = 'Distances to medoid vs forecast errors at medoid'
+        # title = title_str.format(self.spt_region, arima_order)
+        subplot.set_title(title)
+
+        # add some info about plot
+        textstr = '\n'.join((
+            '{}'.format(self.spt_region),
+            'ARIMA: {}'.format(arima_order),
+            '{}'.format(plot_desc)))
+        subplot.text(0.05, 0.95, textstr, transform=subplot.transAxes,
+                     verticalalignment='top')
+
+        subplot.set_xlabel('DTW distances to medoid')
+        subplot.set_ylabel('{} forecast errors'.format(error_type))
+        subplot.grid(True, linestyle='--')
+
+        if plot_name:
+            plt.draw()
+            plt.savefig(plot_name)
+            self.logger.info('Saved figure: {}'.format(plot_name))
+        plt.show()
+
     def check_forecast_request(self, forecast_len):
         '''
         Sanity checking for any forecast. Checks that the models have been trained, and that
@@ -232,7 +292,7 @@ class ArimaForecastingPDQ(ArimaForecasting):
         arima_trainers = ArimaTrainer.with_hyperparameters(arima_hyperparams, x_len, y_len)
 
         # train the models: this returns an instance of ArimaModelRegion, that has an instance of
-        # statsmodels.tsa.arima.ARIMAResults at each point
+        # statsmodels.tsa.arima.model.ARIMAResults at each point
         arima_models = arima_trainers.apply_to(training_region)
 
         # save the number of failed models... ugly but works
@@ -266,7 +326,9 @@ class ArimaForecastingAutoArima(ArimaForecasting):
         arima_trainers = ArimaTrainer.with_auto_arima(auto_arima_params, x_len, y_len)
 
         # train the models: this returns an instance of ArimaModelRegion, that has an instance of
-        # SARIMAXResults at each point
+        # statsmodels.tsa.arima.model.ARIMAResults at each point
+        # this is because we used auto_arima to get (p, d, q) order and then trained
+        # statsmodels.tsa.model.arima.ARIMA model with it
         arima_models = arima_trainers.apply_to(training_region)
 
         # save the number of failed models... ugly but works

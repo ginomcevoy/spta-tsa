@@ -16,6 +16,10 @@ from spta.util import log as log_util
 
 from . import ArimaPDQ, forecast
 
+# For auto_arima, the order is extracted from the model.
+# Use this sentinel value when there is no model.
+ORDER_WHEN_NO_MODEL = (-1, -1, -1)
+
 
 def train_arima_pdq(arima_pdq, training_series):
     '''
@@ -205,7 +209,8 @@ class ExtractAicFromArima(FunctionRegionScalarSame):
             # Problem: ArimaModelRegion is always a full spatial region, so it does not iterate
             # like a cluster if it was generated for a cluster.
             # In points outside of the cluster, the 'value' (fitted_arima_at_point) is 0.
-            if fitted_arima_at_point == 0:
+            # Also, if ARIMA training/fitting fails, the model is None.
+            if fitted_arima_at_point == 0 or fitted_arima_at_point is None:
                 return np.nan
             else:
                 return fitted_arima_at_point.aic
@@ -230,11 +235,14 @@ class ExtractPDQFromAutoArima(FunctionRegionSeriesSame):
             # Problem: ArimaModelRegion is always a full spatial region, so it does not iterate
             # like a cluster if it was generated for a cluster.
             # In points outside of the cluster, the 'value' (fitted_arima_at_point) is 0.
-            if fitted_arima_at_point == 0:
-                (p, d, q) = (-1, -1, -1)
+            # Also, if ARIMA training/fitting fails, the model is None.
+            if fitted_arima_at_point == 0 or fitted_arima_at_point is None:
+                (p, d, q) = ORDER_WHEN_NO_MODEL
             else:
                 (p, d, q) = fitted_arima_at_point.model.order
 
             return np.array([p, d, q])
 
+        # create a spatio-temporal region of integer values for the ARIMA order
+        # integers are needed because they are passed to an ARIMA model
         super(ExtractPDQFromAutoArima, self).__init__(extract_pdq, x_len, y_len, dtype=np.int8)

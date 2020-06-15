@@ -7,7 +7,7 @@ import csv
 from collections import namedtuple
 
 from spta.arima.forecast import ArimaForecastingPDQ
-from spta.arima.analysis import ArimaErrorAnalysis
+from spta.arima import analysis as arima_analysis
 from spta.distance.dtw import DistanceByDTW
 from spta.kmedoids import kmedoids
 
@@ -68,6 +68,8 @@ def processRequest():
 
     # optional arguments
     parser.add_argument('--parallel', help='number of parallel workers')
+    parser.add_argument('--plots', help='create relevant plots (distances vs errors)',
+                        default=False, action='store_true')
     parser.add_argument('--log', help='log level: WARN|INFO|DEBUG')
 
     args = parser.parse_args()
@@ -155,7 +157,7 @@ def do_arima_forecast_cluster(args):
 
             # do the analysis with current ARIMA hyper-parameters
             forecasting_pdq = ArimaForecastingPDQ(arima_params, parallel_workers=parallel_workers)
-            analysis_pdq = ArimaErrorAnalysis(forecasting_pdq)
+            analysis_pdq = arima_analysis.ArimaErrorAnalysis(forecasting_pdq)
 
             arima_forecasting, overall_errors, forecast_time, compute_time = \
                 analysis_pdq.evaluate_forecast_errors(cluster_i, args.error)
@@ -185,7 +187,35 @@ def do_arima_forecast_cluster(args):
                 logger.info('Writing partial result: {}'.format(arima_experiment))
                 csv_writer.writerow(arima_experiment)
 
+            # plot distances to medoid vs forecast errors using medoid model?
+            if args.plots:
+
+                plot_name, plot_desc = plot_info_distances_vs_errors(kmedoids_result, arima_params,
+                                                                     cluster_i, args)
+                arima_forecasting.plot_distances_vs_errors(centroid_i,
+                                                           arima_analysis.FORECAST_LENGTH,
+                                                           args.error,
+                                                           distance_dtw,
+                                                           plot_name=plot_name,
+                                                           plot_desc=plot_desc)
+
     logger.info('CSV output at: {}'.format(csv_filename))
+
+
+def plot_info_distances_vs_errors(kmedoids_result, arima_params, cluster, args):
+    '''
+    Name and description about distances vs errors plot
+    '''
+
+    k, random_seed = kmedoids_result.k, kmedoids_result.random_seed
+    p, d, q = arima_params.p, arima_params.d, arima_params.q
+
+    plot_name_str = 'plots/arima_distance_error_{}_k{}_seed{}_{}_pdq{}-{}-{}_{}.pdf'
+    plot_name = plot_name_str.format(args.region, k, random_seed, cluster.name, p, d, q,
+                                     args.error)
+
+    plot_desc = 'k-medoids: k={} seed={}'.format(k, random_seed)
+    return plot_name, plot_desc
 
 
 if __name__ == '__main__':

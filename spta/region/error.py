@@ -11,8 +11,6 @@ from spta.util import arrays as arrays_util
 from spta.util import error as error_util
 from spta.util import log as log_util
 
-FORECAST_ERROR_TYPES = ['MASE', 'sMAPE']
-
 
 class ErrorRegion(SpatialDecorator):
     '''
