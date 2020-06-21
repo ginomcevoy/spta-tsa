@@ -505,7 +505,7 @@ class SpatioTemporalCluster(SpatialCluster, SpatioTemporalDecorator):
         '''
         assert hasattr(self.mask_region, 'cluster_len')
 
-        all_point_indices = np.zeros(self.mask_region.cluster_len, dtype=np.int8)
+        all_point_indices = np.zeros(self.mask_region.cluster_len, dtype=np.uint32)
         for i, (point, _) in enumerate(self):
             all_point_indices[i] = point.x * self.y_len + point.y
 
@@ -584,7 +584,11 @@ class SpatioTemporalCluster(SpatialCluster, SpatioTemporalDecorator):
             centroid_index = centroids[cluster_index]
             i = int(centroid_index / y_len)
             j = centroid_index % y_len
-            cluster.centroid = Point(i, j)
+            centroid = Point(i, j)
+            cluster.centroid = centroid
+
+            # sanity check
+            assert mask_region.is_member(centroid)
 
         return cluster
 

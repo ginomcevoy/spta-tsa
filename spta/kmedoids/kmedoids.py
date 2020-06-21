@@ -93,6 +93,7 @@ def _get_cost(X, medoids, distance_measure):
 
     # compute the total cost, sum of each intra-cluster cost
     total_cost = np.sum(costs)
+
     return labels, costs, total_cost, dist_mat
 
 
@@ -161,6 +162,10 @@ def run_kmedoids(X, k, distance_measure, initial_medoids=None, random_seed=1, ma
                 logger.info('Final medoid indices: {}'.format(get_medoid_indices(medoids)))
             break
         cc += 1
+
+    np.set_printoptions(precision=3)
+    logger.debug(costs)
+    logger.debug(tot_cost)
 
     result = KmedoidsResult(k, random_seed, get_medoid_indices(medoids), labels, costs, tot_cost,
                             dist_mat)

@@ -90,7 +90,7 @@ def list_of_2d_points(x_len, y_len):
     Given (x_len, y_len), outputs a list of points of the corresponding 2d region:
     (0, 0), (0, 1), ... (0, y_len - 1), (1, 0), (1, 1), ... (x_len - 1, y_len -1)
     '''
-    result = np.empty((x_len * y_len, 2), dtype=np.int8)
+    result = np.empty((x_len * y_len, 2), dtype=np.uint32)
 
     for i in range(0, x_len):
         for j in range(0, y_len):

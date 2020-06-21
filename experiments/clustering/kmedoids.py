@@ -4,6 +4,7 @@ plots.
 '''
 import argparse
 import csv
+import numpy as np
 
 from experiments.metadata.region import predefined_regions
 from experiments.metadata.kmedoids import kmedoids_suites
@@ -113,29 +114,42 @@ def do_kmedoids(args, logger):
                 random_points = int(args.random)
 
             do_variance_analysis(spt_region, distance_dtw, kmedoids_metadata, kmedoids_result,
-                                 random_points, args.bins)
+                                 random_points, args.bins, logger)
 
     logger.info('CSV output at: {}'.format(csv_filename))
 
 
 def do_variance_analysis(spt_region, distance_measure, kmedoids_metadata, kmedoids_result,
-                         random_points, bins):
+                         random_points, bins, logger):
 
     # create spatio-temporal clusters with the labels obtained by k-medoids
     clusters = []
     k, random_seed = kmedoids_metadata.k, kmedoids_metadata.random_seed
     members, centroids = kmedoids_result.labels, kmedoids_result.medoids
+    logger.debug('members: {}'.format(members))
+    logger.debug('medoids: {}'.format(centroids))
 
     # short name for plot
     # be nice and pad with zeros if needed
     padding = int(k / 10) + 1
     cluster_name_str = 'cluster{{:0{}d}}'.format(padding)
 
+    total_cost = 0
     for i in range(0, k):
         cluster_i = SpatioTemporalCluster.from_crisp_clustering(spt_region, members, i,
                                                                 centroids=centroids)
         cluster_i.name = cluster_name_str.format(i)
         clusters.append(cluster_i)
+
+        # verification: compute the intra-cluster cost for each cluster
+        # should be the same as output from k-medoids
+        distances_i = distance_measure.distances_to_point(cluster_i, cluster_i.get_centroid(),
+                                                          cluster_i.all_point_indices)
+        intra_cluster_cost_i = np.sum(distances_i)
+        total_cost += intra_cluster_cost_i
+        logger.debug('Intra-cluster cost cluster_{} = {:.3f}'.format(i, intra_cluster_cost_i))
+
+    logger.debug('Total cost = {:.3f}'.format(total_cost))
 
     # build a suitable name for the current plot: need info on region, k, seed
     plot_name = 'plots/variance_kmedoids_{}_{}_{}.pdf'.format(spt_region.region_metadata,

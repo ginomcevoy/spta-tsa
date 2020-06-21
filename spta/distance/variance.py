@@ -123,6 +123,12 @@ class DistanceHistogram(log_util.LoggerMixin):
             as_subplot = False
             fig, subplot = plt.subplots(1, 1)
 
+        # logging only
+        mean_cost = np.mean(distances)
+        np.set_printoptions(precision=3)
+        # self.logger.debug('Distances: {}'.format(distances))
+        self.logger.debug('Mean from histogram = {:.3f}'.format(mean_cost))
+
         # plot the histogram
         subplot.hist(distances, label=str(self.spt_region), bins=self.bins, alpha=alpha)
         if not as_subplot:
@@ -232,6 +238,12 @@ class DistanceHistogramRandomOutsidePoints(DistanceHistogram):
 
         # only valid within an existing subplot
         assert subplot is not None
+
+        # logging only
+        mean_cost = np.mean(distances)
+        np.set_printoptions(precision=3)
+        # self.logger.debug('Distances random points: {}'.format(distances))
+        self.logger.debug('Cost from random points histogram = {:.3f}'.format(mean_cost))
 
         # add the histogram of provided distances
         # useful for adding a second histogram to existing plot
