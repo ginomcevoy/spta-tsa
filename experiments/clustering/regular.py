@@ -128,6 +128,7 @@ def do_regular_partition(spt_region, distance_measure, k, args):
     centroids_str = ''
 
     # regular clustering is achieved by building a regular mask
+    # TODO use Partition class instead of MaskRegion!
     for i in range(0, k):
         mask_i = MaskRegionCrisp.with_regular_partition(k, i, x_len, y_len)
         cluster_i = SpatioTemporalCluster(spt_region, mask_i)

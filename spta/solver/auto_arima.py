@@ -1,6 +1,6 @@
 '''
 Produces temporal forecasts for points in the region, based on the model trained at medoids.
-Uses kmedoids to define clusters and medoids, and uses auto ARIMA as the forecast model.
+Uses a clustering algorithm to define clusters and medoids, and uses auto ARIMA for forecasting.
 '''
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
@@ -10,18 +10,17 @@ import numpy as np
 import pickle
 import os
 
-from spta.region import Point
-from spta.region.base import BaseRegion
-from spta.region.error import MeasureForecastingError, get_error_func
-from spta.region.partition import PartitionRegionCrisp
-from spta.region.spatial import SpatialCluster
-from spta.region.temporal import SpatioTemporalRegion
-from spta.region.train import SplitTrainingAndTestLast
-
 from spta.arima.forecast import ArimaModelRegion
 from spta.arima import training
 
-from spta.kmedoids import kmedoids
+from spta.clustering.factory import ClusteringFactory
+
+from spta.region import Point
+from spta.region.base import BaseRegion
+from spta.region.error import MeasureForecastingError, get_error_func
+from spta.region.spatial import SpatialCluster
+from spta.region.temporal import SpatioTemporalRegion
+from spta.region.train import SplitTrainingAndTestLast
 
 from spta.util import fs as fs_util
 from spta.util import log as log_util
@@ -32,51 +31,58 @@ from spta.util import plot as plot_util
 FORECAST_LENGTH = 8
 
 
-class KmedoidsAutoARIMATrainer(log_util.LoggerMixin):
+class AutoARIMATrainer(log_util.LoggerMixin):
     '''
     Trains the ARIMA models by partitioning the region and using the ARIMA models at the medoids
     of the resulting clusters
     '''
 
-    def __init__(self, region_metadata, kmedoids_metadata, auto_arima_params):
+    def __init__(self, region_metadata, clustering_metadata, distance_measure, auto_arima_params):
         self.region_metadata = region_metadata
+        self.clustering_metadata = clustering_metadata
+        self.distance_measure = distance_measure
         self.auto_arima_params = auto_arima_params
+
+        # flag
+        self.prepared = False
+
+    def prepare_for_training(self):
 
         # use pre-computed distance matrix
         # TODO this code is broken if we don't use DTW
-        distance_measure = kmedoids_metadata.distance_measure
-        distance_measure.load_distance_matrix_2d(self.region_metadata.distances_filename,
-                                                 self.region_metadata.region)
+        self.distance_measure.load_distance_matrix_2d(self.region_metadata.distances_filename,
+                                                      self.region_metadata.region)
 
-        self.kmedoids_metadata = kmedoids_metadata
-        self.distance_measure = distance_measure
+        # clustering algorithm to use
+        clustering_factory = ClusteringFactory(self.distance_measure)
+        self.clustering_algorithm = clustering_factory.instance(self.clustering_metadata)
 
     def train(self, error_type, training_len=None, test_len=FORECAST_LENGTH):
         '''
-        Partition the region into clusters with kmedoids, then train the ARIMA models on the
-        cluster medoids.
+        Partition the region into clusters, then train the ARIMA models on the cluster medoids.
 
         This code assumes that each temporal series is split into training and test subseries.
         Needs to change when we use a fixed number of points in the past to train the model.
         '''
+        if not self.prepared:
+            self.prepare_for_training()
 
         # get the region and transform to list of time series
         spt_region = SpatioTemporalRegion.from_metadata(self.region_metadata)
-
-        # run k-medoids and get the result
-        series_group = spt_region.as_2d
-        kmedoids_result = kmedoids.run_kmedoids_from_metadata(series_group, self.kmedoids_metadata)
 
         # create training/test regions
         splitter = SplitTrainingAndTestLast(test_len)
         (training_region, test_region) = splitter.split(spt_region)
 
-        # use the k-medoids result to train ARIMA models at the medoids and use them as
+        # get the cluster partition and corresponding medoids
+        partition, medoids = self.clustering_algorithm.partition(spt_region, with_medoids=True)
+
+        # use the partition to train ARIMA models at the cluster medoids and use them as
         # representatives for their own clusters. These models will be used to evalute and save
         # the prediction, but will not be the final models.
         # The output is a single spatial region with k different models!
         arima_model_region_for_error = self.train_auto_arima_at_medoids(training_region,
-                                                                        kmedoids_result)
+                                                                        partition, medoids)
 
         # calculate the generalization error for these ARIMA models: it is the prediction error
         # that is calculated using the test dataset.
@@ -90,19 +96,20 @@ class KmedoidsAutoARIMATrainer(log_util.LoggerMixin):
         # now we need to re-train the models at the medoids with the full dataset
         # which will be used for prediction
         arima_model_region_for_predict = self.train_auto_arima_at_medoids(spt_region,
-                                                                          kmedoids_result)
+                                                                          partition, medoids)
 
         # create a solver with the data acquired, this solver can answer queries
-        solver = KmedoidsAutoARIMASolver(self.region_metadata,
-                                         self.kmedoids_metadata,
-                                         self.auto_arima_params,
-                                         error_type,
-                                         kmedoids_result,
-                                         arima_model_region_for_predict,
-                                         generalization_errors)
+        solver = AutoARIMASolver(region_metadata=self.region_metadata,
+                                 clustering_metadata=self.clustering_metadata,
+                                 auto_arima_params=self.auto_arima_params,
+                                 distance_measure=self.distance_measure,
+                                 error_type=error_type,
+                                 partition=partition,
+                                 arima_model_region=arima_model_region_for_predict,
+                                 generalization_errors=generalization_errors)
         return solver
 
-    def train_auto_arima_at_medoids(self, training_region, kmedoids_result):
+    def train_auto_arima_at_medoids(self, training_region, partition, medoids):
         '''
         The ARIMA model region that will be used for forecasting has only k models; the model from
         each medoid will be replicated throughout its cluster.
@@ -113,22 +120,10 @@ class KmedoidsAutoARIMATrainer(log_util.LoggerMixin):
         '''
         _, x_len, y_len = training_region.shape
 
-        # get the medoids as points
-        medoid_indices = kmedoids_result.medoids
-        medoid_points = [
-            # get (i, j) position relative to the region
-            Point(int(medoid_index / y_len), medoid_index % y_len)
-            for medoid_index
-            in medoid_indices
-        ]
-
-        # use k-medoids result to create clusters for the training dataset
-        # these clusters have medoids from k-medoids as the centroids
-        # the idea is to use train ARIMA models at these medoids
-        membership = kmedoids_result.labels
-        partition = PartitionRegionCrisp.from_membership_array(membership, x_len, y_len)
+        # use partition to create clusters for the training dataset
+        # the idea is to use train ARIMA models at the cluster medoids
         training_clusters = partition.create_all_spt_clusters(training_region,
-                                                              centroid_indices=medoid_indices)
+                                                              medoids=medoids)
 
         # the 'sparse' numpy array that will store the ARIMA models and has the region shape
         # note that all clusters share the same underlying dataset (should be no problem...)
@@ -143,9 +138,9 @@ class KmedoidsAutoARIMATrainer(log_util.LoggerMixin):
                                                             arima_medoids_numpy, cluster_index)
             arima_clusters.append(arima_cluster)
 
-        # merge the clusters into a single region, this will be backed by a new numpy matrix
-        # but should look exactly like arima_medoids_numpy
-        arima_region = partition.merge_with_representatives_2d(arima_clusters, medoid_points)
+        # merge the clusters into a single region, this will be backed by a new numpy matrix,
+        # that should look exactly like arima_medoids_numpy
+        arima_region = partition.merge_with_representatives_2d(arima_clusters, medoids)
         # self.logger.debug('Merged ARIMA region: {}'.format(arima_region.as_numpy))
 
         # we want an ArimaModelRegion that can be applied to produce forecasts, so we wrap
@@ -201,24 +196,25 @@ class KmedoidsAutoARIMATrainer(log_util.LoggerMixin):
         return arima_model_cluster
 
 
-class KmedoidsAutoARIMASolver(log_util.LoggerMixin):
+class AutoARIMASolver(log_util.LoggerMixin):
     '''
     Represents a cluster partition of a given spatio-temporal region, with ARIMA models trained
     at the medoids. It can answer a forecast query of a specified subregion, by using, at each
     point in the subregion, the forecast at the medoid of the cluster for which each point is
     a member.
     '''
-    def __init__(self, region_metadata, kmedoids_metadata, auto_arima_params, error_type,
-                 kmedoids_result, arima_model_region, generalization_errors):
+    def __init__(self, region_metadata, clustering_metadata, distance_measure, auto_arima_params,
+                 error_type, partition, arima_model_region, generalization_errors):
 
         # user input
         self.region_metadata = region_metadata
-        self.kmedoids_metadata = kmedoids_metadata
+        self.clustering_metadata = clustering_metadata
+        self.distance_measure = distance_measure
         self.auto_arima_params = auto_arima_params
         self.error_type = error_type
 
         # calculated during training
-        self.kmedoids_result = kmedoids_result
+        self.partition = partition
         self.arima_model_region = arima_model_region
         self.generalization_errors = generalization_errors
 
@@ -251,9 +247,16 @@ class KmedoidsAutoARIMASolver(log_util.LoggerMixin):
         forecast_subregion = arima_model_subset.apply_to(error_subregion, forecast_len)
 
         # this has all the required information and can be iterated
-        return PredictionQueryResult(forecast_len, forecast_subregion, error_subregion,
-                                     prediction_region, self.partition, self.spt_region,
-                                     self.kmedoids_metadata, self.error_type)
+        return PredictionQueryResult(region_metadata=self.region_metadata,
+                                     clustering_metadata=self.clustering_metadata,
+                                     distance_measure=self.distance_measure,
+                                     forecast_len=forecast_len,
+                                     forecast_subregion=forecast_subregion,
+                                     error_subregion=error_subregion,
+                                     prediction_region=prediction_region,
+                                     partition=self.partition,
+                                     spt_region=self.spt_region,
+                                     error_type=self.error_type)
 
     def prepare_for_predictions(self):
         '''
@@ -266,10 +269,6 @@ class KmedoidsAutoARIMASolver(log_util.LoggerMixin):
         # denormalizing the data
         self.spt_region = SpatioTemporalRegion.from_metadata(self.region_metadata)
         _, x_len, y_len = self.spt_region.shape
-
-        # rebuild the cluster partition
-        membership = self.kmedoids_result.labels
-        self.partition = PartitionRegionCrisp.from_membership_array(membership, x_len, y_len)
 
         # set prepared flag
         self.prepared = True
@@ -285,10 +284,8 @@ class KmedoidsAutoARIMASolver(log_util.LoggerMixin):
         membership_1d = self.partition.as_numpy.reshape(x_len * y_len)
         shape_2d = (x_len, y_len)
 
-        # plot the partitioning
-        title = 'Kmedoids: k={} seed={}; Query: {}'.format(self.kmedoids_result.k,
-                                                           self.kmedoids_result.random_seed,
-                                                           prediction_region)
+        # plot the partitioning, the clustering metadata should format as a nice string
+        title = '{}; Query: {}'.format(self.clustering_metadata, prediction_region)
         fig, ax1 = plt.subplots(1, 1, figsize=(10, 8))
         plot_util.plot_2d_clusters(membership_1d, shape_2d, title=title, subplot=ax1)
 
@@ -315,21 +312,19 @@ class KmedoidsAutoARIMASolver(log_util.LoggerMixin):
         '''
         Returns a string representing the directory structure for storing plots.
         Ex:
-            plots/nordeste_small_1y_1ppd_last/kmedoids/k8_seed1_dtw/
+            plots/nordeste_small_1y_1ppd_last/Kmedoids_k8_seed1/dtw
         '''
 
-        directory_str = 'plots/{}/kmedoids/k{}_seed{}_{}'
+        directory_str = 'plots/{!r}/{!r}/{!r}'
         return directory_str.format(self.region_metadata,
-                                    self.kmedoids_metadata.k,
-                                    self.kmedoids_metadata.random_seed,
-                                    self.kmedoids_metadata.distance_measure)
+                                    self.clustering_metadata,
+                                    self.distance_measure)
 
     def get_plot_filename(self, prediction_region):
         '''
         Returns a string representing the filename for the plot.
         Ex:
-            csv/nordeste_small_1y_1ppd_last/kmedoids/k8_seed1_dtw/
-            region_1_4_2_4.pdf
+            csv/nordeste_small_1y_1ppd_last/Kmedoids_k8_seed1/dtw/region_1_4_2_4.pdf
         '''
         solver_plot_dir = self.get_plot_directory_structure()
         plot_filename = 'region_{}-{}-{}-{}.pdf'.format(prediction_region.x1,
@@ -344,10 +339,11 @@ class KmedoidsAutoARIMASolver(log_util.LoggerMixin):
         See KmedoidsAutoARIMASolverPickler for details.
         '''
         # delegate to the pickler
-        pickler = KmedoidsAutoARIMASolverPickler(self.region_metadata,
-                                                 self.kmedoids_metadata,
-                                                 self.auto_arima_params,
-                                                 self.error_type)
+        pickler = AutoARIMASolverPickler(region_metadata=self.region_metadata,
+                                         clustering_metadata=self.clustering_metadata,
+                                         distance_measure=self.distance_measure,
+                                         auto_arima_params=self.auto_arima_params,
+                                         error_type=self.error_type)
         pickler.save_solver(self)
 
     def __str__(self):
@@ -357,8 +353,7 @@ class KmedoidsAutoARIMASolver(log_util.LoggerMixin):
         lines = [
             'Region: {}'.format(self.region_metadata),
             'Auto ARIMA: {}'.format(self.auto_arima_params),
-            'K-mediods: k={}, seed={}'.format(self.kmedoids_metadata.k,
-                                              self.kmedoids_metadata.random_seed),
+            '{}'.format(self.clustering_metadata),
             'Error function: {}'.format(self.error_type)
         ]
         return '\n'.join(lines)
@@ -374,14 +369,21 @@ class PredictionQueryResult(BaseRegion):
     - The cluster index associated to the cluster for which the point is identified: from partition
     '''
 
-    def __init__(self, forecast_len, forecast_subregion, error_subregion, prediction_region,
-                 partition, spt_region, kmedoids_metadata, error_type):
+    def __init__(self, region_metadata, clustering_metadata, distance_measure,
+                 forecast_len, forecast_subregion, error_subregion, prediction_region,
+                 partition, spt_region, error_type):
         '''
         Constructor, uses a subset of the numpy matrix that backs the forecast region, the subset
         is taken using the prediction region coordinates.
         '''
         super(PredictionQueryResult, self).__init__(forecast_subregion.as_numpy)
 
+        # solver metadata
+        self.region_metadata = region_metadata
+        self.clustering_metadata = clustering_metadata
+        self.distance_measure = distance_measure
+
+        # query-specific
         self.forecast_len = forecast_len
         self.forecast_subregion = forecast_subregion
         self.error_subregion = error_subregion
@@ -390,11 +392,9 @@ class PredictionQueryResult(BaseRegion):
         self.prediction_region = prediction_region
         self.offset_x, self.offset_y = prediction_region.x1, prediction_region.y1
 
-        # note that these are not changed! valid for the entire domain region
+        # valid for the entire domain region
         self.partition = partition
         self.spt_region = spt_region
-        self.region_metadata = spt_region.region_metadata
-        self.kmedoids_metadata = kmedoids_metadata
         self.error_type = error_type
 
     def forecast_at(self, relative_point):
@@ -452,21 +452,19 @@ class PredictionQueryResult(BaseRegion):
         '''
         Returns a string representing the directory structure for storing query results.
         Ex:
-            csv/nordeste_small_1y_1ppd_last/kmedoids/k8_seed1_dtw/
+            csv/nordeste_small_1y_1ppd_last/Kmedoids_k8_seed1/dtw/
         '''
 
-        directory_str = 'csv/{}/kmedoids/k{}_seed{}_{}'
+        directory_str = 'csv/{!r}/{!r}/{!r}'
         return directory_str.format(self.region_metadata,
-                                    self.kmedoids_metadata.k,
-                                    self.kmedoids_metadata.random_seed,
-                                    self.kmedoids_metadata.distance_measure)
+                                    self.clustering_metadata,
+                                    self.distance_measure)
 
     def get_csv_file_path(self):
         '''
         Returns a string representing the CSV file for this query.
         Ex:
-            csv//kmedoids/k8_seed1_dtw/
-            region_1_4_2_4_forecast_8_sMAPE.csv
+            csv/Kmedoids_k8_seed1/dtw/region_1_4_2_4_forecast_8_sMAPE.csv
         '''
         solver_csv_dir = self.get_directory_structure()
         csv_filename = 'region_{}-{}-{}-{}_forecast_{}_{}.csv'.format(self.prediction_region.x1,
@@ -510,44 +508,48 @@ class PredictionQueryResult(BaseRegion):
         self.logger.info('Wrote CSV result at: {}'.format(csv_filename))
 
 
-class KmedoidsAutoARIMASolverPickler(log_util.LoggerMixin):
+class AutoARIMASolverPickler(log_util.LoggerMixin):
     '''
     Handles the persistence of a solver using pickle.
     The metadata is used to create a directory structure that uniquely identies the metadata
     parameters: different parameters should produce a different pickle file.
 
+    Example:
+
     |- pickle
         |- <region>
-            |- kmedoids
-                |-  k<k>_seed<seed>_dtw
-                    |- kmedoids_result.pkl
+            |- Kmedoids_k<k>_seed<seed>
+                |- dtw
+                    |- partition.pkl
                     |- auto_arima_<auto_arima_params>_model_region.pkl
                     |- auto_arima_<auto_arima_params>_errors_<error_type>.pkl
     '''
 
-    def __init__(self, region_metadata, kmedoids_metadata, auto_arima_params, error_type):
+    def __init__(self, region_metadata, clustering_metadata, distance_measure, auto_arima_params,
+                 error_type):
         self.region_metadata = region_metadata
-        self.kmedoids_metadata = kmedoids_metadata
+        self.clustering_metadata = clustering_metadata
+        self.distance_measure = distance_measure
         self.auto_arima_params = auto_arima_params
         self.error_type = error_type
 
-    def save_solver(self, kmedoids_auto_arima_solver):
+    def save_solver(self, auto_arima_solver):
         '''
         persist the solver details as pickle objects.
         '''
-        kmedoids_result = kmedoids_auto_arima_solver.kmedoids_result
-        arima_model_region = kmedoids_auto_arima_solver.arima_model_region
-        generalization_errors = kmedoids_auto_arima_solver.generalization_errors
+        partition = auto_arima_solver.partition
+        arima_model_region = auto_arima_solver.arima_model_region
+        generalization_errors = auto_arima_solver.generalization_errors
         solver_dir = self.get_directory_structure()
 
         # create the directory
         fs_util.mkdir(solver_dir)
 
-        # save the kmedoids result
-        kmedoids_result_path = self.kmedoids_result_pickle_path()
-        with open(kmedoids_result_path, 'wb') as pickle_file:
-            pickle.dump(kmedoids_result, pickle_file)
-            self.logger.debug('Saved kmedoids_result at {}'.format(kmedoids_result_path))
+        # save the partition
+        partition_path = self.partition_pickle_path()
+        with open(partition_path, 'wb') as pickle_file:
+            pickle.dump(partition, pickle_file)
+            self.logger.debug('Saved partition at {}'.format(partition_path))
 
         # save the arima model region
         arima_model_path = self.arima_model_pickle_path()
@@ -569,11 +571,11 @@ class KmedoidsAutoARIMASolverPickler(log_util.LoggerMixin):
         Notice that this operation requires the metadata.
         '''
 
-        # load the kmedoids result
-        kmedoids_result_path = self.kmedoids_result_pickle_path()
-        self.logger.debug('Attempting to load kmedoids result at {}'.format(kmedoids_result_path))
-        with open(kmedoids_result_path, 'rb') as pickle_file:
-            kmedoids_result = pickle.load(pickle_file)
+        # load the cluster partition
+        partition_path = self.partition_pickle_path()
+        self.logger.debug('Attempting to load cluster partition at {}'.format(partition_path))
+        with open(partition_path, 'rb') as pickle_file:
+            partition = pickle.load(pickle_file)
 
         # load the arima model region
         arima_model_path = self.arima_model_pickle_path()
@@ -588,31 +590,33 @@ class KmedoidsAutoARIMASolverPickler(log_util.LoggerMixin):
             generalization_errors = pickle.load(pickle_file)
 
         # recreate the solver
-        log_msg = 'Loaded solver: {}, k={}, seed={}, {}, {}'
+        log_msg = 'Loaded solver: {}, {}, {}, {}'
         self.logger.info(log_msg.format(self.region_metadata,
-                                        kmedoids_result.k, kmedoids_result.random_seed,
+                                        self.clustering_metadata,
                                         self.auto_arima_params, self.error_type))
 
-        return KmedoidsAutoARIMASolver(region_metadata=self.region_metadata,
-                                       kmedoids_metadata=self.kmedoids_metadata,
-                                       auto_arima_params=self.auto_arima_params,
-                                       error_type=self.error_type,
-                                       kmedoids_result=kmedoids_result,
-                                       arima_model_region=arima_model_region,
-                                       generalization_errors=generalization_errors)
+        return AutoARIMASolver(region_metadata=self.region_metadata,
+                               clustering_metadata=self.clustering_metadata,
+                               distance_measure=self.distance_measure,
+                               auto_arima_params=self.auto_arima_params,
+                               error_type=self.error_type,
+                               partition=partition,
+                               arima_model_region=arima_model_region,
+                               generalization_errors=generalization_errors)
 
-    def kmedoids_result_pickle_path(self):
+    def partition_pickle_path(self):
         '''
-        Full path to pickle object of the kmedoids result, given the region and kmedoids metadata.
+        Full path to pickle object of the partition, given the region, clustering and distance
+        metadata.
         '''
         solver_dir = self.get_directory_structure()
-        kmedoids_filename = self.kmedoids_result_filename()
-        return os.path.join(solver_dir, kmedoids_filename)
+        partition_filename = self.partition_filename()
+        return os.path.join(solver_dir, partition_filename)
 
     def arima_model_pickle_path(self):
         '''
-        Full path of the pickle object of the arima model region, given by the region, kmedoids
-        and auto arima metadata.
+        Full path of the pickle object of the arima model region, given by the region, clustering,
+        distance and auto arima metadata.
         '''
         solver_dir = self.get_directory_structure()
         arima_model_filename = self.auto_arima_model_filename()
@@ -620,8 +624,8 @@ class KmedoidsAutoARIMASolverPickler(log_util.LoggerMixin):
 
     def generalization_errors_pickle_path(self):
         '''
-        Full path of the pickle object of the arima model region, given by the region, kmedoids
-        and auto arima metadata, and the error type.
+        Full path of the pickle object of the arima model region, given by the region, clustering,
+        distance and auto arima metadata, also the error type.
         '''
         solver_dir = self.get_directory_structure()
         generalization_errors_filename = self.generalization_errors_filename()
@@ -631,17 +635,16 @@ class KmedoidsAutoARIMASolverPickler(log_util.LoggerMixin):
         '''
         Returns a string representing the directory structure for storing solver data.
         Ex:
-            pickle/nordeste_small_1y_1ppd_last/kmedoids/k8_seed1_dtw/
+            pickle/nordeste_small_1y_1ppd_last/Kmedoids_k8_seed1/dtw
         '''
 
-        directory_str = 'pickle/{}/kmedoids/k{}_seed{}_{}'
+        directory_str = 'pickle/{!r}/{!r}/{!r}'
         return directory_str.format(self.region_metadata,
-                                    self.kmedoids_metadata.k,
-                                    self.kmedoids_metadata.random_seed,
-                                    self.kmedoids_metadata.distance_measure)
+                                    self.clustering_metadata,
+                                    self.distance_measure)
 
-    def kmedoids_result_filename(self):
-        return 'kmedoids_result.pkl'
+    def partition_filename(self):
+        return 'partition.pkl'
 
     def auto_arima_model_filename(self):
         '''

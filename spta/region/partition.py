@@ -143,7 +143,7 @@ class PartitionRegion(BaseRegion):
 
         return SpatioTemporalCluster(spt_region, self, cluster_index, spt_region.region_metadata)
 
-    def create_all_spt_clusters(self, spt_region, centroid_indices=None):
+    def create_all_spt_clusters(self, spt_region, centroid_indices=None, medoids=None):
         '''
         Returns an array of spatio-temporal clusters, calls create_spt_cluster to create each
         one, looping over the indices [0, k-1].
@@ -151,7 +151,16 @@ class PartitionRegion(BaseRegion):
         centroid_indices:
             a 1-d array of indices (not points!) indicating the centroids of each cluster.
             If present, the i-th centroid will be saved as a centroid of the new instance.
+            Cannot be used with medoids.
+
+        medoids
+            an array of medoid point instances to use as centroids. Cannot be used with
+            centroid_indices
         '''
+
+        # only one
+        assert centroid_indices is None or medoids is None
+
         clusters = []
         for i in range(0, self.k):
             cluster_i = self.create_spt_cluster(spt_region, i)
@@ -163,6 +172,10 @@ class PartitionRegion(BaseRegion):
                 cj = centroid_index % self.y_len
                 centroid_i = Point(ci, cj)
                 cluster_i.centroid = centroid_i
+
+            # medoids available?
+            if medoids:
+                cluster_i.centroid = medoids[i]
 
             clusters.append(cluster_i)
 

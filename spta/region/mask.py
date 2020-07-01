@@ -1,6 +1,7 @@
 '''
-TODO: Reimplement functionality in MaskRegionFuzzy as PartitionRegionFuzzy, then delete this
-module!
+TODO Refactor uses of MaskRegionCrisp in codebase
+TODO Reimplement functionality in MaskRegionFuzzy as PartitionRegionFuzzy
+TODO Delete this module
 '''
 
 import numpy as np

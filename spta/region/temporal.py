@@ -125,7 +125,7 @@ class SpatioTemporalRegionMetadata(object):
         '''
         return '{}/{}.pickle'.format(self.pickle_dir, self)
 
-    def __str__(self):
+    def __repr__(self):
         '''
         Ex sp_small_1y_4ppd_norm'
         '''
@@ -139,6 +139,8 @@ class SpatioTemporalRegionMetadata(object):
 
         return '{}_{}_{}ppd{}{}'.format(self.name, self.time_str, self.ppd, last_str, norm_str)
 
+    def __str__(self):
+        return repr(self)
 
 class SpatioTemporalRegion(DomainRegion):
     '''

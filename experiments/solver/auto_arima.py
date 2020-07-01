@@ -1,17 +1,24 @@
 '''
-Execute this program with --train to partition a spatio-temporal region using k-medoids, and then
-train auto ARIMA models at the medoids of the resulting clusters. This will create a solver for
-forecast queries that can be used with this same command (without --train).
+Execute this program with the train subcommand to partition a spatio-temporal region using a
+clustering algorithm (e.g. k-medoids), and then train auto ARIMA models at the medoids of the
+resulting clusters.
+
+This will create a solver for forecast queries that can be used with this same command and the
+predict subcommand.
 '''
 
 import argparse
 import numpy as np
 import sys
 
+from spta.clustering.kmedoids import KmedoidsClusteringMetadata
+from spta.clustering.regular import RegularClusteringMetadata
+
+from spta.distance.dtw import DistanceByDTW
+
 from spta.region import Region
 from spta.region.error import error_functions
-from spta.kmedoids import kmedoids
-from spta.solver import kmedoids_auto_arima
+from spta.solver.auto_arima import AutoARIMATrainer, AutoARIMASolverPickler
 from spta.util import log as log_util
 
 from experiments.metadata.arima import predefined_auto_arima
@@ -28,7 +35,7 @@ def processRequest():
     # the main parser
     desc = '''Solver: given a partitioned spatio-temporal region and trained auto
 ARIMA models at the medoids of the resulting clusters.
-Assumes DTW and default k-medoids. Use train to train the solver'''
+Assumes DTW. Use train sub-command to train the solver, and predict to answer prediction queries'''
 
     usage = '%(prog)s [-h] {train | predict} ...'
     main_parser = argparse.ArgumentParser(prog='auto-arima-solver', description=desc,
@@ -75,8 +82,16 @@ def configure_parent(parent_parser):
     parent_parser.add_argument('auto_arima', help='ID of auto arima clustering experiment',
                                choices=auto_arima_options)
 
-    parent_parser.add_argument('-k', help='Number of clusters for k-medoids', required=True)
-    parent_parser.add_argument('-seed', help='Random seed for k-medoids', required=True)
+    # clustering algorithm
+    clustering_options = ('kmedoids', 'regular')
+    parent_parser.add_argument('clustering', help='Name of clustering algorithm',
+                               choices=clustering_options)
+    parent_parser.add_argument('-k', help='Number of clusters', required=True,
+                               type=int)
+
+    # seed of clustering algorithm is optional and defaults to 1
+    parent_parser.add_argument('--seed', help='Random seed for k-medoids (default: %(default)s)',
+                               default=1, type=int)
 
     # error type is optional and defaults to sMAPE
     error_options = error_functions().keys()
@@ -118,12 +133,14 @@ def train_request(args):
     logger.debug(args)
 
     # parse to get metadata
-    region_metadata, kmedoids_metadata, auto_arima_params = metadata_from_args(args)
+    region_metadata, clustering_metadata, auto_arima_params = metadata_from_args(args)
 
     # get a trainer, and train to get a solver
     # default values for test/training...
-    trainer = kmedoids_auto_arima.KmedoidsAutoARIMATrainer(region_metadata, kmedoids_metadata,
-                                                           auto_arima_params)
+    trainer = AutoARIMATrainer(region_metadata=region_metadata,
+                               clustering_metadata=clustering_metadata,
+                               distance_measure=DistanceByDTW(),
+                               auto_arima_params=auto_arima_params)
     solver = trainer.train(args.error)
 
     # persist this solver for later use
@@ -135,17 +152,19 @@ def predict_request(args):
     logger = log_util.setup_log_argparse(args)
     logger.debug(args)
 
-    # parse to get metadata
-    region_metadata, kmedoids_metadata, auto_arima_params = metadata_from_args(args)
+    # parse to get metadata, assuming DTW
+    region_metadata, clustering_metadata, auto_arima_params = metadata_from_args(args)
+    distance_measure = DistanceByDTW()
 
     # get region
     prediction_region = Region(int(args.x1), int(args.x2), int(args.y1), int(args.y2))
 
     # load solver from persistence
-    pickler = kmedoids_auto_arima.KmedoidsAutoARIMASolverPickler(region_metadata,
-                                                                 kmedoids_metadata,
-                                                                 auto_arima_params,
-                                                                 args.error)
+    pickler = AutoARIMASolverPickler(region_metadata=region_metadata,
+                                     clustering_metadata=clustering_metadata,
+                                     distance_measure=distance_measure,
+                                     auto_arima_params=auto_arima_params,
+                                     error_type=args.error)
     solver = pickler.load_solver()
     print('')
     print('*********************************')
@@ -181,14 +200,18 @@ def metadata_from_args(args):
     # get the region metadata
     region_metadata = predefined_regions()[args.region]
 
-    # create kmedoids metadata, assuming default values
-    k, random_seed = int(args.k), int(args.seed)
-    kmedoids_metadata = kmedoids.kmedoids_default_metadata(k, random_seed=random_seed)
+    # create clustering metadata
+    if args.clustering == 'kmedoids':
+        # assuming other default values for k-medoids
+        clustering_metadata = KmedoidsClusteringMetadata(args.k, random_seed=args.seed)
+
+    if args.clustering == 'regular':
+        clustering_metadata = RegularClusteringMetadata(args.k)
 
     # get the auto arima params
     auto_arima_params = predefined_auto_arima()[args.auto_arima]
 
-    return region_metadata, kmedoids_metadata, auto_arima_params
+    return region_metadata, clustering_metadata, auto_arima_params
 
 
 if __name__ == '__main__':
