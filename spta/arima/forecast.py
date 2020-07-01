@@ -33,10 +33,13 @@ class ArimaModelRegion(ForecastModelRegion):
         When using statsmodels.tsa.arima_model.ARIMA:
             return model_at_point.forecast(forecast_len)[0]
 
+        When using statsmodels.tsa.arima.model.ARIMA:
+            return model_at_point.forecast(forecast_len)
+
         When using pmdarima.arima.ARIMA:
             return model_at_point.predict(forecast_len)
         '''
-        return model_at_point.forecast(forecast_len)[0]
+        return model_at_point.forecast(forecast_len)
 
 
 class ArimaForecasting(log_util.LoggerMixin):

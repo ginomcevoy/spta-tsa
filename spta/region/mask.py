@@ -1,3 +1,8 @@
+'''
+TODO: Reimplement functionality in MaskRegionFuzzy as PartitionRegionFuzzy, then delete this
+module!
+'''
+
 import numpy as np
 
 from spta.util import arrays as arrays_util
@@ -75,6 +80,9 @@ class MaskRegionCrisp(MaskRegion):
 
     All clusters created by a clustering algorithm can get a a MaskRegion with the same underlying
     dataset (membership matrix), but with indices ranging from 0 to k-1.
+
+    Since the internal numpy representation describes the memberships for all clusters in the
+    partition, this class also supports the method find_memberships(points).
     '''
 
     def __init__(self, numpy_dataset, cluster_index):
@@ -96,6 +104,18 @@ class MaskRegionCrisp(MaskRegion):
             return False
 
         return self.numpy_dataset[point.x, point.y] == self.cluster_index
+
+    def find_memberships(self, points):
+        '''
+        Given an array of points, returns an array of cluster indices that indicate the membership
+        of each point to a cluster in the partition. Note that this information goes beyond the
+        cluster attributed to this mask...
+        '''
+        return [
+            self.numpy_dataset[point.x, point.y]
+            for point
+            in points
+        ]
 
     def clone(self):
         return MaskRegionCrisp(np.copy(self.numpy_dataset), self.cluster_index)

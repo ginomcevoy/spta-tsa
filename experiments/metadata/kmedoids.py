@@ -17,7 +17,7 @@ def kmedoids_suites():
 
     # add new here
     return {
-        'quick': kmedoids_suite_metadata(k_values=range(3, 5), seed_values=range(0, 1)),
+        'quick': kmedoids_suite_metadata(k_values=range(2, 4), seed_values=range(0, 1)),
         'large': kmedoids_suite_metadata(k_values=range(12, 15), seed_values=range(0, 1)),
         'even': kmedoids_suite_metadata(k_values=[8, 10, 12, 14, 16, 18, 20, 22, 24, 26],
                                         seed_values=range(0, 3)),

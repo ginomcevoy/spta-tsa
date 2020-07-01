@@ -102,6 +102,12 @@ class DistanceByDTW(DistanceBetweenSeries):
 
         return distance_matrix
 
+    def __str__(self):
+        '''
+        Useful to identify this distance_measure
+        '''
+        return 'dtw'
+
 
 class DistanceBySpatialDTW(DistanceByDTW):
     '''

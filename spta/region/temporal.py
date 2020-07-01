@@ -7,7 +7,6 @@ from spta.util import fs as fs_util
 
 from . import Point, Region
 from .spatial import SpatialDecorator, SpatialCluster, DomainRegion
-from .mask import MaskRegionCrisp, MaskRegionFuzzy
 
 # SMALL_REGION = Region(55, 58, 50, 54)
 # SMALL_REGION = Region(0, 1, 0, 1)
@@ -428,58 +427,63 @@ class SpatioTemporalDecorator(SpatialDecorator, SpatioTemporalRegion):
 class SpatioTemporalCluster(SpatialCluster, SpatioTemporalDecorator):
     '''
     A subset of a spatio-temporal region that represents a cluster, created by a clustering
-    algorithm. A spatio-temporal region may be split into two or more clusters, so that each
-    is represented by a mask region and a label.
+    algorithm. A spatio-temporal region may be split into two or more clusters of a partition,
+    so that each by a cluster index.
 
-    The cluster behaves like a full spatio-temporal region when it comes to iteration and
+    The cluster behaves similar to a full spatio-temporal region when it comes to iteration and
     and some properties. See SpatialCluster for more information.
     '''
 
-    def __init__(self, decorated_region, mask_region, region_metadata=None):
+    def __init__(self, decorated_region, partition, cluster_index, region_metadata=None):
         '''
         Creates a new instance.
 
         decorated_region
             a spatio-temporal region that is being decorated with cluster behavior
 
-        mask_region
-            indicates membership to a cluster. must have a 'label' property that identifies
-            the cluster, and a 'cluster_len' property that gives the number of points.
+        partition
+            obtained with a clustering algorithm, it is capable of indicating which points
+            belong to a cluster. It knows the number of clusters (k)
+
+        cluster_index
+            identifies this cluster in the partition, must be an integer in [0, k-1].
 
         region_metadata
             allowed for now... not yet useful
         '''
         # beware the diamond problem!!
         # this should be solved in parents...
-        super(SpatioTemporalCluster, self).__init__(decorated_region, mask_region,
+        super(SpatioTemporalCluster, self).__init__(decorated_region, partition, cluster_index,
                                                     region_metadata=region_metadata)
 
     def interval_subset(self, ti):
         '''
         ti: TimeInterval
-        Will create a new spatio-temporal cluster, copying current mask
+        Will create a new spatio-temporal cluster with same partition and index
         '''
         self.logger.debug('{} interval_subset'.format(self))
         decorated_interval_subset = self.decorated_region.interval_subset(ti)
 
-        # we need to clone the mask!
+        # we need to clone the partition!
         # if we don't, training and observation will have the same iterators when forecasting
-        return SpatioTemporalCluster(decorated_interval_subset, self.mask_region.clone())
+        # TODO is this still true? Probably not...
+        return SpatioTemporalCluster(decorated_interval_subset, self.partition.clone(),
+                                     self.cluster_index)
 
     def series_at(self, point):
         '''
-        Returns the time series at specified point, the point must belong to cluster mask
+        Returns the time series at specified point, the point must belong to cluster
         '''
         # sanity check
         if point is None:
-            series_len, _, _ = self.numpy_dataset.shape
+            series_len, _, _ = self.numpy_dataset.shape   # TODO self.series_len
             np.repeat(np.nan, repeats=series_len)
 
         # self.logger.debug('SpatioTemporalCluster {} series_at {}'.format(self.label, point))
-        if self.mask_region.is_member(point):
+        if self.partition.is_member(point, self.cluster_index):
             return self.decorated_region.series_at(point)
         else:
-            raise ValueError('Point not in cluster mask: {}'.format(point))
+            raise ValueError('Point not in cluster: {}'.format(point))
 
     def repeat_series(self, series):
         '''
@@ -487,25 +491,23 @@ class SpatioTemporalCluster(SpatialCluster, SpatioTemporalDecorator):
         same as the provided series.
 
         The series is repeated over all points for simplicity, but calling series_at on points
-        outside the mask should remain forbidden.
+        outside the cluster should remain forbidden.
 
         NOTE: no need to reimplement repeat_point, it should correctly use this method
         polymorphically to create a SpatioTemporalCluster.
         '''
         self.logger.debug('{} repeat_series'.format(self))
         repeated_region = self.decorated_region.repeat_series(series)
-        return SpatioTemporalCluster(repeated_region, self.mask_region, self.region_metadata)
+        return SpatioTemporalCluster(repeated_region, self.partition, self.cluster_index,
+                                     self.region_metadata)
 
     @property
     def all_point_indices(self):
         '''
         Returns an array containing all indices in this region.
-        For clusters, need to iterate each point using the mask iterator.
-        For improved performance in crisp regions, ask the mask for the cluster length.
+        TODO: ask the partition for this, should be faster
         '''
-        assert hasattr(self.mask_region, 'cluster_len')
-
-        all_point_indices = np.zeros(self.mask_region.cluster_len, dtype=np.uint32)
+        all_point_indices = np.zeros(self.cluster_len, dtype=np.uint32)
         for i, (point, _) in enumerate(self):
             all_point_indices[i] = point.x * self.y_len + point.y
 
@@ -513,14 +515,31 @@ class SpatioTemporalCluster(SpatialCluster, SpatioTemporalDecorator):
 
     def __next__(self):
         '''
-        Used for iterating over points in the cluster. Only points in the mask are iterated!
+        Used for iterating *only* over points in the cluster. Points not in the cluster are skipped
+        by this iterator!
         The iterator returns the tuple (Point, series) for each point.
         '''
-        # use the mask region to iterate over points
-        point_in_mask = self.mask_region.__next__()
+        while True:
 
-        # return next point and series in the cluster
-        return (point_in_mask, self.series_at(point_in_mask))
+            # use the base iterator to get next candidate point in region
+            # when the base iterator stops, we also stop
+            try:
+                candidate_point = DomainRegion.__next__(self)
+            except StopIteration:
+                # self.logger.debug('Base region iteration stopped')
+                raise
+
+            # self.logger.debug('{}: candidate = {}'.format(self, candidate_point))
+
+            if self.partition.is_member(candidate_point, self.cluster_index):
+                # found a member of the cluster
+                next_point_in_cluster = candidate_point
+                break
+
+            # the point was not in the cluster, try with next candidate
+
+        next_value = self.series_at(next_point_in_cluster)
+        return (next_point_in_cluster, next_value)
 
     def __str__(self):
         '''
@@ -533,99 +552,40 @@ class SpatioTemporalCluster(SpatialCluster, SpatioTemporalDecorator):
             return 'SpatioTemporalCluster {}'.format(self.shape)
 
     @classmethod
-    def from_crisp_clustering(cls, spt_region, members, cluster_index, centroids=None):
-        '''
-        Given a clustering result and a cluster index, create a new instance of spatio-temporal
-        cluster. A clustering algorithm with parameter k should create k clusters, with cluster
-        indices ranging from 0 to k-1.
-
-        The members and cluster index are used to select one of the clusters and to create the
-        mask_region used as input of a the cluster instance.
-
-        spt_region
-            the spatio-temporal region that was clustered
-
-        members
-            a 1-d array (not region!) of labels indicating the membership of a point to a
-            cluster, given the index position of the point.
-
-        cluster index
-            a value i from [0, k-1] that refers to the i-th cluster of a clustering result.
-
-        centroids (optional)
-            a 1-d array of indices (not points!) indicating the centroids of each cluster.
-            If present, the i-th centroid will be saved as a centroid of the new instance.
-        '''
-        (_, x_len, y_len) = spt_region.shape
-
-        # sanity checks
-        assert members.ndim == 1
-        assert members.shape[0] == x_len * y_len
-
-        k = np.max(members) + 1
-        assert isinstance(cluster_index, int)
-        assert cluster_index >= 0 and cluster_index < k
-
-        # build mask_region from members and cluster_index
-        mask_region = MaskRegionCrisp.from_membership_array(members, cluster_index, x_len, y_len)
-        mask_region.name = '{}->MaskCrisp{}'.format(spt_region, cluster_index)
-
-        # build one cluster for this cluster_index
-        cluster = SpatioTemporalCluster(spt_region, mask_region, None)
-
-        # short name for cluster
-        # be nice and pad with zeros if needed
-        padding = int(k / 10) + 1
-        cluster_name_str = 'cluster{{:0{}d}}'.format(padding)
-        cluster.name = cluster_name_str.format(cluster_index)
-
-        # centroid available?
-        if centroids is not None:
-            centroid_index = centroids[cluster_index]
-            i = int(centroid_index / y_len)
-            j = centroid_index % y_len
-            centroid = Point(i, j)
-            cluster.centroid = centroid
-
-            # sanity check
-            assert mask_region.is_member(centroid)
-
-        return cluster
-
-    @classmethod
     def from_fuzzy_clustering(cls, spt_region, uij, cluster_index, threshold, centroids=None):
         '''
         Similar to from_crisp_clustering, but for fuzzy clustering results.
         uij is a 2-d membership array, threshold defines how the cluster can consider point
         membership depending on its fuzzy membership values.
 
-        See MaskRegionFuzzy for more info.
+        TODO should be handled by PartitionRegionFuzzy instead!
         '''
-        (_, x_len, y_len) = spt_region.shape
+        # (_, x_len, y_len) = spt_region.shape
 
-        (N, k) = uij.shape
-        assert N == x_len * y_len
+        # (N, k) = uij.shape
+        # assert N == x_len * y_len
 
-        assert isinstance(cluster_index, int)
-        assert cluster_index >= 0 and cluster_index <= k
+        # assert isinstance(cluster_index, int)
+        # assert cluster_index >= 0 and cluster_index <= k
 
-        # build mask_region from uij, cluster_index and threshold
-        mask_region = MaskRegionFuzzy.from_uij_and_region(uij, x_len, y_len, cluster_index,
-                                                          threshold)
-        mask_region.name = '{}-MaskFuzzy{}'.format(spt_region, cluster_index)
+        # # build mask_region from uij, cluster_index and threshold
+        # mask_region = MaskRegionFuzzy.from_uij_and_region(uij, x_len, y_len, cluster_index,
+        #                                                   threshold)
+        # mask_region.name = '{}-MaskFuzzy{}'.format(spt_region, cluster_index)
 
-        # build one cluster for this cluster_index
-        cluster = SpatioTemporalCluster(spt_region, mask_region, None)
-        cluster.name = '{}-fcluster{}'.format(spt_region, cluster_index)
+        # # build one cluster for this cluster_index
+        # cluster = SpatioTemporalCluster(spt_region, mask_region, None)
+        # cluster.name = '{}-fcluster{}'.format(spt_region, cluster_index)
 
-        # centroid available?
-        if centroids is not None:
-            centroid_index = centroids[cluster_index]
-            i = int(centroid_index / y_len)
-            j = centroid_index % y_len
-            cluster.centroid = Point(i, j)
+        # # centroid available?
+        # if centroids is not None:
+        #     centroid_index = centroids[cluster_index]
+        #     i = int(centroid_index / y_len)
+        #     j = centroid_index % y_len
+        #     cluster.centroid = Point(i, j)
 
-        return cluster
+        # return cluster
+        raise NotImplementedError
 
 
 class SpatioTemporalNormalized(SpatioTemporalDecorator):

@@ -13,7 +13,8 @@ from spta.distance.dtw import DistanceByDTW
 from spta.kmedoids import kmedoids
 
 from spta.region.error import error_functions
-from spta.region.temporal import SpatioTemporalRegion, SpatioTemporalCluster
+from spta.region.partition import PartitionRegionCrisp
+from spta.region.temporal import SpatioTemporalRegion
 
 from spta.util import fs as fs_util
 from spta.util import log as log_util
@@ -123,13 +124,11 @@ def analyze_kmedoids_partition(spt_region, kmedoids_result, experiment, distance
     k, random_seed = kmedoids_result.k, kmedoids_result.random_seed
     auto_arima_params = predefined_auto_arima()[experiment.auto_arima_id]
 
-    # build the spatio-temporal clusters
-    clusters = []
-    for i in range(0, k):
-        cluster_i = SpatioTemporalCluster.from_crisp_clustering(spt_region, kmedoids_result.labels,
-                                                                cluster_index=i,
-                                                                centroids=kmedoids_result.medoids)
-        clusters.append(cluster_i)
+    # build the spatio-temporal clusters and pass the medoids as centroids
+    _, x_len, y_len = spt_region.shape
+    partition = PartitionRegionCrisp.from_membership_array(kmedoids_result.labels, x_len, y_len)
+    clusters = partition.create_all_spt_clusters(spt_region,
+                                                 centroid_indices=kmedoids_result.medoids)
 
     # prepare the CSV output
     # csv/<k>/auto_arima_<auto_arima_id>_<region>_kmedoids_<k>_<seed>.csv

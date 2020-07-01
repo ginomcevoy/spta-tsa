@@ -1,9 +1,40 @@
 import numpy as np
 
 
+def crisp_membership_stub():
+    '''
+    A 2-d array indicating membership to a cluster, from a crisp clustering algorithm with k=3.
+    Assumes a 4x5 region.
+    '''
+    mask_np = np.empty((4, 5))
+
+    mask_np[0, 0] = 0
+    mask_np[0, 1] = 1
+    mask_np[0, 2] = 1
+    mask_np[0, 3] = 0
+    mask_np[0, 4] = 0
+    mask_np[1, 0] = 1
+    mask_np[1, 1] = 1
+    mask_np[1, 2] = 2
+    mask_np[1, 3] = 2
+    mask_np[1, 4] = 2
+    mask_np[2, 0] = 0
+    mask_np[2, 1] = 2
+    mask_np[2, 2] = 1
+    mask_np[2, 3] = 1
+    mask_np[2, 4] = 2
+    mask_np[3, 0] = 0
+    mask_np[3, 1] = 0
+    mask_np[3, 2] = 1
+    mask_np[3, 3] = 1
+    mask_np[3, 4] = 2
+
+    return mask_np
+
+
 def fuzzy_membership_stub():
     '''
-    A 3-d array indicating membership to a cluster, from a fuzzy clustering algorighm with k=2.
+    A 3-d array indicating membership to a cluster, from a fuzzy clustering algorithm with k=2.
     It is a subset of the output of k-medoids fuzzy for the nordeste_small_1y_1ppd dataset,
     with k=2, seed=0. The subset has 20 points and has the medoids at indices 0 and 19.
     '''

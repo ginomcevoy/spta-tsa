@@ -2,6 +2,7 @@ import numpy as np
 import unittest
 
 from spta.region import Point
+from spta.region.partition import PartitionRegionCrisp
 from spta.region.spatial import SpatialCluster
 from spta.region.temporal import SpatioTemporalCluster
 from spta.tests.stub import stub_region
@@ -16,14 +17,15 @@ class TestFunctionRegionOnSpatioTemporalCluster(unittest.TestCase):
 
         # given a clustering of a sptr
         spt_region = stub_region.spatio_temporal_region_stub()
+        _, x_len, y_len = spt_region.shape
         members = np.array([2, 0, 1, 2, 0, 2])
 
         # given the function that calculates the mean of a series in each point
         mean_function_region = stub_region.stub_mean_function_scalar()
 
         # when getting cluster with cluster index 2 and applying the function to it
-        cluster_2 = SpatioTemporalCluster.from_crisp_clustering(spt_region, members,
-                                                                cluster_index=2)
+        partition = PartitionRegionCrisp.from_membership_array(members, x_len, y_len)
+        cluster_2 = partition.create_spt_cluster(spt_region, cluster_index=2)
         mean_cluster_2 = mean_function_region.apply_to(cluster_2)
 
         # then result is a SpatialCluster
@@ -56,14 +58,15 @@ class TestFunctionRegionOnSpatioTemporalCluster(unittest.TestCase):
 
         # given a clustering of a sptr
         spt_region = stub_region.spatio_temporal_region_stub()
+        _, x_len, y_len = spt_region.shape
         members = np.array([2, 0, 1, 2, 0, 2])
 
         # given the function that reverses each series
         reverse_function_region = stub_region.stub_reverse_function_series()
 
         # when getting cluster with cluster index 2 and applying the function to it
-        cluster_2 = SpatioTemporalCluster.from_crisp_clustering(spt_region, members,
-                                                                cluster_index=2)
+        partition = PartitionRegionCrisp.from_membership_array(members, x_len, y_len)
+        cluster_2 = partition.create_spt_cluster(spt_region, cluster_index=2)
         reversed_cluster = reverse_function_region.apply_to(cluster_2, output_len=3)
 
         # then result is a SpatialTemporalCluster

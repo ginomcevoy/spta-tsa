@@ -11,8 +11,9 @@ from spta.arima import analysis as arima_analysis
 from spta.distance.dtw import DistanceByDTW
 from spta.kmedoids import kmedoids
 
+from spta.region.partition import PartitionRegionCrisp
 from spta.region.error import error_functions
-from spta.region.temporal import SpatioTemporalRegion, SpatioTemporalCluster
+from spta.region.temporal import SpatioTemporalRegion
 
 from spta.util import fs as fs_util
 from spta.util import log as log_util
@@ -84,6 +85,7 @@ def do_arima_forecast_cluster(args):
     # get the region from metadata
     spt_region_metadata = predefined_regions()[args.region]
     spt_region = SpatioTemporalRegion.from_metadata(spt_region_metadata)
+    _, x_len, y_len = spt_region.shape
 
     # get experiment parameters including ARIMA suite
     exp_params = arima_clustering_experiments()[args.arima_clustering]
@@ -118,13 +120,10 @@ def do_arima_forecast_cluster(args):
     # KmedoidsResult(k, random_seed, medoids, labels, costs, tot_cost, dist_mat)
     kmedoids_result = kmedoids.run_kmedoids_from_metadata(spt_region.as_2d, kmedoids_metadata)
 
-    # build the spatio-temporal clusters
-    clusters = []
-    for i in range(0, k):
-        cluster_i = SpatioTemporalCluster.from_crisp_clustering(spt_region, kmedoids_result.labels,
-                                                                cluster_index=i,
-                                                                centroids=kmedoids_result.medoids)
-        clusters.append(cluster_i)
+    # build the spatio-temporal clusters and pass the medoids as centroids
+    partition = PartitionRegionCrisp.from_membership_array(kmedoids_result.labels, x_len, y_len)
+    clusters = partition.create_all_spt_clusters(spt_region,
+                                                 centroid_indices=kmedoids_result.medoids)
 
     # ensure output dir
     output_dir = 'csv'

@@ -2,7 +2,21 @@ from collections import namedtuple
 
 ArimaPDQ = namedtuple('ArimaPDQ', 'p d q')
 
-AutoArimaParams = namedtuple('AutoArimaParams', 'start_p start_q max_p max_q d stepwise')
+
+class AutoArimaParams(namedtuple('AutoArimaParams', 'start_p start_q max_p max_q d stepwise')):
+    '''
+    Hyper parameters for an auto ARIMA model
+    '''
+    __slots__ = ()
+
+    def __str__(self):
+        '''
+        Override the string representation of AutoArimaParams
+        # https://stackoverflow.com/a/7914212/3175179
+        '''
+        as_str = 'start_p{}-start_q{}-max_p{}-max_q{}-d{}-stepwise{}'
+        return as_str.format(self.start_p, self.start_q, self.max_p, self.max_q, self.d,
+                             self.stepwise)
 
 
 class ArimaSuiteParams(object):

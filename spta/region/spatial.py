@@ -3,6 +3,8 @@ import numpy as np
 from . import base
 from . import Region, reshape_1d_to_2d
 
+from spta.util import arrays as arrays_util
+
 
 class DomainRegion(base.BaseRegion):
     '''
@@ -157,6 +159,24 @@ class SpatialRegion(DomainRegion):
 
         return (max_point, max_value)
 
+    def repeat_value(self, value):
+        '''
+        Creates a new spatial region with this same shape, where all the values are
+        the same provided values.
+        '''
+        repeated_value_np = arrays_util.copy_value_as_matrix_elements(value, self.x_len,
+                                                                      self.y_len)
+        return SpatialRegion(repeated_value_np)
+
+    def repeat_point(self, point):
+        '''
+        Creates a new spatial region with this same shape, where all the values are the
+        same value as in the provided point.
+        '''
+        # reuse repeat_value
+        value_at_point = self.value_at(point)
+        return self.repeat_value(value_at_point)
+
     @classmethod
     def create_from_1d(cls, list_1d, x, y):
         '''
@@ -231,30 +251,33 @@ class SpatialCluster(SpatialDecorator):
     and some properties. Specifically:
 
     - Each cluster retains the shape of the entire region.
-    - The iteration of points is made only over the points indicated by the mask (points
-        belonging to the cluster).
+    - The iteration of points is made only over the points indicated by the partition and index
+        (points belonging to the cluster).
     - A FunctionRegion can be applied to the cluster, only points in the mask will be considered
         (it uses the iteration above).
     - Region subsets are not allowed (TODO?), calling region_subset raises NotImplementedError
-    - Attempt to use value_at at a point outside of the mask will raise ValueError.
+    - Attempt to use value_at at a point that is not a member will raise ValueError.
 
     Implemented by decorating an existing SpatialRegion with cluster data.
-    See MaskRegion for more information.
+    See PartitionRegion for more information.
     '''
-    def __init__(self, decorated_region, mask_region, **kwargs):
+    def __init__(self, decorated_region, partition, cluster_index, **kwargs):
         '''
         decorated_region
             a spatial region that is being decorated with cluster behavior
 
-        mask_region
-            indicates membership to a cluster. must have a cluster index that identifies
-            the cluster, and a 'cluster_len' property that gives the number of points.
+        partition
+            obtained with a clustering algorithm, it is capable of indicating which points
+            belong to a cluster. It knows the number of clusters (k)
+
+        cluster_index
+            identifies this cluster in the partition, must be an integer in [0, k-1].
         '''
         super(SpatialCluster, self).__init__(decorated_region, **kwargs)
 
         # cluster-specific
-        self.mask_region = mask_region
-        self.cluster_index = self.mask_region.cluster_index
+        self.partition = partition
+        self.cluster_index = cluster_index
 
     @property
     def cluster_len(self):
@@ -262,7 +285,7 @@ class SpatialCluster(SpatialDecorator):
         The size of the cluster (# of points).
         '''
         # ask the mask for the size
-        return self.mask_region.cluster_len
+        return self.partition.cluster_len(self.cluster_index)
 
     def region_subset(self, region):
         error_msg = 'region_subset not allowed for {}!'
@@ -273,30 +296,63 @@ class SpatialCluster(SpatialDecorator):
         if point is None:
             return np.nan
 
-        if self.mask_region.is_member(point):
+        if self.partition.is_member(point, self.cluster_index):
             return self.decorated_region.value_at(point)
         else:
             raise ValueError('Point not in cluster mask: {}'.format(point))
 
+    def repeat_value(self, value):
+        '''
+        Creates a new spatial cluster with this same shape, where all the values are the
+        same as the provided value.
+
+        The value is repeated over all points for simplicity, but calling value_at on points
+        outside the cluster should remain forbidden.
+
+        NOTE: no need to reimplement repeat_point, it should correctly use this method
+        polymorphically to create a SpatialCluster.
+        '''
+        repeated_region = self.decorated_region.repeat_value(value)
+        return SpatialCluster(repeated_region, self.partition, self.cluster_index)
+
     def empty_region_2d(self):
         '''
-        Returns an empty SpatialCluster with the same shape as this region, and same mask.
+        Returns an empty SpatialCluster with the same shape and same clustering info.
         '''
         empty_spatial_region = self.decorated_region.empty_region_2d()
         return SpatialCluster(decorated_region=empty_spatial_region,
-                              mask_region=self.mask_region)
+                              partition=self.partition,
+                              cluster_index=self.cluster_index)
 
     def __next__(self):
         '''
-        Used for iterating over points in the cluster. Only points in the mask are iterated!
+        Used for iterating *only* over points in the cluster. Points not in the cluster are skipped
+        by this iterator!
         The iterator returns the tuple (Point, value) for each point.
         '''
+        while True:
 
-        # use the mask region to iterate over points
-        point_in_mask = self.mask_region.__next__()
+            # use the base iterator to get next candidate point in region
+            # using DomainRegion instead of BaseRegion to avoid an import...
+            try:
+                candidate_point = DomainRegion.__next__(self)
+            except StopIteration:
+                # self.logger.debug('Base region iteration stopped')
 
-        # return next point and value in the cluster
-        return (point_in_mask, self.value_at(point_in_mask))
+                # when the base iterator stops, we also stop
+                raise
+
+            # self.logger.debug('{}: candidate = {}'.format(self, candidate_point))
+
+            if self.partition.is_member(candidate_point, self.cluster_index):
+                # found a member of the cluster
+                next_point_in_cluster = candidate_point
+                break
+
+            # the point was not in the cluster, try with next candidate
+
+        next_value = self.value_at(next_point_in_cluster)
+        return (next_point_in_cluster, next_value)
 
     def apply_function_scalar(self, function_region_scalar):
         '''
@@ -321,7 +377,7 @@ class SpatialCluster(SpatialDecorator):
         # return a SpatialCluster instead!
         # Notice that the calling function is not aware of the change
         # (visitor is not aware of how the visited element is of a different subclass)
-        return SpatialCluster(spatial_region, self.mask_region)
+        return SpatialCluster(spatial_region, self.partition, self.cluster_index)
 
     def apply_function_series(self, function_region_series, output_len):
         '''
@@ -345,7 +401,7 @@ class SpatialCluster(SpatialDecorator):
         # Notice that the calling function is not aware of the change
         # (visitor is not aware of how the visited element is of a differnt subclass)
         from .temporal import SpatioTemporalCluster
-        return SpatioTemporalCluster(spt_region, self.mask_region)
+        return SpatioTemporalCluster(spt_region, self.partition, self.cluster_index)
 
     def __str__(self):
         '''

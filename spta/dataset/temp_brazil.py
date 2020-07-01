@@ -4,6 +4,8 @@ import os
 import time
 import sys
 
+from spta.util import log as log_util
+
 
 DATASET = 'raw/TEMPERATURE_1979-2015.hdf'
 # REDUCED_FORMAT = 'raw/dataset_%s.npy'
@@ -25,7 +27,8 @@ def load_dataset(filename, series_len):
         real = f['real'][...]
         real = real[:series_len, :, :]
 
-    print('Shape of %s with %d points: %s' % (filename, series_len, real.shape))
+    logger = log_util.logger_for_me(load_dataset)
+    logger.info('Shape of %s with %d points: %s' % (filename, series_len, real.shape))
     return real
 
 
@@ -41,7 +44,8 @@ def load_dataset_last(filename, series_len):
         real = f['real'][...]
         real = real[-series_len:, :, :]
 
-    print('Shape of %s with %d points: %s' % (filename, series_len, real.shape))
+    logger = log_util.logger_for_me(load_dataset_last)
+    logger.debug('Shape of %s with %d points: %s' % (filename, series_len, real.shape))
     return real
 
 
@@ -71,7 +75,8 @@ def load_saved(filename):
         raise ValueError(msg)
 
     data = np.load(filename)
-    print('Shape of %s with: %s' % (filename, data.shape))
+    logger = log_util.logger_for_me(load_dataset)
+    logger.info('Shape of %s with: %s' % (filename, data.shape))
     return data
 
 

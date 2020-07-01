@@ -7,6 +7,7 @@ import unittest
 
 from spta.region import Point
 from spta.region.centroid import CalculateCentroid
+from spta.region.partition import PartitionRegionCrisp
 from spta.region.temporal import SpatioTemporalCluster
 
 from spta.tests.stub import stub_region, stub_distance
@@ -40,12 +41,11 @@ class TestCalculateCentroid(unittest.TestCase):
         # cluster0: index 1 has least sum of distances: (1->*16*, 4->28, 5->23)
         # cluster1: index 2 has least sum of distances: (0->25, 2->*21*, 3->22)
         spt_region = stub_region.spatio_temporal_region_stub()
+        _, x_len, y_len = spt_region.shape
         members = np.array([1, 0, 1, 1, 0, 0])
 
-        cluster0 = SpatioTemporalCluster.from_crisp_clustering(spt_region, members,
-                                                               cluster_index=0)
-        cluster1 = SpatioTemporalCluster.from_crisp_clustering(spt_region, members,
-                                                               cluster_index=1)
+        partition = PartitionRegionCrisp.from_membership_array(members, x_len, y_len)
+        (cluster0, cluster1) = partition.create_all_spt_clusters(spt_region)
 
         # when finding centroid of cluster0
         centroid0, _ = self.calculate_centroid.find_centroid_and_distances(cluster0)

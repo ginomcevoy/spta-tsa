@@ -65,7 +65,7 @@ def train_auto_arima(auto_arima_params, training_series):
     resulting model with the same training data.
     '''
     logger = log_util.logger_for_me(train_auto_arima)
-    logger.debug('Running auto_arima...')
+    logger.debug('Running auto_arima with training size {}'.format(len(training_series)))
 
     try:
         # find p, d, q with auto_arima, get a model

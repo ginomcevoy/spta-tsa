@@ -13,7 +13,9 @@ from experiments.metadata.kmedoids import kmedoids_suites
 from spta.distance.dtw import DistanceByDTW
 from spta.distance.variance import DistanceHistogramClusters
 from spta.kmedoids import kmedoids, medoids_to_absolute_coordinates
-from spta.region.temporal import SpatioTemporalRegion, SpatioTemporalCluster
+
+from spta.region.partition import PartitionRegionCrisp
+from spta.region.temporal import SpatioTemporalRegion
 
 from spta.util import fs as fs_util
 from spta.util import log as log_util
@@ -134,12 +136,17 @@ def do_variance_analysis(spt_region, distance_measure, kmedoids_metadata, kmedoi
     padding = int(k / 10) + 1
     cluster_name_str = 'cluster{{:0{}d}}'.format(padding)
 
+    # build the spatio-temporal clusters and pass the medoids as centroids
+    _, x_len, y_len = spt_region.shape
+    partition = PartitionRegionCrisp.from_membership_array(kmedoids_result.labels, x_len, y_len)
+    clusters = partition.create_all_spt_clusters(spt_region,
+                                                 centroid_indices=kmedoids_result.medoids)
+
+    # iterate clusters to set names and calculate costs
     total_cost = 0
     for i in range(0, k):
-        cluster_i = SpatioTemporalCluster.from_crisp_clustering(spt_region, members, i,
-                                                                centroids=centroids)
+        cluster_i = clusters[i]
         cluster_i.name = cluster_name_str.format(i)
-        clusters.append(cluster_i)
 
         # verification: compute the intra-cluster cost for each cluster
         # should be the same as output from k-medoids

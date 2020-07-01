@@ -1,7 +1,18 @@
 import numpy as np
 
+from spta.region.spatial import SpatialRegion
 from spta.region.temporal import SpatioTemporalRegion
 from spta.region.function import FunctionRegionScalar, FunctionRegionSeries
+
+
+def numpy_2d_stub():
+    np_2d = np.arange(20).reshape(4, 5)
+    np_2d = np_2d ** 2
+    return np_2d
+
+
+def spatial_region_stub():
+    return SpatialRegion(numpy_2d_stub())
 
 
 def numpy_3d_stub():
@@ -28,6 +39,11 @@ def numpy_3d_stub():
 def spatio_temporal_region_stub():
     numpy_dataset = numpy_3d_stub()
     return SpatioTemporalRegion(numpy_dataset)
+
+
+def spt_region_stub_2_4_5():
+    np_3d = np.arange(40).reshape(2, 4, 5)
+    return SpatioTemporalRegion(np_3d)
 
 
 def stub_mean_function_scalar():
