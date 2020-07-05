@@ -34,7 +34,7 @@ class SplitTrainingAndTestLast(SplitTrainingAndTest):
             training subset: shape [training_len, x_len, y_len]
             test_subset: shape [test_len, x_len, y_len]
         '''
-        series_len = spt_region.series_len()
+        series_len = spt_region.series_len
 
         # use the concept of time intervals to easily split the region by the temporal axis
         training_size = series_len - self.test_len

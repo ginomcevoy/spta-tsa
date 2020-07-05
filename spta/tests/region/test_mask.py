@@ -1,62 +1,13 @@
 '''
 Unit tests for spta.region.mask module.
+
+TODO refactor this to test_partition when code is implemented
 '''
 import unittest
 
 from spta.region import Point
-from spta.region.mask import MaskRegionCrisp, MaskRegionFuzzy
+from spta.region.mask import MaskRegionFuzzy
 from spta.tests.stub import stub_mask
-
-
-class TestMaskRegionCrisp(unittest.TestCase):
-    '''
-    Unit tests for mask.MaskRegionCrisp class.
-    '''
-
-    def setUp(self):
-        self.mask_np = stub_mask.crisp_membership_stub()
-
-    def test_find_memberships_empty(self):
-
-        # given a cluster mask and no points
-        cluster_index = 1
-        mask = MaskRegionCrisp(self.mask_np, cluster_index)
-        points = []
-
-        # when asking for memberships
-        result = mask.find_memberships(points)
-
-        # then result is empty
-        expected = []
-        self.assertEqual(result, expected)
-
-    def test_find_memberships_single(self):
-
-        # given a cluster mask and one point
-        cluster_index = 1
-        mask = MaskRegionCrisp(self.mask_np, cluster_index)
-        points = [Point(0, 0)]
-
-        # when asking for memberships
-        result = mask.find_memberships(points)
-
-        # then result is membership of point
-        expected = [0]
-        self.assertEqual(result, expected)
-
-    def test_find_memberships_three(self):
-
-        # given a cluster mask and three points
-        cluster_index = 1
-        mask = MaskRegionCrisp(self.mask_np, cluster_index)
-        points = [Point(0, 0), Point(2, 4), Point(1, 1)]
-
-        # when asking for memberships
-        result = mask.find_memberships(points)
-
-        # then result is memberships of points
-        expected = [0, 2, 1]
-        self.assertEqual(result, expected)
 
 
 class TestMaskRegionFuzzy(unittest.TestCase):

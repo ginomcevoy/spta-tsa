@@ -1,12 +1,10 @@
 '''
-TODO Refactor uses of MaskRegionCrisp in codebase
 TODO Reimplement functionality in MaskRegionFuzzy as PartitionRegionFuzzy
 TODO Delete this module
 '''
 
 import numpy as np
 
-from spta.util import arrays as arrays_util
 from .base import BaseRegion
 
 
@@ -69,89 +67,6 @@ class MaskRegion(BaseRegion):
             # the point was not in the mask, try with next candidate
 
         return next_point
-
-
-class MaskRegionCrisp(MaskRegion):
-    '''
-    A mask region that is the result of applying a 'crisp' (non-fuzzy) clustering
-    algorithm.
-
-    It contains a 2-d array that indicates the membership of each point, using 2-d region
-    coordinates. The value indicates the index of the cluster to which the point belongs to.
-
-    All clusters created by a clustering algorithm can get a a MaskRegion with the same underlying
-    dataset (membership matrix), but with indices ranging from 0 to k-1.
-
-    Since the internal numpy representation describes the memberships for all clusters in the
-    partition, this class also supports the method find_memberships(points).
-    '''
-
-    def __init__(self, numpy_dataset, cluster_index):
-        # assume that the numpy_dataset is a 2-d array (membership matrix)
-        assert numpy_dataset.ndim == 2
-
-        super(MaskRegionCrisp, self).__init__(numpy_dataset, cluster_index)
-
-        # save number of members in cluster (constant for crisp clusters)
-        self.cluster_len = np.count_nonzero(self.numpy_dataset == cluster_index)
-
-    def is_member(self, point):
-        '''
-        Returns True iff the point is a member of the cluster with this mask.
-        Implemented by checking the cluster index in the 2-d region.
-        '''
-        # sanity check
-        if point is None:
-            return False
-
-        return self.numpy_dataset[point.x, point.y] == self.cluster_index
-
-    def find_memberships(self, points):
-        '''
-        Given an array of points, returns an array of cluster indices that indicate the membership
-        of each point to a cluster in the partition. Note that this information goes beyond the
-        cluster attributed to this mask...
-        '''
-        return [
-            self.numpy_dataset[point.x, point.y]
-            for point
-            in points
-        ]
-
-    def clone(self):
-        return MaskRegionCrisp(np.copy(self.numpy_dataset), self.cluster_index)
-
-    @classmethod
-    def from_membership_array(cls, membership, cluster_index, x_len, y_len):
-        '''
-        Creates an instance of MaskRegionCrisp using a 1-d membership array as input.
-        Requires the region shape.
-        '''
-        # reshape the array to get a membership matrix (shape of region)
-        membership_2d = membership.reshape(x_len, y_len)
-        return MaskRegionCrisp(membership_2d, cluster_index)
-
-    @classmethod
-    def with_regular_partition(cls, k, cluster_index, x_len, y_len):
-        '''
-        Creates an instance of MaskRegionCrisp based on the number of clusters, so that each
-        cluster gets a rectangle of (approximately) the same size.
-        The process is as follows:
-            - Compute the most balanced divisors of k, e.g. 12 -> 4 x 3.
-            - Partition the (x_len, y_len)  using these two values to create the cluster labels,
-              e.g.
-                  0  0  0  1  1  1 ...  3  3  3
-                  0  0  0  1  1  1 ...  3  3  3
-                  .....................
-                  9  9  9 10 10 10 ..  11 11 11
-                  9  9  9 10 10 10 ..  11 11 11
-
-            - call from _membership_array with this membership matrix and corresponding
-              cluster_index
-        '''
-        # all clusters in the partition will have this same membership matrix
-        membership_regular = arrays_util.regular_partitioning(x_len, y_len, k)
-        return cls.from_membership_array(membership_regular, cluster_index, x_len, y_len)
 
 
 class MaskRegionFuzzy(MaskRegion):

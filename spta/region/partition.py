@@ -313,7 +313,7 @@ class PartitionRegionCrisp(PartitionRegion):
     @classmethod
     def from_membership_array(cls, membership, x_len, y_len):
         '''
-        Creates an instance of MaskRegionCrisp using a 1-d membership array as input.
+        Creates an instance of PartitionRegionCrisp using a 1-d membership array as input.
         Requires the region shape.
         '''
         # find k: the maximum index in the array + 1 (values range from 0 to k-1)

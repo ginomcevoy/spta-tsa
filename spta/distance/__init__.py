@@ -134,9 +134,8 @@ class DistanceBetweenSeries(log_util.LoggerMixin):
 
         # subset the matrix using the point index and the indices of the points in the region
         point_index = point.x * y_len + point.y
-        self.logger.debug('Extracting distances to {}, index {} from matrix'.format(point,
-                                                                                    point_index))
-        # self.logger.debug('For all_point_indices {}'.format(all_point_indices))
-        distances_to_point = self.distance_matrix[point_index, all_point_indices]
 
-        return distances_to_point
+        log_msg = 'Extracting {} distances to {}, index {} from distance matrix'
+        self.logger.debug(log_msg.format(len(all_point_indices), point, point_index))
+
+        return self.distance_matrix[point_index, all_point_indices]

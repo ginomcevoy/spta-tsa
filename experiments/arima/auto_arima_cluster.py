@@ -55,7 +55,9 @@ def processRequest():
     # parses the arguments
     desc = 'Perform various clustering partitions on a spatial-region, ' \
         'then do ARIMA error analysis on each cluster'
-    usage = '%(prog)s [-h] <region> <auto_arima_id> <error_type> [--log=log_level]'
+    usage = '%(prog)s [-h] <region> <auto_arima_id> <error_type> [--parallel n] [--plots] ' \
+        '[--log=log_level]'
+
     parser = argparse.ArgumentParser(prog='arima_forecast_cluster', description=desc, usage=usage)
 
     # region_id required, see metadata.region

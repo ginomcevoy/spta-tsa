@@ -6,7 +6,7 @@ from spta.util import log as log_util
 from .dtw import DistanceByDTW
 
 
-# TODO improve performance by assigning rows to processes, instead of single points
+# MAYBE improve performance by assigning rows to processes, instead of single points?
 
 class DistanceByDTWParallel(DistanceByDTW):
 

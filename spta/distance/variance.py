@@ -428,9 +428,9 @@ if __name__ == '__main__':
     log_util.setup_log('DEBUG')
 
     from experiments.metadata.region import predefined_regions
-    from spta.region.temporal import SpatioTemporalRegion, SpatioTemporalCluster
+    from spta.clustering.regular import RegularClusteringAlgorithm, RegularClusteringMetadata
     from spta.region.centroid import CalculateCentroid
-    from spta.region.mask import MaskRegionCrisp
+    from spta.region.temporal import SpatioTemporalRegion
     from spta.distance.dtw import DistanceByDTW
 
     # spt_region_md = SpatioTemporalRegionMetadata('nordeste_small', Region(43, 50, 85, 95),
@@ -453,18 +453,10 @@ if __name__ == '__main__':
                                             plot_name='plots/variance_test1.pdf', bins='auto')
 
     # use regular partitioning for clusters
-    k = 4
-    clusters = []
-
-    for i in range(0, k):
-        mask_i = MaskRegionCrisp.with_regular_partition(k, i, x_len, y_len)
-        cluster_i = SpatioTemporalCluster(spt_region, mask_i)
-        cluster_i.name = 'cluster{}'.format(i)
-
-        # find centroid of the regular clusters
-        # this also computes the distances to the centroid, so TODO use that
-        cluster_i.centroid, _ = calculate_centroid.find_centroid_and_distances(cluster_i)
-        clusters.append(cluster_i)
+    regular_clustering = RegularClusteringAlgorithm(RegularClusteringMetadata(k=4),
+                                                    distance_measure)
+    partition, medoids = regular_clustering.partition(spt_region, with_medoids=True)
+    clusters = partition.create_all_spt_clusters(spt_region, medoids=medoids)
 
     DistanceHistogramClusters.cluster_histograms(clusters=clusters,
                                                  distance_measure=distance_measure,

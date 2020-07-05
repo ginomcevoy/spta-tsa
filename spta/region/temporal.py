@@ -142,6 +142,7 @@ class SpatioTemporalRegionMetadata(object):
     def __str__(self):
         return repr(self)
 
+
 class SpatioTemporalRegion(DomainRegion):
     '''
     A 3-d spatio-temporal region, backed by a 3-d numpy dataset.
@@ -151,6 +152,9 @@ class SpatioTemporalRegion(DomainRegion):
         super(SpatioTemporalRegion, self).__init__(numpy_dataset)
         self.region_metadata = region_metadata
         self.centroid = None
+
+        # just for simplicity
+        self.series_len = self.numpy_dataset.shape[0]
 
     def __next__(self):
         '''
@@ -178,13 +182,9 @@ class SpatioTemporalRegion(DomainRegion):
     def series_at(self, point):
         # sanity check
         if point is None:
-            series_len, _, _ = self.numpy_dataset.shape
-            np.repeat(np.nan, repeats=series_len)
+            np.repeat(np.nan, repeats=self.series_len)
 
         return self.numpy_dataset[:, point.x, point.y]
-
-    def series_len(self):
-        return self.numpy_dataset.shape[0]
 
     def region_subset(self, region):
         '''
@@ -383,11 +383,11 @@ class SpatioTemporalDecorator(SpatialDecorator, SpatioTemporalRegion):
         # keep metadata if provided
         self.region_metadata = kwargs.get('region_metadata', None)
 
+        # keep this too
+        self.series_len = decorated_region.series_len
+
     def series_at(self, point):
         return self.decorated_region.series_at(point)
-
-    def series_len(self):
-        return self.decorated_region.series_len()
 
     def region_subset(self, region):
         return self.decorated_region.region_subset(region)
@@ -478,8 +478,7 @@ class SpatioTemporalCluster(SpatialCluster, SpatioTemporalDecorator):
         '''
         # sanity check
         if point is None:
-            series_len, _, _ = self.numpy_dataset.shape   # TODO self.series_len
-            np.repeat(np.nan, repeats=series_len)
+            np.repeat(np.nan, repeats=self.series_len)
 
         # self.logger.debug('SpatioTemporalCluster {} series_at {}'.format(self.label, point))
         if self.partition.is_member(point, self.cluster_index):
@@ -506,14 +505,24 @@ class SpatioTemporalCluster(SpatialCluster, SpatioTemporalDecorator):
     @property
     def all_point_indices(self):
         '''
-        Returns an array containing all indices in this region.
-        TODO: ask the partition for this, should be faster
+        Returns an array containing all indices in this cluster.
         '''
-        all_point_indices = np.zeros(self.cluster_len, dtype=np.uint32)
-        for i, (point, _) in enumerate(self):
-            all_point_indices[i] = point.x * self.y_len + point.y
 
-        return all_point_indices
+        # these are all the point indices in the region (not this cluster!)
+        all_point_indices_region = np.arange(self.x_len * self.y_len)
+
+        # ask the partition for the membership of these points
+        memberships = self.partition.membership_of_point_indices(all_point_indices_region)
+
+        # now filter for this cluster, note that where requires numpy array, and returns 2 tuples
+        point_indices_cluster = np.where(np.array(memberships) == self.cluster_index)[0]
+        return point_indices_cluster
+
+        # all_point_indices = np.zeros(self.cluster_len, dtype=np.uint32)
+        # for i, (point, _) in enumerate(self):
+        #     all_point_indices[i] = point.x * self.y_len + point.y
+
+        # return all_point_indices
 
     def __next__(self):
         '''
@@ -533,8 +542,9 @@ class SpatioTemporalCluster(SpatialCluster, SpatioTemporalDecorator):
 
             # self.logger.debug('{}: candidate = {}'.format(self, candidate_point))
 
+            # the partition knows which cluster(s) the point belongs to
             if self.partition.is_member(candidate_point, self.cluster_index):
-                # found a member of the cluster
+                # found a member of the cluster, will be returned
                 next_point_in_cluster = candidate_point
                 break
 
