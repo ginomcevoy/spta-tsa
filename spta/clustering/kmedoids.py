@@ -10,8 +10,6 @@ class KmedoidsClusteringMetadata(ClusteringMetadata):
     Stores metadata for k-medoids clustering algorithm.
     '''
 
-    __slots__ = ()
-
     def __init__(self, k, random_seed=1, initial_medoids=None, max_iter=1000, tol=0.001,
                  verbose=True):
         '''
@@ -42,6 +40,18 @@ class KmedoidsClusteringMetadata(ClusteringMetadata):
         Useful for plot titles
         '''
         return '{}: k={} seed={}'.format(self.name.capitalize(), self.k, self.random_seed)
+
+
+def kmedoids_metadata_generator(k_values, seed_values, initial_medoids=None, max_iter=1000,
+                                tol=0.001, verbose=True):
+    '''
+    Generate k-medoids metadata given a list of k_values and seeds, also default values for
+    the other parameters. Performs a cartesian product of k_values and seeds.
+    '''
+    for k in k_values:
+        for random_seed in seed_values:
+            yield KmedoidsClusteringMetadata(k, random_seed, initial_medoids, max_iter, tol,
+                                             verbose)
 
 
 class KmedoidsClusteringAlgorithm(ClusteringAlgorithm):

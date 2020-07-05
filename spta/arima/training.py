@@ -109,13 +109,13 @@ class ArimaTrainer(FunctionRegionScalarSame):
     ArimaModelRegion can later be applied to another region to obtain the ForecastRegion
     (spatio-temporal region).
 
-    This implementation assumes that the same ARIMA hyper-parameters (p, d, q) are used for all
-    the ARIMA models.
-
     To create an instance of this class by using a training region, use either:
 
-        - with_pdq(): Create ARIMA models with the same supplied hyperparameters
-        - auto_arima()
+        - with_hyperparameters():
+            Create ARIMA models with the same supplied hyper-parameters in all region points.
+
+        - with_auto_arima():
+            Uses AutoARIMA to determine the hyper-parameters for each region point.
 
     class method. This will produce a different ARIMA model in each point.
     '''
@@ -162,7 +162,7 @@ class ArimaTrainer(FunctionRegionScalarSame):
         '''
         Creates an instance of this class, a function region. When applied to a training region,
         this function region will produce a different ARIMA model in each point of the training
-        region.
+        region, but all models will have the same hyper-parameters.
 
         arima_params
             ArimaPDQ (p, d, q) hyper-parameters

@@ -30,18 +30,19 @@ def arima_clustering_experiment_by_name(experiment_name):
     return arima_clustering_experiments()[experiment_name]
 
 
-AutoArimaCluster = namedtuple('AutoArimaCluster', 'auto_arima_id clustering kmedoids_id distance')
+AutoArimaCluster = namedtuple('AutoArimaCluster', ('auto_arima_id', 'clustering_name',
+                                                   'clustering_id', 'distance'))
 
 
 def auto_arima_clustering_experiments():
 
     # add auto_arima experiments here
-    # auto_arima_clustering_id = AutoArimaCluster(<auto_arima_id>, 'Kmedoids', <kmedoids_suite_id>,
-    #                                             'DistanceByDTW')
+    # AutoArimaCluster(<auto_arima_id>, <clustering_name>, <clustering_suite_id>, 'DistanceByDTW')
 
     auto_arima_clustering_id = {
-        'simple_quick': AutoArimaCluster('simple', 'Kmedoids', 'quick', 'DistanceByDTW'),
-        'simple_even': AutoArimaCluster('simple', 'Kmedoids', 'even', 'DistanceByDTW'),
+        'simple_kmedoids_quick': AutoArimaCluster('simple', 'kmedoids', 'quick', 'DistanceByDTW'),
+        'simple_regular_quick': AutoArimaCluster('simple', 'regular', 'quick', 'DistanceByDTW'),
+        'simple_even': AutoArimaCluster('simple', 'kmedoids', 'even', 'DistanceByDTW'),
     }
 
     return auto_arima_clustering_id

@@ -164,6 +164,7 @@ class PartitionRegion(BaseRegion):
         clusters = []
         for i in range(0, self.k):
             cluster_i = self.create_spt_cluster(spt_region, i)
+            cluster_i.name = 'cluster{}'.format(i)
 
             # centroids available?
             if centroid_indices:

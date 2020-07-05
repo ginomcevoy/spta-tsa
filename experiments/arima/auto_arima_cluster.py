@@ -96,7 +96,12 @@ def do_auto_arima_forecast_cluster(args, logger):
     # get the auto_arima cluster experiment
     # and from that, the kmedoids suite and auto_arima params
     experiment = auto_arima_clustering_experiments()[args.auto_arima_cluster]
-    kmedoids_suite = kmedoids_suites()[experiment.kmedoids_id]
+
+    # assume k-medoids
+    # TODO also support regular here, should not be too hard...
+    assert experiment.clustering_name == 'kmedoids'
+
+    kmedoids_suite = kmedoids_suites()[experiment.clustering_id]
 
     # Assumption: use DTW
     # use pre-computed distance matrix

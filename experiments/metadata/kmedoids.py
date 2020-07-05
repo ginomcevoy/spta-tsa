@@ -1,5 +1,7 @@
 '''
 Define kmedoids clustering by name, can override metadata
+TODO remove after refactoring code that uses this, use .clustering instead
+
 '''
 from spta.kmedoids.kmedoids import kmedoids_suite_metadata
 

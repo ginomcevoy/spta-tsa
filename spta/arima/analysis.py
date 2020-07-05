@@ -72,6 +72,13 @@ class ArimaErrorAnalysis(log_util.LoggerMixin):
         log_msg = 'Combined {} error from all ARIMAs: {}'
         self.logger.info(log_msg.format(error_type, overall_error_each))
 
+        if spt_region.has_centroid:
+            # show the local error at the centroid
+            centroid = spt_region.centroid
+            local_error_centroid = error_region_each.value_at(centroid)
+            log_msg = 'Local error of ARIMA model at the medoid {}: {}'
+            self.logger.debug(log_msg.format(centroid, local_error_centroid))
+
         # find the errors when using each model to forecast the entire region
         # see ArimaForecasting for details
         overall_error_region = self.arima_forecasting.forecast_whole_region_with_all_models(

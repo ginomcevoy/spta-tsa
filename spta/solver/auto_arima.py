@@ -26,6 +26,7 @@ from spta.util import fs as fs_util
 from spta.util import log as log_util
 from spta.util import plot as plot_util
 
+from .metadata import SolverMetadata
 
 # default forecast length
 FORECAST_LENGTH = 8
@@ -57,6 +58,11 @@ class AutoARIMATrainer(log_util.LoggerMixin):
         clustering_factory = ClusteringFactory(self.distance_measure)
         self.clustering_algorithm = clustering_factory.instance(self.clustering_metadata)
 
+        self.metadata = SolverMetadata(region_metadata=self.region_metadata,
+                                       clustering_metadata=self.clustering_metadata,
+                                       distance_measure=self.distance_measure)
+        self.prepared = True
+
     def train(self, error_type, training_len=None, test_len=FORECAST_LENGTH):
         '''
         Partition the region into clusters, then train the ARIMA models on the cluster medoids.
@@ -67,7 +73,7 @@ class AutoARIMATrainer(log_util.LoggerMixin):
         if not self.prepared:
             self.prepare_for_training()
 
-        # get the region and transform to list of time series
+        # recover the spatio-temporal region
         spt_region = SpatioTemporalRegion.from_metadata(self.region_metadata)
 
         # create training/test regions
@@ -270,6 +276,10 @@ class AutoARIMASolver(log_util.LoggerMixin):
         self.spt_region = SpatioTemporalRegion.from_metadata(self.region_metadata)
         _, x_len, y_len = self.spt_region.shape
 
+        self.metadata = SolverMetadata(region_metadata=self.region_metadata,
+                                       clustering_metadata=self.clustering_metadata,
+                                       distance_measure=self.distance_measure)
+
         # set prepared flag
         self.prepared = True
 
@@ -298,7 +308,7 @@ class AutoARIMASolver(log_util.LoggerMixin):
                                 width=width, height=height, linewidth=1, color='red', fill=False))
 
         # save figure
-        fs_util.mkdir(self.get_plot_directory_structure())
+        fs_util.mkdir(self.metadata.plot_dir)
         plt.draw()
 
         plot_name = self.get_plot_filename(prediction_region)
@@ -308,25 +318,13 @@ class AutoARIMASolver(log_util.LoggerMixin):
         # show figure
         plt.show()
 
-    def get_plot_directory_structure(self):
-        '''
-        Returns a string representing the directory structure for storing plots.
-        Ex:
-            plots/nordeste_small_1y_1ppd_last/Kmedoids_k8_seed1/dtw
-        '''
-
-        directory_str = 'plots/{!r}/{!r}/{!r}'
-        return directory_str.format(self.region_metadata,
-                                    self.clustering_metadata,
-                                    self.distance_measure)
-
     def get_plot_filename(self, prediction_region):
         '''
         Returns a string representing the filename for the plot.
         Ex:
-            csv/nordeste_small_1y_1ppd_last/Kmedoids_k8_seed1/dtw/region_1_4_2_4.pdf
+            csv/nordeste_small_1y_1ppd_last/kmedoids_k8_seed1/dtw/region_1_4_2_4.pdf
         '''
-        solver_plot_dir = self.get_plot_directory_structure()
+        solver_plot_dir = self.metadata.plot_dir
         plot_filename = 'region_{}-{}-{}-{}.pdf'.format(prediction_region.x1,
                                                         prediction_region.x2,
                                                         prediction_region.y1,
@@ -336,7 +334,7 @@ class AutoARIMASolver(log_util.LoggerMixin):
     def save(self):
         '''
         Saves this solver as a pickle object for later use.
-        See KmedoidsAutoARIMASolverPickler for details.
+        See AutoARIMASolverPickler for details.
         '''
         # delegate to the pickler
         pickler = AutoARIMASolverPickler(region_metadata=self.region_metadata,
@@ -382,6 +380,10 @@ class PredictionQueryResult(BaseRegion):
         self.region_metadata = region_metadata
         self.clustering_metadata = clustering_metadata
         self.distance_measure = distance_measure
+
+        self.metadata = SolverMetadata(region_metadata=self.region_metadata,
+                                       clustering_metadata=self.clustering_metadata,
+                                       distance_measure=self.distance_measure)
 
         # query-specific
         self.forecast_len = forecast_len
@@ -448,25 +450,14 @@ class PredictionQueryResult(BaseRegion):
         # now get the absolute coordinates, because the domain region can be a subset too
         return self.region_metadata.absolute_position_of_point(domain_point)
 
-    def get_directory_structure(self):
-        '''
-        Returns a string representing the directory structure for storing query results.
-        Ex:
-            csv/nordeste_small_1y_1ppd_last/Kmedoids_k8_seed1/dtw/
-        '''
-
-        directory_str = 'csv/{!r}/{!r}/{!r}'
-        return directory_str.format(self.region_metadata,
-                                    self.clustering_metadata,
-                                    self.distance_measure)
-
     def get_csv_file_path(self):
         '''
         Returns a string representing the CSV file for this query.
         Ex:
-            csv/Kmedoids_k8_seed1/dtw/region_1_4_2_4_forecast_8_sMAPE.csv
+            csv/nordeste_small_1y_1ppd_last/kmedoids_k8_seed1/dtw/
+            region_1_4_2_4_forecast_8_sMAPE.csv
         '''
-        solver_csv_dir = self.get_directory_structure()
+        solver_csv_dir = self.metadata.csv_dir
         csv_filename = 'region_{}-{}-{}-{}_forecast_{}_{}.csv'.format(self.prediction_region.x1,
                                                                       self.prediction_region.x2,
                                                                       self.prediction_region.y1,
@@ -480,9 +471,8 @@ class PredictionQueryResult(BaseRegion):
         Writes prediction results to CSV, at the file indicated by get_csv_file_path()
         '''
 
-        # essure dir
-        solver_csv_dir = self.get_directory_structure()
-        fs_util.mkdir(solver_csv_dir)
+        # ensure dir
+        fs_util.mkdir(self.metadata.csv_dir)
 
         np.set_printoptions(precision=3)
         csv_filename = self.get_csv_file_path()
@@ -518,7 +508,7 @@ class AutoARIMASolverPickler(log_util.LoggerMixin):
 
     |- pickle
         |- <region>
-            |- Kmedoids_k<k>_seed<seed>
+            |- kmedoids_k<k>_seed<seed>
                 |- dtw
                     |- partition.pkl
                     |- auto_arima_<auto_arima_params>_model_region.pkl
@@ -530,6 +520,11 @@ class AutoARIMASolverPickler(log_util.LoggerMixin):
         self.region_metadata = region_metadata
         self.clustering_metadata = clustering_metadata
         self.distance_measure = distance_measure
+
+        self.metadata = SolverMetadata(region_metadata=self.region_metadata,
+                                       clustering_metadata=self.clustering_metadata,
+                                       distance_measure=self.distance_measure)
+
         self.auto_arima_params = auto_arima_params
         self.error_type = error_type
 
@@ -540,10 +535,10 @@ class AutoARIMASolverPickler(log_util.LoggerMixin):
         partition = auto_arima_solver.partition
         arima_model_region = auto_arima_solver.arima_model_region
         generalization_errors = auto_arima_solver.generalization_errors
-        solver_dir = self.get_directory_structure()
+        solver_pickle_dir = self.metadata.pickle_dir
 
         # create the directory
-        fs_util.mkdir(solver_dir)
+        fs_util.mkdir(solver_pickle_dir)
 
         # save the partition
         partition_path = self.partition_pickle_path()
@@ -563,7 +558,7 @@ class AutoARIMASolverPickler(log_util.LoggerMixin):
             pickle.dump(generalization_errors, pickle_file)
             self.logger.debug('Saved errors at {}'.format(generalization_errors_path))
 
-        self.logger.info('Solver saved at {}'.format(solver_dir))
+        self.logger.info('Solver saved at {}'.format(solver_pickle_dir))
 
     def load_solver(self):
         '''
@@ -609,39 +604,27 @@ class AutoARIMASolverPickler(log_util.LoggerMixin):
         Full path to pickle object of the partition, given the region, clustering and distance
         metadata.
         '''
-        solver_dir = self.get_directory_structure()
+        solver_pickle_dir = self.metadata.pickle_dir
         partition_filename = self.partition_filename()
-        return os.path.join(solver_dir, partition_filename)
+        return os.path.join(solver_pickle_dir, partition_filename)
 
     def arima_model_pickle_path(self):
         '''
         Full path of the pickle object of the arima model region, given by the region, clustering,
         distance and auto arima metadata.
         '''
-        solver_dir = self.get_directory_structure()
+        solver_pickle_dir = self.metadata.pickle_dir
         arima_model_filename = self.auto_arima_model_filename()
-        return os.path.join(solver_dir, arima_model_filename)
+        return os.path.join(solver_pickle_dir, arima_model_filename)
 
     def generalization_errors_pickle_path(self):
         '''
         Full path of the pickle object of the arima model region, given by the region, clustering,
         distance and auto arima metadata, also the error type.
         '''
-        solver_dir = self.get_directory_structure()
+        solver_pickle_dir = self.metadata.pickle_dir
         generalization_errors_filename = self.generalization_errors_filename()
-        return os.path.join(solver_dir, generalization_errors_filename)
-
-    def get_directory_structure(self):
-        '''
-        Returns a string representing the directory structure for storing solver data.
-        Ex:
-            pickle/nordeste_small_1y_1ppd_last/Kmedoids_k8_seed1/dtw
-        '''
-
-        directory_str = 'pickle/{!r}/{!r}/{!r}'
-        return directory_str.format(self.region_metadata,
-                                    self.clustering_metadata,
-                                    self.distance_measure)
+        return os.path.join(solver_pickle_dir, generalization_errors_filename)
 
     def partition_filename(self):
         return 'partition.pkl'

@@ -12,6 +12,14 @@ class RegularClusteringMetadata(ClusteringMetadata):
         super(RegularClusteringMetadata, self).__init__('regular', k)
 
 
+def regular_metadata_generator(k_values):
+    '''
+    Generate metadata given a list of k_values
+    '''
+    for k in k_values:
+        yield RegularClusteringMetadata(k)
+
+
 class RegularClusteringAlgorithm(ClusteringAlgorithm):
 
     def partition_2d(self, spatial_region):
