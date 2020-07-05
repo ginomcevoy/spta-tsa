@@ -27,7 +27,7 @@ from spta.util import log as log_util
 
 from experiments.metadata.arima import predefined_auto_arima
 from experiments.metadata.arima_clustering import auto_arima_clustering_experiments
-from experiments.metadata.clustering import kmedoids_suites, regular_suites
+from experiments.metadata.clustering import get_suite
 from experiments.metadata.region import predefined_regions
 
 
@@ -197,11 +197,7 @@ def metadata_from_args(args):
     # get the clustering metadata from the auto arima clustering id
     auto_arima_cluster = auto_arima_clustering_experiments()[args.auto_arima_cluster]
     clustering_name = auto_arima_cluster.clustering_name
-
-    if clustering_name == 'kmedoids':
-        clustering_suite = kmedoids_suites()[auto_arima_cluster.clustering_id]
-    elif clustering_name == 'regular':
-        clustering_suite = regular_suites()[auto_arima_cluster.clustering_id]
+    clustering_suite = get_suite(clustering_name, auto_arima_cluster.clustering_id)
 
     # get the auto arima params
     auto_arima_params = predefined_auto_arima()[auto_arima_cluster.auto_arima_id]

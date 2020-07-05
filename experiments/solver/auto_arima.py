@@ -19,6 +19,7 @@ from spta.distance.dtw import DistanceByDTW
 from spta.region import Region
 from spta.region.error import error_functions
 from spta.solver.auto_arima import AutoARIMATrainer, AutoARIMASolverPickler
+from spta.solver.metadata import SolverMetadata
 from spta.util import log as log_util
 
 from experiments.metadata.arima import predefined_auto_arima
@@ -160,10 +161,12 @@ def predict_request(args):
     prediction_region = Region(int(args.x1), int(args.x2), int(args.y1), int(args.y2))
 
     # load solver from persistence
-    pickler = AutoARIMASolverPickler(region_metadata=region_metadata,
+    solver_metadata = SolverMetadata(region_metadata=region_metadata,
                                      clustering_metadata=clustering_metadata,
                                      distance_measure=distance_measure,
-                                     auto_arima_params=auto_arima_params,
+                                     model_params=auto_arima_params)
+
+    pickler = AutoARIMASolverPickler(solver_metadata=solver_metadata,
                                      error_type=args.error)
     solver = pickler.load_solver()
     print('')

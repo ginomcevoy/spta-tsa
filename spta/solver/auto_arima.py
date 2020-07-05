@@ -60,7 +60,8 @@ class AutoARIMATrainer(log_util.LoggerMixin):
 
         self.metadata = SolverMetadata(region_metadata=self.region_metadata,
                                        clustering_metadata=self.clustering_metadata,
-                                       distance_measure=self.distance_measure)
+                                       distance_measure=self.distance_measure,
+                                       model_params=self.auto_arima_params)
         self.prepared = True
 
     def train(self, error_type, training_len=None, test_len=FORECAST_LENGTH):
@@ -105,10 +106,7 @@ class AutoARIMATrainer(log_util.LoggerMixin):
                                                                           partition, medoids)
 
         # create a solver with the data acquired, this solver can answer queries
-        solver = AutoARIMASolver(region_metadata=self.region_metadata,
-                                 clustering_metadata=self.clustering_metadata,
-                                 auto_arima_params=self.auto_arima_params,
-                                 distance_measure=self.distance_measure,
+        solver = AutoARIMASolver(solver_metadata=self.metadata,
                                  error_type=error_type,
                                  partition=partition,
                                  arima_model_region=arima_model_region_for_predict,
@@ -209,14 +207,16 @@ class AutoARIMASolver(log_util.LoggerMixin):
     point in the subregion, the forecast at the medoid of the cluster for which each point is
     a member.
     '''
-    def __init__(self, region_metadata, clustering_metadata, distance_measure, auto_arima_params,
-                 error_type, partition, arima_model_region, generalization_errors):
+    def __init__(self, solver_metadata, error_type, partition, arima_model_region,
+                 generalization_errors):
 
         # user input
-        self.region_metadata = region_metadata
-        self.clustering_metadata = clustering_metadata
-        self.distance_measure = distance_measure
-        self.auto_arima_params = auto_arima_params
+        self.metadata = solver_metadata
+        self.region_metadata = solver_metadata.region_metadata
+        self.clustering_metadata = solver_metadata.clustering_metadata
+        self.distance_measure = solver_metadata.distance_measure
+        self.auto_arima_params = solver_metadata.model_params
+
         self.error_type = error_type
 
         # calculated during training
@@ -253,8 +253,7 @@ class AutoARIMASolver(log_util.LoggerMixin):
         forecast_subregion = arima_model_subset.apply_to(error_subregion, forecast_len)
 
         # this has all the required information and can be iterated
-        return PredictionQueryResult(region_metadata=self.region_metadata,
-                                     clustering_metadata=self.clustering_metadata,
+        return PredictionQueryResult(solver_metadata=self.metadata,
                                      distance_measure=self.distance_measure,
                                      forecast_len=forecast_len,
                                      forecast_subregion=forecast_subregion,
@@ -275,10 +274,6 @@ class AutoARIMASolver(log_util.LoggerMixin):
         # denormalizing the data
         self.spt_region = SpatioTemporalRegion.from_metadata(self.region_metadata)
         _, x_len, y_len = self.spt_region.shape
-
-        self.metadata = SolverMetadata(region_metadata=self.region_metadata,
-                                       clustering_metadata=self.clustering_metadata,
-                                       distance_measure=self.distance_measure)
 
         # set prepared flag
         self.prepared = True
@@ -337,10 +332,7 @@ class AutoARIMASolver(log_util.LoggerMixin):
         See AutoARIMASolverPickler for details.
         '''
         # delegate to the pickler
-        pickler = AutoARIMASolverPickler(region_metadata=self.region_metadata,
-                                         clustering_metadata=self.clustering_metadata,
-                                         distance_measure=self.distance_measure,
-                                         auto_arima_params=self.auto_arima_params,
+        pickler = AutoARIMASolverPickler(solver_metadata=self.metadata,
                                          error_type=self.error_type)
         pickler.save_solver(self)
 
@@ -367,7 +359,7 @@ class PredictionQueryResult(BaseRegion):
     - The cluster index associated to the cluster for which the point is identified: from partition
     '''
 
-    def __init__(self, region_metadata, clustering_metadata, distance_measure,
+    def __init__(self, solver_metadata, distance_measure,
                  forecast_len, forecast_subregion, error_subregion, prediction_region,
                  partition, spt_region, error_type):
         '''
@@ -377,13 +369,10 @@ class PredictionQueryResult(BaseRegion):
         super(PredictionQueryResult, self).__init__(forecast_subregion.as_numpy)
 
         # solver metadata
-        self.region_metadata = region_metadata
-        self.clustering_metadata = clustering_metadata
-        self.distance_measure = distance_measure
-
-        self.metadata = SolverMetadata(region_metadata=self.region_metadata,
-                                       clustering_metadata=self.clustering_metadata,
-                                       distance_measure=self.distance_measure)
+        self.metadata = solver_metadata
+        self.region_metadata = solver_metadata.region_metadata
+        self.clustering_metadata = solver_metadata.clustering_metadata
+        self.model_params = solver_metadata.model_params
 
         # query-specific
         self.forecast_len = forecast_len
@@ -515,17 +504,10 @@ class AutoARIMASolverPickler(log_util.LoggerMixin):
                     |- auto_arima_<auto_arima_params>_errors_<error_type>.pkl
     '''
 
-    def __init__(self, region_metadata, clustering_metadata, distance_measure, auto_arima_params,
-                 error_type):
-        self.region_metadata = region_metadata
-        self.clustering_metadata = clustering_metadata
-        self.distance_measure = distance_measure
+    def __init__(self, solver_metadata, error_type):
 
-        self.metadata = SolverMetadata(region_metadata=self.region_metadata,
-                                       clustering_metadata=self.clustering_metadata,
-                                       distance_measure=self.distance_measure)
-
-        self.auto_arima_params = auto_arima_params
+        # solver metadata
+        self.metadata = solver_metadata
         self.error_type = error_type
 
     def save_solver(self, auto_arima_solver):
@@ -586,14 +568,12 @@ class AutoARIMASolverPickler(log_util.LoggerMixin):
 
         # recreate the solver
         log_msg = 'Loaded solver: {}, {}, {}, {}'
-        self.logger.info(log_msg.format(self.region_metadata,
-                                        self.clustering_metadata,
-                                        self.auto_arima_params, self.error_type))
+        self.logger.info(log_msg.format(self.metadata.region_metadata,
+                                        self.metadata.clustering_metadata,
+                                        self.metadata.model_params,
+                                        self.error_type))
 
-        return AutoARIMASolver(region_metadata=self.region_metadata,
-                               clustering_metadata=self.clustering_metadata,
-                               distance_measure=self.distance_measure,
-                               auto_arima_params=self.auto_arima_params,
+        return AutoARIMASolver(solver_metadata=self.metadata,
                                error_type=self.error_type,
                                partition=partition,
                                arima_model_region=arima_model_region,
@@ -634,10 +614,11 @@ class AutoARIMASolverPickler(log_util.LoggerMixin):
         auto_arima_<auto_arima_params>_model_region.pkl
         See spta.arima.AutoArimaParams
         '''
-        return 'auto_arima_{}_model_region.pkl'.format(self.auto_arima_params)
+        return 'auto_arima_{!r}_model_region.pkl'.format(self.metadata.model_params)
 
     def generalization_errors_filename(self):
         '''
         auto_arima_<auto_arima_params>_errors_<error_type>.pkl
         '''
-        return 'auto_arima_{}_errors_{}.pkl'.format(self.auto_arima_params, self.error_type)
+        return 'auto_arima_{!r}_errors_{}.pkl'.format(self.metadata.model_params,
+                                                      self.error_type)

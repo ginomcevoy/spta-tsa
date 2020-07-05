@@ -1,3 +1,5 @@
+import os
+
 from spta.region.centroid import CalculateCentroid
 from spta.region.partition import PartitionRegion
 
@@ -17,6 +19,33 @@ class ClusteringMetadata():
     def __init__(self, name, k, **kwargs):
         self.name = name
         self.k = k
+
+    def clustering_subdir(self, region_metadata, distance_measure):
+        '''
+        Sub-directory used for saving results.
+        '''
+        region_subdir = '{!r}'.format(region_metadata)
+        clustering_metadata_subdir = '{!r}'.format(self)
+        distance_subdir = '{!r}'.format(distance_measure)
+        return os.path.join(region_subdir, clustering_metadata_subdir, distance_subdir)
+
+    def csv_dir(self, region_metadata, distance_measure):
+        '''
+        Directory to store CSV results.
+        '''
+        return os.path.join('csv', self.clustering_subdir(region_metadata, distance_measure))
+
+    def pickle_dir(self, region_metadata, distance_measure):
+        '''
+        Directory to store pickle objects.
+        '''
+        return os.path.join('pickle', self.clustering_subdir(region_metadata, distance_measure))
+
+    def plot_dir(self, region_metadata, distance_measure):
+        '''
+        Directory to store plots results.
+        '''
+        return os.path.join('plot', self.clustering_subdir(region_metadata, distance_measure))
 
     def __repr__(self):
         return '{}_k{}'.format(self.name, self.k)
