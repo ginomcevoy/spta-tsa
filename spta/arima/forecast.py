@@ -227,6 +227,7 @@ class ArimaForecasting(log_util.LoggerMixin):
         ]
 
         # convert to arrays and plot distances vs errors
+        # TODO use plot_util.plot_distances_vs_forecast_errors
         from matplotlib import pyplot as plt
         _, subplot = plt.subplots(1, 1, figsize=(7, 5))
         subplot.plot(distances_to_point, forecast_errors, 'bo')

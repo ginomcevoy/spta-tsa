@@ -179,6 +179,31 @@ def plot_clustering_silhouette(distance_matrix, cluster_labels, subplot=None, sh
     return silhouette_avg
 
 
+def plot_distances_vs_forecast_errors(distances_to_point, forecast_errors, distance_measure,
+                                      error_type, info_text, plot_filename=None,
+                                      title='Distances to medoid vs forecast errors at medoid'):
+
+    logger = logging.getLogger()
+    _, subplot = plt.subplots(1, 1, figsize=(7, 5))
+    subplot.plot(distances_to_point, forecast_errors, 'bo')
+
+    subplot.set_title(title)
+
+    # add some info about plot
+    if info_text:
+        subplot.text(0.05, 0.95, info_text, transform=subplot.transAxes,
+                     verticalalignment='top')
+
+    subplot.set_xlabel('Distances to medoid ({})'.format(distance_measure))
+    subplot.set_ylabel('{} forecast errors'.format(error_type))
+    subplot.grid(True, linestyle='--')
+    if plot_filename:
+        plt.draw()
+        plt.savefig(plot_filename)
+        logger.info('Saved figure: {}'.format(plot_filename))
+    plt.show()
+
+
 def check_palette_len(color_length):
     if color_length > len(PALETTE):
         raise ValueError('Need more colors in palette!')

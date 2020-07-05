@@ -45,7 +45,7 @@ class ClusteringMetadata():
         '''
         Directory to store plots results.
         '''
-        return os.path.join('plot', self.clustering_subdir(region_metadata, distance_measure))
+        return os.path.join('plots', self.clustering_subdir(region_metadata, distance_measure))
 
     def __repr__(self):
         return '{}_k{}'.format(self.name, self.k)

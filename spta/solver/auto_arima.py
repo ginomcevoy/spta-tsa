@@ -136,10 +136,10 @@ class AutoARIMATrainer(log_util.LoggerMixin):
         # iterate the training clusters to produce an ARIMA cluster for each one
         # using enumerate to also get the cluster index in [0, k-1]
         arima_clusters = []
-        for cluster_index, training_cluster in enumerate(training_clusters):
+        for training_cluster in training_clusters:
 
             arima_cluster = self.train_auto_arima_at_medoid(partition, training_cluster,
-                                                            arima_medoids_numpy, cluster_index)
+                                                            arima_medoids_numpy)
             arima_clusters.append(arima_cluster)
 
         # merge the clusters into a single region, this will be backed by a new numpy matrix,
@@ -170,8 +170,7 @@ class AutoARIMATrainer(log_util.LoggerMixin):
         # will calculate the forecast error at each point of the region
         return measure_error.apply_to(forecast_region)
 
-    def train_auto_arima_at_medoid(self, partition, training_cluster, arima_medoids_numpy,
-                                   cluster_index):
+    def train_auto_arima_at_medoid(self, partition, training_cluster, arima_medoids_numpy):
         '''
         Given a spatio-temporal cluster with training data and its medoid, train a single ARIMA
         model at the medoid, and replicate it over the cluster. This effectively turns the medoid
@@ -196,7 +195,7 @@ class AutoARIMATrainer(log_util.LoggerMixin):
         # create an ARIMA model region for this cluster
         # but we need a spatial cluster to use merge later! so wrap this region as a cluster
         arima_model_cluster = SpatialCluster(ArimaModelRegion(arima_medoids_numpy), partition,
-                                             cluster_index=cluster_index)
+                                             cluster_index=training_cluster.cluster_index)
         return arima_model_cluster
 
 
