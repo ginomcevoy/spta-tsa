@@ -75,7 +75,7 @@ class AutoARIMATrainer(log_util.LoggerMixin):
             self.prepare_for_training()
 
         # recover the spatio-temporal region
-        spt_region = SpatioTemporalRegion.from_metadata(self.region_metadata)
+        spt_region = self.region_metadata.create_instance()
 
         # create training/test regions
         splitter = SplitTrainingAndTestLast(test_len)
@@ -271,7 +271,8 @@ class AutoARIMASolver(log_util.LoggerMixin):
         # load the region again
         # normally only to get shape, but for normalized regions it also has info useful for
         # denormalizing the data
-        self.spt_region = SpatioTemporalRegion.from_metadata(self.region_metadata)
+        # TODO revise this
+        self.spt_region = self.region_metadata.create_instance()
         _, x_len, y_len = self.spt_region.shape
 
         # set prepared flag

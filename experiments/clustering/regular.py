@@ -10,7 +10,7 @@ from experiments.metadata.kmedoids import kmedoids_suites
 from spta.distance.dtw import DistanceByDTW
 from spta.distance.variance import DistanceHistogramClusters
 from spta.region.centroid import CalculateCentroid
-from spta.region.temporal import SpatioTemporalRegion, SpatioTemporalCluster
+from spta.region.temporal import SpatioTemporalCluster
 from spta.region.mask import MaskRegionCrisp
 
 from spta.util import fs as fs_util
@@ -59,7 +59,7 @@ def analyze_regular_partitions(args, logger):
     region_metadata = predefined_regions()[args.region]
 
     # get the region and transform to list of time series
-    spt_region = SpatioTemporalRegion.from_metadata(region_metadata)
+    spt_region = region_metadata.create_instance()
     _, x_len, y_len = spt_region.shape
 
     # for now, use the kmedoids suite to get k data

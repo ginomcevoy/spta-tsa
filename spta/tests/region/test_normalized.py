@@ -1,5 +1,5 @@
 '''
-Unit tests for spta.region.SpatioTemporalNormalized
+Unit tests for spta.region.normalize.SpatioTemporalNormalized
 '''
 
 import numpy as np
@@ -7,7 +7,7 @@ import unittest
 
 from spta.tests.stub import stub_region
 from spta.region import Point
-from spta.region.temporal import SpatioTemporalNormalized
+from spta.region.normalize import SpatioTemporalNormalized
 
 
 class TestSpatioTemporalNormalized(unittest.TestCase):

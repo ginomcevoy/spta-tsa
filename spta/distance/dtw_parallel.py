@@ -75,7 +75,7 @@ if __name__ == '__main__':
     import logging
 
     from spta.region import Region
-    from spta.region.temporal import SpatioTemporalRegion, SpatioTemporalRegionMetadata
+    from spta.region.metadata import SpatioTemporalRegionMetadata
 
     logger = log_util.setup_log('DEBUG')
 
@@ -83,7 +83,7 @@ if __name__ == '__main__':
 
     nordeste_small_md = SpatioTemporalRegionMetadata('nordeste_small', Region(43, 50, 85, 95),
                                                      series_len=365, ppd=1, last=True)
-    nordeste_small_region = SpatioTemporalRegion.from_metadata(nordeste_small_md)
+    nordeste_small_region = nordeste_small_md.create_instance()
 
     logger.info('Calculating distances using DTW...')
     distance_measure_parallel = DistanceByDTWParallel(4)
@@ -91,7 +91,6 @@ if __name__ == '__main__':
     print(distance_matrix)
 
     # compare with known result
-    # it is not really equal because of triangular approach...
     dtw = DistanceByDTW()
     distance_saved = dtw.load_distance_matrix_md(nordeste_small_md)
     print(distance_saved)

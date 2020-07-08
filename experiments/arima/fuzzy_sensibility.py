@@ -7,7 +7,7 @@ import argparse
 from spta.arima.fuzzy_sensibility import ArimaFuzzySensibility
 from spta.distance.dtw import DistanceByDTW
 from spta.kmedoids import kmedoids_fuzzy
-from spta.region.temporal import SpatioTemporalRegion, SpatioTemporalCluster
+from spta.region.temporal import SpatioTemporalCluster
 from spta.util import log as log_util
 
 from experiments.metadata.arima import arima_suite_by_name
@@ -46,7 +46,7 @@ def do_arima_fuzzy_sensibility(args):
 
     # get the region from metadata
     spt_region_metadata = predefined_regions()[args.region]
-    spt_region = SpatioTemporalRegion.from_metadata(spt_region_metadata)
+    spt_region = spt_region_metadata.create_instance()
 
     # get experiment parameters including ARIMA suite
     exp_params = arima_clustering_experiments()[args.arima_clustering]

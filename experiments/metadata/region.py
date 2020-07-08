@@ -1,5 +1,5 @@
 from spta.region import Region
-from spta.region.temporal import SpatioTemporalRegionMetadata
+from spta.region.metadata import SpatioTemporalRegionMetadata
 
 
 def predefined_regions():

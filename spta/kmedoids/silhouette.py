@@ -52,7 +52,7 @@ class KmedoidsWithSilhouette(object):
         Obtains the spatio temporal region from a complete dataset, and saves it to a file.
         '''
         # read the dataset to load the spatio-temporal region
-        sptr = SpatioTemporalRegion.from_metadata(self.sptr_metadata)
+        sptr = self.sptr_metadata.create_instance()
 
         # save it to file given by metadata
         sptr.save()
@@ -314,7 +314,7 @@ if __name__ == '__main__':
 
     # Run with sp_small
     from spta.region import Region
-    from spta.region.temporal import SpatioTemporalRegionMetadata
+    from spta.region.metadata import SpatioTemporalRegionMetadata
 
     # use this region as example
     sp_small_md = SpatioTemporalRegionMetadata('sp_small', Region(40, 50, 50, 60), 1460, 4)

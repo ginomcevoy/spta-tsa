@@ -3,7 +3,6 @@ import numpy as np
 from spta.distance.dtw import DistanceByDTW
 from spta.util import log as log_util
 
-from .temporal import SpatioTemporalRegion, SpatioTemporalRegionMetadata
 from . import Region
 
 
@@ -69,7 +68,7 @@ class CalculateCentroid(log_util.LoggerMixin):
 
         Uses DTW by default.
         '''
-        spt_region = SpatioTemporalRegion.from_metadata(spt_region_metadata)
+        spt_region = spt_region_metadata.create_instance()
 
         # calculate centroid, should reuse a saved distance matrix if it is available
         centroid_calc = CalculateCentroid(distance_measure)
@@ -80,6 +79,7 @@ class CalculateCentroid(log_util.LoggerMixin):
 if __name__ == '__main__':
     logger = log_util.setup_log('DEBUG')
 
+    from .metadata import SpatioTemporalRegionMetadata
     nordeste_small_md = SpatioTemporalRegionMetadata('nordeste_small', Region(43, 50, 85, 95),
                                                      series_len=365, ppd=1, last=True)
 

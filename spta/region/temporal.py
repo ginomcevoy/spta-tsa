@@ -1,7 +1,7 @@
 import logging
 import numpy as np
 
-from spta.dataset import temp_brazil
+
 from spta.util import arrays as arrays_util
 from spta.util import fs as fs_util
 
@@ -12,135 +12,6 @@ from .spatial import SpatialDecorator, SpatialCluster, DomainRegion
 # SMALL_REGION = Region(0, 1, 0, 1)
 SAO_PAULO = Region(55, 75, 50, 70)
 SMALL_REGION = Region(0, 3, 0, 4)
-
-
-class SpatioTemporalRegionMetadata(object):
-    '''
-    Metadata for a spatio temporal region of a spatio temporal dataset.
-    Includes:
-        name
-            string (e.g sp_small)
-        region
-            a 2D region
-        series_len
-            the length of the temporal series
-        ppd
-            the points per day
-        last
-            if True, use the last years, else use the first years
-        dataset_dir
-            path where to load/store numpy files
-    '''
-
-    def __init__(self, name, region, series_len, ppd, last=True, centroid=None,
-                 normalized=True, dataset_dir='raw', pickle_dir='pickle'):
-        self.name = name
-        self.region = region
-        self.series_len = series_len
-        self.ppd = ppd
-        self.last = last
-        self.normalized = normalized
-        self.dataset_dir = dataset_dir
-        self.pickle_dir = pickle_dir
-
-    def index_to_absolute_point(self, index):
-        '''
-        Given a 2d index, recover the original Point coordinates.
-        This is useful when applied to a medoid index, because it will give the medoid position
-        in the original dataset.
-
-        Assumes that the medoid index has been calculated from the region specified in this
-        metadata instance.
-        '''
-        y_len = self.region.y2 - self.region.y1
-
-        # get (i, j) position relative to the region
-        x_region = int(index / y_len)
-        y_region = index % y_len
-
-        # add region offset like this
-        return self.absolute_position_of_point(Point(x_region, y_region))
-
-    def absolute_position_of_point(self, point):
-        '''
-        Given a point, recover its original coordinates.
-        Assumes that the provided point has been calculated from the region specified in this
-        metadata instance.
-        '''
-        # get the region offset and add to point
-        x_offset, y_offset = self.region.x1, self.region.y1
-        return Point(point.x + x_offset, point.y + y_offset)
-
-    @property
-    def years(self):
-        '''
-        Integer representing number of years of series length
-        '''
-        days = self.series_len / self.ppd
-        return int(days / 365)
-
-    @property
-    def time_str(self):
-        '''
-        A string representing the series length in days.
-        For now assume that we are always using entire years.
-        Ex: series_len = 365 and ppd = 1 -> time_str = 1y
-        Ex: series_len = 730 and ppd = 1 -> time_str = 2y
-        Ex: series_len = 1460 and ppd = 4 -> time_str = 1y
-        '''
-        return '{}y'.format(self.years)
-
-    @property
-    def dataset_filename(self):
-        '''
-        Ex 'raw/sp_small_1y_4ppd_norm.npy'
-        '''
-        return '{}/{}.npy'.format(self.dataset_dir, self)
-
-    @property
-    def distances_filename(self):
-        '''
-        Ex raw/distances_sp_small_1y_4ppd_norm.npy'
-        '''
-        return '{}/distances_{}.npy'.format(self.dataset_dir, self)
-
-    @property
-    def norm_min_filename(self):
-        '''
-        Ex 'raw/sp_small_1y_4ppd_min.npy'
-        '''
-        return '{}/{}_min.npy'.format(self.dataset_dir, self)
-
-    @property
-    def norm_max_filename(self):
-        '''
-        Ex 'raw/sp_small_1y_4ppd_max.npy'
-        '''
-        return '{}/{}_max.npy'.format(self.dataset_dir, self)
-
-    @property
-    def pickle_filename(self):
-        '''
-        Ex 'pickle/sp_small_1y_4ppd_norm.pickle'
-        '''
-        return '{}/{}.pickle'.format(self.pickle_dir, self)
-
-    def __repr__(self):
-        '''
-        Ex sp_small_1y_4ppd_norm'
-        '''
-        norm_str = ''
-        if self.normalized:
-            norm_str = '_norm'
-
-        last_str = ''
-        if not self.last:
-            last_str = '_first'
-
-        return '{}_{}_{}ppd{}{}'.format(self.name, self.time_str, self.ppd, last_str, norm_str)
-
-    def __str__(self):
-        return repr(self)
 
 
 class SpatioTemporalRegion(DomainRegion):
@@ -320,43 +191,6 @@ class SpatioTemporalRegion(DomainRegion):
             return self.region_metadata.name
         else:
             return 'SpatioTemporalRegion {}'.format(self.shape)
-
-    @classmethod
-    def from_metadata(cls, sptr_metadata):
-        '''
-        Loads the data of a spatio temporal region given its metadata
-        (SpatioTemporalRegionMetadata).
-        Currently supports only 1y and 4y, 1ppd and 4ppd.
-        '''
-
-        # big assumption
-        assert sptr_metadata.ppd == 1 or sptr_metadata.ppd == 4
-
-        logger = logging.getLogger()
-
-        # read the dataset according to the number of years and start/finish of dataset
-        # default is 4ppd...
-        if sptr_metadata.last:
-            numpy_dataset = temp_brazil.load_brazil_temps_last(sptr_metadata.years)
-        else:
-            numpy_dataset = temp_brazil.load_brazil_temps(sptr_metadata.years)
-
-        # convert to 1ppd?
-        if sptr_metadata.ppd == 1:
-            numpy_dataset = average_4ppd_to_1ppd(numpy_dataset, logger)
-
-        # subset the data to work only with region
-        spt_region = SpatioTemporalRegion(numpy_dataset).region_subset(sptr_metadata.region)
-
-        # save the metadata in the instance, can be useful later
-        spt_region.region_metadata = sptr_metadata
-
-        if sptr_metadata.normalized:
-            # replace region with normalized version
-            spt_region = SpatioTemporalNormalized(spt_region, region_metadata=sptr_metadata)
-
-        logger.info('Loaded dataset {}: {}'.format(sptr_metadata, sptr_metadata.region))
-        return spt_region
 
     @classmethod
     def repeat_series_over_region(cls, series, shape2D):
@@ -600,120 +434,6 @@ class SpatioTemporalCluster(SpatialCluster, SpatioTemporalDecorator):
         raise NotImplementedError
 
 
-class SpatioTemporalNormalized(SpatioTemporalDecorator):
-    '''
-    A decorator that normalizes the temporal series by scaling all the series to values
-    between 0 and 1. This can be achieved by applying the formula to each series:
-
-    normalized_series = (series - min) / (max - min)
-
-    We store the min and max values, so that the series can be later recovered by using:
-
-    series = normalized_series (max - min) + min
-
-    The min and max values are valid for each series. These are stored in spatial regions
-    called normalization_min and normalization_max, respectively.
-
-    If min = max, then scaled is fixed to 0.
-    If the series is Nan, save the  series, and set min = max = 0.
-    '''
-    def __init__(self, decorated_region, **kwargs):
-
-        self.logger.debug('SpatioTemporalNormalized kwargs: {}'.format(kwargs))
-
-        (series_len, x_len, y_len) = decorated_region.shape
-
-        # moved here to avoid circular imports between FunctionRegion and SpatioTemporalRegion
-        from . import function as function_region
-
-        # calculate the min, max values for each series
-        # we will save these outputs to allow denormalization
-        minFunction = function_region.FunctionRegionScalarSame(np.nanmin, x_len, y_len)
-        self.normalization_min = minFunction.apply_to(decorated_region)
-
-        maxFunction = function_region.FunctionRegionScalarSame(np.nanmax, x_len, y_len)
-        self.normalization_max = maxFunction.apply_to(decorated_region)
-
-        # this function normalizes the series at each point independently of other points
-        def normalize(series):
-
-            # calculate min/max (again...)
-            series_min = np.nanmin(series)
-            series_max = np.nanmax(series)
-
-            # sanity checks
-            if np.isnan(series_min) or np.isnan(series_max):
-                return np.repeat(np.nan, repeats=series_len)
-
-            if series_min == series_max:
-                return np.zeros(series_len)
-
-            # normalize here
-            return (series - series_min) / (series_max - series_min)
-
-        # call the function
-        normalizing_function = function_region.FunctionRegionSeriesSame(normalize, x_len, y_len)
-        normalized_region = normalizing_function.apply_to(decorated_region, series_len)
-        normalized_region.region_metadata = decorated_region.region_metadata
-
-        # use the normalized region here, all decorating functions from other decorators should be
-        # applied to this normalized region instead
-        super(SpatioTemporalNormalized, self).__init__(normalized_region, **kwargs)
-
-    def save(self):
-        '''
-        In addition of saving the numpy dataset, also save the min/max regions.
-        Requires the metadata!
-        '''
-
-        # save dataset
-        super(SpatioTemporalNormalized, self).save()
-
-        # save min
-        min_filename = self.region_metadata.norm_min_filename
-        np.save(min_filename, self.normalization_min.numpy_dataset)
-        self.logger.info('Saved norm_min to {}'.format(min_filename))
-
-        # save max
-        max_filename = self.region_metadata.norm_max_filename
-        np.save(max_filename, self.normalization_max.numpy_dataset)
-        self.logger.info('Saved norm_max to {}'.format(max_filename))
-
-    def __next__(self):
-        '''
-        Don't use the default iterator here, which comes from SpatialDecorator.
-        Instead, iterate like a spatio-temporal region, as the decorated region does.
-        '''
-        return self.decorated_region.__next__()
-
-
-def average_4ppd_to_1ppd(sptr_numpy, logger=None):
-    '''
-    Given a spatio temporal region with the defaults of 4 points per day (ppd=4), average the
-    points in each day to get 1 point per day(ppd = 1)
-    '''
-    (series_len, x_len, y_len) = sptr_numpy.shape
-
-    # we have 4 points per day
-    # average these four points to get a smoother curve
-    new_series_len = int(series_len / 4)
-    single_point_per_day = np.empty((new_series_len, x_len, y_len))
-
-    for x in range(0, x_len):
-        for y in range(0, y_len):
-            point_series = sptr_numpy[:, x, y]
-            series_reshape = (new_series_len, 4)
-            smooth = np.mean(np.reshape(point_series, series_reshape), axis=1)
-            # sptr.log.debug('smooth: %s' % smooth)
-            single_point_per_day[:, x, y] = np.array(smooth)
-
-    if logger:
-        log_msg = 'reshaped 4ppd {} to 1ppd {}'
-        logger.info(log_msg.format(sptr_numpy.shape, single_point_per_day.shape))
-
-    return single_point_per_day
-
-
 if __name__ == '__main__':
     import time
 
@@ -727,9 +447,10 @@ if __name__ == '__main__':
     # print('small: ', small.shape)
 
     # print('centroid %s' % str(small.centroid))
+    from .metadata import SpatioTemporalRegionMetadata
     sp_small_md = SpatioTemporalRegionMetadata('sp_small', Region(40, 50, 50, 60), 1460, 4,
                                                last=False, normalized=True)
-    sp_small = SpatioTemporalRegion.from_metadata(sp_small_md)
+    sp_small = sp_small_md.create_instance()
     print('sp_small: ', sp_small.shape)
 
     # save as npy

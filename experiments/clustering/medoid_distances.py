@@ -13,7 +13,6 @@ from experiments.metadata.clustering import get_suite
 
 from spta.clustering.factory import ClusteringFactory
 from spta.distance.dtw import DistanceByDTW
-from spta.region.temporal import SpatioTemporalRegion
 
 from spta.util import log as log_util
 from spta.util import fs as fs_util
@@ -50,7 +49,7 @@ def processRequest():
 def do_medoid_distances(args, logger):
 
     region_metadata, clustering_suite = metadata_from_args(args)
-    spt_region = SpatioTemporalRegion.from_metadata(region_metadata)
+    spt_region = region_metadata.create_instance()
     _, x_len, y_len = spt_region.shape
 
     # TODO assuming DTW

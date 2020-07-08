@@ -9,7 +9,6 @@ import os
 from spta.distance.dtw import DistanceByDTW
 
 from spta.region.error import ErrorAnalysis, error_functions
-from spta.region.temporal import SpatioTemporalRegion
 from spta.region.train import SplitTrainingAndTestLast
 
 from spta.solver.auto_arima import AutoARIMATrainer
@@ -76,7 +75,7 @@ def do_auto_arima_distance_errors(args, logger):
     error_type = args.error
 
     # recover the spatio-temporal region
-    spt_region = SpatioTemporalRegion.from_metadata(region_metadata)
+    spt_region = region_metadata.create_instance()
 
     for clustering_metadata in clustering_suite:
         logger.info('Clustering algorithm: {}'.format(clustering_metadata))

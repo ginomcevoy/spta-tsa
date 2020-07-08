@@ -430,14 +430,10 @@ if __name__ == '__main__':
     from experiments.metadata.region import predefined_regions
     from spta.clustering.regular import RegularClusteringAlgorithm, RegularClusteringMetadata
     from spta.region.centroid import CalculateCentroid
-    from spta.region.temporal import SpatioTemporalRegion
     from spta.distance.dtw import DistanceByDTW
 
-    # spt_region_md = SpatioTemporalRegionMetadata('nordeste_small', Region(43, 50, 85, 95),
-    #                                              series_len=365, ppd=1, last=True)
     spt_region_md = predefined_regions()['sp_small']
-
-    spt_region = SpatioTemporalRegion.from_metadata(spt_region_md)
+    spt_region = spt_region_md.create_instance()
     _, x_len, y_len = spt_region.shape
 
     # load saved distances for this region

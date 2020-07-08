@@ -13,9 +13,7 @@ from experiments.metadata.kmedoids import kmedoids_suites
 from spta.distance.dtw import DistanceByDTW
 from spta.distance.variance import DistanceHistogramClusters
 from spta.kmedoids import kmedoids, medoids_to_absolute_coordinates
-
 from spta.region.partition import PartitionRegionCrisp
-from spta.region.temporal import SpatioTemporalRegion
 
 from spta.util import fs as fs_util
 from spta.util import log as log_util
@@ -63,7 +61,7 @@ def do_kmedoids(args, logger):
     region_metadata = predefined_regions()[args.region]
 
     # get the region and transform to list of time series
-    spt_region = SpatioTemporalRegion.from_metadata(region_metadata)
+    spt_region = region_metadata.create_instance()
     series_group = spt_region.as_2d
 
     # prepare the CSV output now (header)

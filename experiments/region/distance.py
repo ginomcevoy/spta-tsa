@@ -10,7 +10,6 @@ import matplotlib.pyplot as plt
 from experiments.metadata.region import predefined_regions
 
 from spta.region.spatial import SpatialRegion
-from spta.region.temporal import SpatioTemporalRegion
 from spta.distance.dtw import DistanceByDTW
 from spta.distance.dtw_parallel import DistanceByDTWParallel
 
@@ -47,7 +46,7 @@ def calculate_distances_with_args(args, logger):
 
     # get the region from predefined metadata
     spt_region_metadata = predefined_regions()[args.region]
-    spt_region = SpatioTemporalRegion.from_metadata(spt_region_metadata)
+    spt_region = spt_region_metadata.create_instance()
 
     # only DTW support for now
     if args.distance == 'dtw':

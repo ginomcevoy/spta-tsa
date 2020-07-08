@@ -2,7 +2,6 @@ import time
 import numpy as np
 
 from spta.region import Point, Region
-from spta.region.temporal import SpatioTemporalRegion, SpatioTemporalRegionMetadata
 from spta.region.forecast import ErrorRegion
 from spta.region.train import split_region_in_train_test
 
@@ -79,10 +78,12 @@ def evaluate_arima_performance_parameters(p_values, d_values, q_values, training
 if __name__ == '__main__':
     log_util.setup_log('DEBUG')
 
+    from spta.region.metadata import SpatioTemporalRegionMetadata
+
     # get region from metadata
     nordeste_small_md = SpatioTemporalRegionMetadata(
         'nordeste_small', Region(43, 50, 85, 95), series_len=365, ppd=1, last=True)
-    spt_region = SpatioTemporalRegion.from_metadata(nordeste_small_md)
+    spt_region = nordeste_small_md.create_instance()
 
     # region has known centroid
     centroid = Point(5, 4)

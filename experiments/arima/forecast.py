@@ -6,8 +6,6 @@ import argparse
 from spta.arima.forecast import ArimaForecastingPDQ
 from spta.arima.analysis import ArimaErrorAnalysis
 from spta.distance.dtw import DistanceByDTW
-from spta.region import Point
-from spta.region.temporal import SpatioTemporalRegion
 from spta.util import log as log_util
 
 from experiments.metadata.arima import predefined_arima_suites, arima_suite_by_name
@@ -40,7 +38,7 @@ def do_arima_forecast(args):
 
     # get the region from metadata
     spt_region_metadata = predefined_regions()[args.region]
-    spt_region = SpatioTemporalRegion.from_metadata(spt_region_metadata)
+    spt_region = spt_region_metadata.create_instance()
 
     # try to get a pre-calculated centroid, otherwise calculate it
     # TODO allow other distances

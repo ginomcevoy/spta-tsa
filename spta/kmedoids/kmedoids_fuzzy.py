@@ -276,7 +276,7 @@ def run_kmedoids_fuzzy_from_params(X, kfuzzy_params):
 
 if __name__ == '__main__':
     from spta.region import Region
-    from spta.region.temporal import SpatioTemporalRegion, SpatioTemporalRegionMetadata
+    from spta.region.metadata import SpatioTemporalRegionMetadata
     from spta.util import log as log_util
 
     log_util.setup_log('DEBUG')
@@ -284,7 +284,7 @@ if __name__ == '__main__':
     # Run k=2 on sp_small dataset
     nordeste_small_md = SpatioTemporalRegionMetadata('nordeste_small', Region(43, 50, 85, 95),
                                                      series_len=365, ppd=1, last=True)
-    nordeste_small = SpatioTemporalRegion.from_metadata(nordeste_small_md)
+    nordeste_small = nordeste_small_md.create_instance()
 
     # load pre-computed distances
     distance_dtw = DistanceByDTW()

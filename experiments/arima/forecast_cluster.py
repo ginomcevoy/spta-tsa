@@ -13,7 +13,6 @@ from spta.kmedoids import kmedoids
 
 from spta.region.partition import PartitionRegionCrisp
 from spta.region.error import error_functions
-from spta.region.temporal import SpatioTemporalRegion
 
 from spta.util import fs as fs_util
 from spta.util import log as log_util
@@ -84,7 +83,7 @@ def do_arima_forecast_cluster(args):
 
     # get the region from metadata
     spt_region_metadata = predefined_regions()[args.region]
-    spt_region = SpatioTemporalRegion.from_metadata(spt_region_metadata)
+    spt_region = spt_region_metadata.create_instance()
     _, x_len, y_len = spt_region.shape
 
     # get experiment parameters including ARIMA suite

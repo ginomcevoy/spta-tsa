@@ -183,12 +183,12 @@ if __name__ == '__main__':
 
     # get region from metadata
     from spta.region import Point, Region
-    from spta.region.temporal import SpatioTemporalRegion, SpatioTemporalRegionMetadata
+    from spta.region.metadata import SpatioTemporalRegionMetadata
     from .forecast import ArimaForecastingPDQ, ArimaForecastingAutoArima
 
     nordeste_small_md = SpatioTemporalRegionMetadata(
         'nordeste_small', Region(43, 50, 85, 95), series_len=365, ppd=1, last=True)
-    spt_region = SpatioTemporalRegion.from_metadata(nordeste_small_md)
+    spt_region = nordeste_small_md.create_instance()
 
     # region has known centroid
     spt_region.centroid = Point(5, 4)

@@ -14,7 +14,6 @@ from spta.kmedoids import kmedoids
 
 from spta.region.error import error_functions
 from spta.region.partition import PartitionRegionCrisp
-from spta.region.temporal import SpatioTemporalRegion
 
 from spta.util import fs as fs_util
 from spta.util import log as log_util
@@ -90,7 +89,7 @@ def do_auto_arima_forecast_cluster(args, logger):
     region_metadata = predefined_regions()[args.region]
 
     # get the region and transform to list of time series
-    spt_region = SpatioTemporalRegion.from_metadata(region_metadata)
+    spt_region = region_metadata.create_instance()
 
     _, _, y_len = spt_region.shape
     series_group = spt_region.as_2d

@@ -1,7 +1,7 @@
 import unittest
 
 from spta.region import Point, Region
-from spta.region.temporal import SpatioTemporalRegionMetadata
+from spta.region.metadata import SpatioTemporalRegionMetadata
 
 
 class TestSptrMetadata(unittest.TestCase):
