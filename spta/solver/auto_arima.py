@@ -5,6 +5,7 @@ Uses a clustering algorithm to define clusters and medoids, and uses auto ARIMA 
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 
+from collections import namedtuple
 import csv
 import numpy as np
 import pickle
@@ -20,7 +21,6 @@ from spta.region.base import BaseRegion
 from spta.region.error import MeasureForecastingError, get_error_func
 from spta.region.scaling import SpatioTemporalScaled
 from spta.region.spatial import SpatialCluster
-from spta.region.temporal import SpatioTemporalRegion
 from spta.region.train import SplitTrainingAndTestLast
 
 from spta.util import fs as fs_util
@@ -305,18 +305,21 @@ class AutoARIMASolver(log_util.LoggerMixin):
         membership_1d = self.partition.as_numpy.reshape(x_len * y_len)
         shape_2d = (x_len, y_len)
 
+        # get info on the prediction region for plot
+        rectangle_data = self.get_rectangle_data(prediction_region)
+
         # plot the partitioning, the clustering metadata should format as a nice string
-        title = '{}; Query: {}'.format(self.clustering_metadata, prediction_region)
+        title = '{}; {}'.format(self.clustering_metadata, rectangle_data.desc)
         fig, ax1 = plt.subplots(1, 1, figsize=(10, 8))
         plot_util.plot_2d_clusters(membership_1d, shape_2d, title=title, subplot=ax1)
 
-        # add the rectangle representing the region
-        width = prediction_region.x2 - prediction_region.x1
-        height = prediction_region.y2 - prediction_region.y1
-
         # https://stackoverflow.com/questions/52056475/python-plot-rectangles-of-known-size-at-scatter-points
-        ax1.add_patch(Rectangle(xy=(prediction_region.x1 - 0.5, prediction_region.y1 - 0.5),
-                                width=width, height=height, linewidth=1, color='red', fill=False))
+        ax1.add_patch(Rectangle(xy=rectangle_data.xy,
+                                width=rectangle_data.width,
+                                height=rectangle_data.height,
+                                linewidth=1,
+                                color='red',
+                                fill=False))
 
         # save figure
         fs_util.mkdir(self.metadata.plot_dir)
@@ -328,6 +331,36 @@ class AutoARIMASolver(log_util.LoggerMixin):
 
         # show figure
         plt.show()
+
+    def get_rectangle_data(self, prediction_region):
+        '''
+        Returns the following data: xy, width, height, so that the prediction region can be added
+        to the partitioning plot.
+
+        FIXME COORDS The plot in plot_2d_clusters is "wrong", meaning that the axes are rotated.
+        However, the x, y coordinates are *also* rotated (x is latitute, should be longitude).
+        So the plot is "OK", but the prediction region needs to be rotated here.
+
+        When the (x, y) coordinates are changed to long/lat (instead of lat/long), then we
+        can come back here again and revert this rotation.
+        '''
+        xy = (prediction_region.y1 - 0.5, prediction_region.x1 - 0.5)
+        width = prediction_region.y2 - prediction_region.y1
+        height = prediction_region.x2 - prediction_region.x1
+
+        # a meaningful description for the prediction region
+        # recover the original coordinates using the region metadata
+        # Representation: (top left) - (top right) - (bottom left) - (bottom right)
+        # note: xy still needs the offset, should not use absolute
+        absolute_region = self.region_metadata.absolute_coordinates_of_region(prediction_region)
+        desc_txt = 'Region: ({}, {}) - ({}, {}) - ({}, {}) - ({}, {})'
+        desc = desc_txt.format(absolute_region.x1, absolute_region.y1,
+                               absolute_region.x1, absolute_region.y2,
+                               absolute_region.x2, absolute_region.y1,
+                               absolute_region.x2, absolute_region.y2)
+
+        RectangleData = namedtuple('RectangleData', ('xy', 'width', 'height', 'desc'))
+        return RectangleData(xy, width, height, desc)
 
     def get_plot_filename(self, prediction_region):
         '''

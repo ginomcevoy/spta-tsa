@@ -1,6 +1,6 @@
 import numpy as np
 
-from . import Point
+from . import Point, Region
 from .temporal import SpatioTemporalRegion
 from .scaling import ScaleFunction
 from spta.dataset import temp_brazil
@@ -66,6 +66,22 @@ class SpatioTemporalRegionMetadata(log_util.LoggerMixin):
         # get the region offset and add to point
         x_offset, y_offset = self.region.x1, self.region.y1
         return Point(point.x + x_offset, point.y + y_offset)
+
+    def absolute_coordinates_of_region(self, region):
+        '''
+        Given a rectangle region, recover its original coordinates.
+        Assumes that the provided points have been calculated from the region specified in this
+        metadata instance.
+        '''
+        # get the offset of (x1, y1) and (x2, y2)
+        corner1 = Point(region.x1, region.y1)
+        corner1_absolute = self.absolute_position_of_point(corner1)
+        corner2 = Point(region.x2, region.y2)
+        corner2_absolute = self.absolute_position_of_point(corner2)
+
+        # build a new Region with the absolute coordinates
+        return Region(corner1_absolute.x, corner2_absolute.x,
+                      corner1_absolute.y, corner2_absolute.y)
 
     @property
     def years(self):

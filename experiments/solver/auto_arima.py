@@ -119,10 +119,10 @@ def configure_predict_parser(predict_parser):
     Configure specific options for the predict action.
     '''
     # region is mandatory... as 4 coords for now
-    predict_parser.add_argument('x1', help='Region for forecasting: region.x1')
-    predict_parser.add_argument('x2', help='Region for forecasting: region.x2')
-    predict_parser.add_argument('y1', help='Region for forecasting: region.y1')
-    predict_parser.add_argument('y2', help='Region for forecasting: region.y2')
+    predict_parser.add_argument('lat1', help='First latitude index relative to region (north)')
+    predict_parser.add_argument('lat2', help='Second latitude index relative to region (south)')
+    predict_parser.add_argument('long1', help='First longitude index relative to region (west)')
+    predict_parser.add_argument('long2', help='Second longitude index relative to region (east)')
 
     # function called after action is parsed
     predict_parser.set_defaults(func=predict_request)
@@ -158,7 +158,9 @@ def predict_request(args):
     distance_measure = DistanceByDTW()
 
     # get region
-    prediction_region = Region(int(args.x1), int(args.x2), int(args.y1), int(args.y2))
+    # NOTE: x = lat, y = long!
+    # Revise this if we adapt for COORDS
+    prediction_region = Region(int(args.lat1), int(args.lat2), int(args.long1), int(args.long2))
 
     # load solver from persistence
     solver_metadata = SolverMetadata(region_metadata=region_metadata,

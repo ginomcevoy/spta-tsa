@@ -5,13 +5,12 @@ import argparse
 import csv
 
 from experiments.metadata.region import predefined_regions
-from experiments.metadata.kmedoids import kmedoids_suites
+from experiments.metadata.clustering import regular_suites
+
+from spta.clustering.factory import ClusteringFactory
 
 from spta.distance.dtw import DistanceByDTW
 from spta.distance.variance import DistanceHistogramClusters
-from spta.region.centroid import CalculateCentroid
-from spta.region.temporal import SpatioTemporalCluster
-from spta.region.mask import MaskRegionCrisp
 
 from spta.util import fs as fs_util
 from spta.util import log as log_util
@@ -21,16 +20,16 @@ def processRequest():
 
     # parses the arguments
     desc = 'Create regular partitions on a spatio temporal region with different k values'
-    usage = '%(prog)s [-h] <region> <kmedoids_id> [--variance] [--log LOG]'
+    usage = '%(prog)s [-h] <region> <regular_suite_id> [--variance] [--log LOG]'
     parser = argparse.ArgumentParser(prog='cluster-regular', description=desc, usage=usage)
 
     # need name of region metadata and the ID of the kmedoids
     region_options = predefined_regions().keys()
     parser.add_argument('region', help='Name of the region metadata', choices=region_options)
 
-    kmedoids_options = kmedoids_suites().keys()
-    parser.add_argument('kmedoids_id', help='ID of the kmedoids analysis',
-                        choices=kmedoids_options)
+    # required argument: clustering ID
+    help_msg = 'ID of the regular clustering suite (see metadata.clustering)'
+    parser.add_argument('regular_suite', help=help_msg, choices=regular_suites().keys())
 
     # variance analysis: --variance to create histograms, --random to add random points
     # bins to specify bins, default='auto'
@@ -62,39 +61,36 @@ def analyze_regular_partitions(args, logger):
     spt_region = region_metadata.create_instance()
     _, x_len, y_len = spt_region.shape
 
-    # for now, use the kmedoids suite to get k data
-    kmedoids_suite = kmedoids_suites()[args.kmedoids_id]
+    # retrieve the regular clustering suite
+    regular_suite = regular_suites()[args.regular_suite]
 
     # prepare the CSV output now (header)
     # name is built based on region and kmedoids IDs
     fs_util.mkdir('csv')
-    csv_filename = 'csv/cluster_regular_{}_{}.csv'.format(args.region, args.kmedoids_id)
+    csv_filename = 'csv/cluster_regular_{}_{}.csv'.format(args.region, args.regular_suite)
     with open(csv_filename, 'w', newline='') as csv_file:
         csv_writer = csv.writer(csv_file, delimiter=' ', quotechar='|',
                                 quoting=csv.QUOTE_MINIMAL)
         # header
         csv_writer.writerow(['k', 'total_cost', 'medoids'])
 
-    # retrieve the kmedoids suite
-    kmedoids_suite = kmedoids_suites()[args.kmedoids_id]
-
     # Assumption: use DTW
     # use pre-computed distance matrix
-    distance_dtw = DistanceByDTW()
-    distance_dtw.load_distance_matrix_2d(region_metadata.distances_filename,
-                                         region_metadata.region)
+    distance_measure = DistanceByDTW()
+    distance_measure.load_distance_matrix_2d(region_metadata.distances_filename,
+                                             region_metadata.region)
 
-    # iterate the suite to get the k values
-    # the suite also has seeds, no need for them here
-    k_set = set()
-    for kmedoids_metadata in kmedoids_suite:
-        k_set.add(kmedoids_metadata.k)
+    # iterate possible regular clusterings
+    for clustering_metadata in regular_suite:
+        logger.info('Clustering algorithm: {}'.format(clustering_metadata))
 
-    # iterate k values
-    for k in k_set:
+        # clustering algorithm to use
+        clustering_factory = ClusteringFactory(distance_measure)
+        clustering_algorithm = clustering_factory.instance(clustering_metadata)
 
-        # work on this k (single partition, no seed)
-        partial_result = do_regular_partition(spt_region, distance_dtw, k, args)
+        # work on this regular clustering
+        partial_result = do_regular_partition(spt_region, clustering_algorithm, distance_measure,
+                                              args)
 
         # write partial result
         with open(csv_filename, 'a', newline='') as csv_file:
@@ -106,52 +102,48 @@ def analyze_regular_partitions(args, logger):
     logger.info('CSV output at: {}'.format(csv_filename))
 
 
-def do_regular_partition(spt_region, distance_measure, k, args):
+def do_regular_partition(spt_region, clustering_algorithm, distance_measure, args):
     '''
     Analyze regular partition for a particular value of k.
     '''
     _, x_len, y_len = spt_region.shape
+    k = clustering_algorithm.k
 
-    # for regular clustering, the centroid needs to be calculated
-    calculate_centroid = CalculateCentroid(distance_measure)
-
-    # short name for clusters
-    # be nice and pad with zeros if needed
-    padding = int(k / 10) + 1
-    cluster_name_str = 'cluster{{:0{}d}}'.format(padding)
+    # use the regular algorithm to get a partition and the medoids
+    partition, medoid_points = clustering_algorithm.partition(spt_region, with_medoids=True)
 
     # keep track of total cost of the each cluster by adding the distances to the point
     intra_cluster_costs = []
-    clusters = []
+    clusters = partition.create_all_spt_clusters(spt_region, medoids=medoid_points)
 
-    # format the centroids for CSV output
-    centroids_str = ''
+    # format the medoids for CSV output
+    medoids_str = ''
 
-    # regular clustering is achieved by building a regular mask
-    # TODO use Partition class instead of MaskRegion!
     for i in range(0, k):
-        mask_i = MaskRegionCrisp.with_regular_partition(k, i, x_len, y_len)
-        cluster_i = SpatioTemporalCluster(spt_region, mask_i)
-        cluster_i.name = cluster_name_str.format(i)
 
-        # find the centroid of each cluster
-        cluster_i.centroid, cluster_i.distances_to_centroid = \
-            calculate_centroid.find_centroid_and_distances(cluster_i)
+        cluster_i = clusters[i]
 
         # recover the original coordinate of the centroid using the region metadata
-        absolute_centroid = \
+        absolute_medoid = \
             spt_region.region_metadata.absolute_position_of_point(cluster_i.centroid)
-        centroids_str += '({},{}) '.format(absolute_centroid.x, absolute_centroid.y)
+        medoids_str += '({},{}) '.format(absolute_medoid.x, absolute_medoid.y)
+
+        # use the distance matrix to find the intra-cluster cost (sum of all distances of the
+        # cluster points to its medoid)
+        point_indices_of_cluster_i = cluster_i.all_point_indices
+        distances_to_medoid = \
+            distance_measure.distances_to_point(spt_region=cluster_i,
+                                                point=cluster_i.centroid,
+                                                all_point_indices=point_indices_of_cluster_i)
 
         # add to total cost of this cluster
-        intra_cluster_cost = distance_measure.combine(cluster_i.distances_to_centroid)
+        intra_cluster_cost = distance_measure.combine(distances_to_medoid)
         intra_cluster_costs.append(intra_cluster_cost)
-        clusters.append(cluster_i)
 
     # combine intra_cluster costs to obtain total cost
     total_cost = distance_measure.combine(intra_cluster_costs)
     total_cost_str = '{:0.3f}'.format(total_cost)
-    partial_result = [k, total_cost_str, centroids_str]
+    partial_result = [k, total_cost_str, medoids_str]
 
     # do variance analysis and plots?
     if args.variance:
