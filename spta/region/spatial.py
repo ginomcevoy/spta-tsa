@@ -15,6 +15,20 @@ class DomainRegion(base.BaseRegion):
     def __init__(self, numpy_dataset, **kwargs):
         super(DomainRegion, self).__init__(numpy_dataset)
 
+    def new_spatial_region(self, numpy_dataset):
+        '''
+        Creates a new instance of SpatialRegion with the underlying numpy data.
+        '''
+        return SpatialRegion(numpy_dataset)
+
+    def new_spatio_temporal_region(self, numpy_dataset):
+        '''
+        Creates a new instance of SpatioTemporalRegion with the underlying numpy data.
+        '''
+        # ugly import to avoid circular imports
+        from .temporal import SpatioTemporalRegion
+        return SpatioTemporalRegion(numpy_dataset)
+
     def apply_function_scalar(self, function_region_scalar):
         '''
         Applies an instance of FunctionRegionScalar on this region, to get a SpatialRegion
@@ -23,6 +37,7 @@ class DomainRegion(base.BaseRegion):
         Should be reusable in SpatioTemporalRegion (still returns a SpatialRegion), even though
         the value passed to the function is expected to be an array.
 
+        If the iterator is overridden, the behavior may change, e.g. for clusters.
         Cannot be used inside the class iterator!
         '''
 
@@ -33,7 +48,6 @@ class DomainRegion(base.BaseRegion):
         # condition passed, the output will have the same 2D shape
         # the output dtype is given by the function
         result_np = np.zeros((self.x_len, self.y_len), dtype=function_region_scalar.dtype)
-        result = SpatialRegion(result_np)
 
         # use internal iterator! this means we can't use this function inside another iteration...
         for (point, value) in self:
@@ -46,13 +60,16 @@ class DomainRegion(base.BaseRegion):
             # store result in numpy array: cannot use result.value_at(point)
             result_np[point.x, point.y] = function_at_point(value)
 
-        return result
+        # create a new instance of SpatialRegion
+        # the call may be polymorphic resulting in instances of other child classes.
+        return self.new_spatial_region(result_np)
 
     def apply_function_series(self, function_region_series, output_len):
         '''
         Applies an instance of FunctionRegionSeries on this region, to get a
         SpatioTemporalRegion as a result.
 
+        If the iterator is overridden, the behavior may change, e.g. for clusters.
         Cannot be used inside the class iterator!
         '''
 
@@ -64,10 +81,6 @@ class DomainRegion(base.BaseRegion):
         result_np = np.zeros((output_len, self.x_len, self.y_len),
                              dtype=function_region_series.dtype)
 
-        # ugly import to avoid circular imports
-        from .temporal import SpatioTemporalRegion
-        result = SpatioTemporalRegion(result_np)
-
         # use internal iterator! this means we can't use this function inside another iteration...
         for (point, series) in self:
 
@@ -77,7 +90,9 @@ class DomainRegion(base.BaseRegion):
             # store result in numpy array
             result_np[:, point.x, point.y] = function_at_point(series)
 
-        return result
+        # create a new instance of SpatialRegion
+        # the call may be polymorphic resulting in instances of other child classes.
+        return self.new_spatio_temporal_region(result_np)
 
 
 class SpatialRegion(DomainRegion):
@@ -114,7 +129,7 @@ class SpatialRegion(DomainRegion):
         region: Region namedtuple
         '''
         numpy_region_subset = self.numpy_dataset[region.x1:region.x2, region.y1:region.y2]
-        return SpatialRegion(numpy_region_subset)
+        return self.new_spatial_region(numpy_region_subset)
 
     def value_at(self, point):
         # sanity check
@@ -166,7 +181,7 @@ class SpatialRegion(DomainRegion):
         '''
         repeated_value_np = arrays_util.copy_value_as_matrix_elements(value, self.x_len,
                                                                       self.y_len)
-        return SpatialRegion(repeated_value_np)
+        return self.new_spatial_region(repeated_value_np)
 
     def repeat_point(self, point):
         '''
@@ -217,14 +232,25 @@ class SpatialDecorator(SpatialRegion):
         self.decorated_region = decorated_region
         super(SpatialDecorator, self).__init__(decorated_region.numpy_dataset, **kwargs)
 
+    def new_spatial_region(self, numpy_dataset):
+        '''
+        By default, delegate SpatialRegion instance to decorated region using Chain of
+        Responsibility pattern.
+        '''
+        return self.decorated_region.new_spatial_region(numpy_dataset)
+
+    def new_spatio_temporal_region(self, numpy_dataset):
+        '''
+        By default, delegate SpatioTemporalRegion instance to decorated region using Chain of
+        Responsibility pattern.
+        '''
+        return self.decorated_region.new_spatio_temporal_region(numpy_dataset)
+
     def region_subset(self, region):
         return self.decorated_region.region_subset(region)
 
     def value_at(self, point):
         return self.decorated_region.value_at(point)
-
-    def empty_region_2d(self):
-        return self.decorated_region.empty_region_2d()
 
     def save_to(self, filename):
         return self.decorated_region.save_to(filename)
@@ -260,6 +286,11 @@ class SpatialCluster(SpatialDecorator):
 
     Implemented by decorating an existing SpatialRegion with cluster data.
     See PartitionRegion for more information.
+
+    No need to override these, because they will use new_spatial_region correctly:
+        - repeat_value
+        - repeat_point
+        - empty_region_2d
     '''
     def __init__(self, decorated_region, partition, cluster_index, **kwargs):
         '''
@@ -287,11 +318,32 @@ class SpatialCluster(SpatialDecorator):
         # ask the mask for the size
         return self.partition.cluster_len(self.cluster_index)
 
+    def new_spatial_region(self, numpy_dataset):
+        '''
+        Creates a new instance of SpatialCluster with the same partition and cluster index.
+        This will wrap a new decorated region, that was built by the original decorator
+        using Chain of Responsibility pattern.
+        '''
+        new_decorated_region = self.decorated_region.new_spatial_region(numpy_dataset)
+        return SpatialCluster(decorated_region=new_decorated_region,
+                              partition=self.partition,
+                              cluster_index=self.cluster_index)
+
+    def new_spatio_temporal_region(self, numpy_dataset):
+        # We need a decorated SpatioTemporalRegion, which we don't have.
+        raise NotImplementedError
+
     def region_subset(self, region):
+        '''
+        TODO don't need this yet
+        '''
         error_msg = 'region_subset not allowed for {}!'
         raise NotImplementedError(error_msg.format(self.__class__.__name__))
 
     def value_at(self, point):
+        '''
+        Returns the value at the point, only if the point belongs to this cluster.
+        '''
         # sanity check
         if point is None:
             return np.nan
@@ -299,36 +351,16 @@ class SpatialCluster(SpatialDecorator):
         if self.partition.is_member(point, self.cluster_index):
             return self.decorated_region.value_at(point)
         else:
-            raise ValueError('Point not in cluster mask: {}'.format(point))
-
-    def repeat_value(self, value):
-        '''
-        Creates a new spatial cluster with this same shape, where all the values are the
-        same as the provided value.
-
-        The value is repeated over all points for simplicity, but calling value_at on points
-        outside the cluster should remain forbidden.
-
-        NOTE: no need to reimplement repeat_point, it should correctly use this method
-        polymorphically to create a SpatialCluster.
-        '''
-        repeated_region = self.decorated_region.repeat_value(value)
-        return SpatialCluster(repeated_region, self.partition, self.cluster_index)
-
-    def empty_region_2d(self):
-        '''
-        Returns an empty SpatialCluster with the same shape and same clustering info.
-        '''
-        empty_spatial_region = self.decorated_region.empty_region_2d()
-        return SpatialCluster(decorated_region=empty_spatial_region,
-                              partition=self.partition,
-                              cluster_index=self.cluster_index)
+            raise ValueError('Point not in cluster: {}'.format(point))
 
     def __next__(self):
         '''
         Used for iterating *only* over points in the cluster. Points not in the cluster are skipped
         by this iterator!
         The iterator returns the tuple (Point, value) for each point.
+
+        This iterator will also play a role in apply_function_scalar and apply_function_series,
+        the function will be applied only the points that belong to this cluster.
         '''
         while True:
 
@@ -353,55 +385,6 @@ class SpatialCluster(SpatialDecorator):
 
         next_value = self.value_at(next_point_in_cluster)
         return (next_point_in_cluster, next_value)
-
-    def apply_function_scalar(self, function_region_scalar):
-        '''
-        Applies an instance of FunctionRegionScalar on this cluster region, to get a SpatialCluster
-        as a result.
-
-        Behaves similar to the SpatialRegion implementation, with these differences:
-          - only points in the mask are iterated (iterator is overridden)
-          - a new SpatialCluster is created, instead of a new SpatialRegion.
-
-        Should be reusable in SpatioTemporalCluster (still returns a SpatialCluster), even though
-        the value passed to the function is expected to be an array.
-
-        Cannot be used inside the class iterator!
-        '''
-
-        # call the parent code (SpatialRegion)
-        # since the iterator is overridden, this should only iterate over points in the mask
-        self.logger.debug('{} apply_function_scalar'.format(self))
-        spatial_region = super(SpatialCluster, self).apply_function_scalar(function_region_scalar)
-
-        # return a SpatialCluster instead!
-        # Notice that the calling function is not aware of the change
-        # (visitor is not aware of how the visited element is of a different subclass)
-        return SpatialCluster(spatial_region, self.partition, self.cluster_index)
-
-    def apply_function_series(self, function_region_series, output_len):
-        '''
-        Applies an instance of FunctionRegionSeries on this cluster region, to get a
-        SpatioTemporalCluster as a result.
-
-        Behaves similar to the SpatialRegion implementation, with these differences:
-          - only points in the mask are iterated (iterator is overridden)
-          - a new SpatioTemporalCluster is created, instead of a new SpatioTemporalRegion.
-
-        Cannot be used inside the class iterator!
-        '''
-        self.logger.debug('{} apply_function_series'.format(self))
-
-        # call the parent code (SpatialRegion)
-        # since the iterator is overridden, this should only iterate over points in the mask
-        spt_region = super(SpatialCluster, self).apply_function_series(function_region_series,
-                                                                       output_len)
-
-        # return a SpatioTemporalCluster instead!
-        # Notice that the calling function is not aware of the change
-        # (visitor is not aware of how the visited element is of a differnt subclass)
-        from .temporal import SpatioTemporalCluster
-        return SpatioTemporalCluster(spt_region, self.partition, self.cluster_index)
 
     def __str__(self):
         '''

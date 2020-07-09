@@ -18,6 +18,7 @@ from spta.clustering.factory import ClusteringFactory
 from spta.region import Point
 from spta.region.base import BaseRegion
 from spta.region.error import MeasureForecastingError, get_error_func
+from spta.region.scaling import SpatioTemporalScaled
 from spta.region.spatial import SpatialCluster
 from spta.region.temporal import SpatioTemporalRegion
 from spta.region.train import SplitTrainingAndTestLast
@@ -251,6 +252,21 @@ class AutoARIMASolver(log_util.LoggerMixin):
         # and the error_subregion is right there... so use it
         forecast_subregion = arima_model_subset.apply_to(error_subregion, forecast_len)
 
+        # handle descaling here: we want to present descaled data to users
+        if self.region_metadata.normalized:
+
+            # The forecast_subregion is not aware of the scaling, because it was not created
+            # as such. As a workaround, use the original spatio-temporal region (which HAS the
+            # scaling data) and to retrieve appropriate descaling info for this forecast subregion.
+            # TODO make this work: forecast_subregion = forecast_subregion.descale()
+            self.logger.debug('About to descale: {}'.format(forecast_subregion))
+            spt_subset_with_scaling_data = self.spt_region.region_subset(prediction_region)
+            scaled_forecast_subregion = \
+                SpatioTemporalScaled(forecast_subregion,
+                                     scale_min=spt_subset_with_scaling_data.scale_min,
+                                     scale_max=spt_subset_with_scaling_data.scale_max)
+            forecast_subregion = scaled_forecast_subregion.descale()
+
         # this has all the required information and can be iterated
         return PredictionQueryResult(solver_metadata=self.metadata,
                                      distance_measure=self.distance_measure,
@@ -270,10 +286,10 @@ class AutoARIMASolver(log_util.LoggerMixin):
 
         # load the region again
         # normally only to get shape, but for normalized regions it also has info useful for
-        # denormalizing the data
-        # TODO revise this
+        # descaling the data
         self.spt_region = self.region_metadata.create_instance()
-        _, x_len, y_len = self.spt_region.shape
+        self.logger.debug('Loaded spt_region for predictions: {} {!r}'.format(self.spt_region,
+                                                                              self.spt_region))
 
         # set prepared flag
         self.prepared = True
@@ -391,26 +407,8 @@ class PredictionQueryResult(BaseRegion):
     def forecast_at(self, relative_point):
         '''
         Forecast at point, where (0, 0) is the corner of the prediction region.
-        We need to handle denormalization here!
         '''
-        forecast_series = self.forecast_subregion.series_at(relative_point)
-
-        if self.region_metadata.normalized:
-
-            # undo the prediction offset to get coordinates in the domain region
-            domain_point = Point(relative_point.x + self.offset_x,
-                                 relative_point.y + self.offset_y)
-
-            # get the normalization info for this domain point
-            norm_min = self.spt_region.normalization_min.value_at(domain_point)
-            norm_max = self.spt_region.normalization_max.value_at(domain_point)
-            self.logger.debug('point {}: norm_min={}, norm_max={}'.format(domain_point,
-                                                                          norm_min, norm_max))
-
-            # denormalize
-            forecast_series = (norm_max - norm_min) * forecast_series + norm_min
-
-        return forecast_series
+        return self.forecast_subregion.series_at(relative_point)
 
     def error_at(self, relative_point):
         '''

@@ -5,7 +5,7 @@ import numpy as np
 from spta.util import arrays as arrays_util
 from spta.util import fs as fs_util
 
-from . import Point, Region
+from . import Region
 from .spatial import SpatialDecorator, SpatialCluster, DomainRegion
 
 # SMALL_REGION = Region(55, 58, 50, 54)
@@ -62,14 +62,14 @@ class SpatioTemporalRegion(DomainRegion):
         region: Region namedtuple
         '''
         numpy_region_subset = self.numpy_dataset[:, region.x1:region.x2, region.y1:region.y2]
-        return SpatioTemporalRegion(numpy_region_subset)
+        return self.new_spatio_temporal_region(numpy_region_subset)
 
     def interval_subset(self, ti):
         '''
         ti: TimeInterval
         '''
         numpy_region_subset = self.numpy_dataset[ti.t1:ti.t2, :, :]
-        return SpatioTemporalRegion(numpy_region_subset)
+        return self.new_spatio_temporal_region(numpy_region_subset)
 
     def subset(self, region, ti):
         '''
@@ -78,7 +78,7 @@ class SpatioTemporalRegion(DomainRegion):
         '''
         numpy_region_subset = \
             self.numpy_dataset[ti.t1:ti.t2, region.x1:region.x2, region.y1:region.y2]
-        return SpatioTemporalRegion(numpy_region_subset)
+        return self.new_spatio_temporal_region(numpy_region_subset)
 
     def repeat_series(self, series):
         '''
@@ -87,7 +87,7 @@ class SpatioTemporalRegion(DomainRegion):
         '''
         repeated_series_np = arrays_util.copy_array_as_matrix_elements(series, self.x_len,
                                                                        self.y_len)
-        return SpatioTemporalRegion(repeated_series_np)
+        return self.new_spatio_temporal_region(repeated_series_np)
 
     def repeat_point(self, point):
         '''
@@ -143,6 +143,14 @@ class SpatioTemporalRegion(DomainRegion):
         # delegate
         self.pickle_to(self.region_metadata.pickle_filename)
 
+    def descale(self):
+        '''
+        This region cannot be descaled, since it was not scaled here. However, we write this
+        function here as a sentinel to indicate the error of issuing such a descaling
+        request.
+        '''
+        raise NotImplementedError('Cannot descale a pure SpatioTemporalRegion!')
+
     @property
     def all_point_indices(self):
         '''
@@ -178,9 +186,6 @@ class SpatioTemporalRegion(DomainRegion):
     def shape_2d(self):
         _, x_len, y_len = self.shape
         return (x_len, y_len)
-
-    # def get_dummy_region(self):
-    #     dummy = Region)
 
     def __str__(self):
         '''
@@ -220,26 +225,15 @@ class SpatioTemporalDecorator(SpatialDecorator, SpatioTemporalRegion):
         # keep this too
         self.series_len = decorated_region.series_len
 
-    def series_at(self, point):
-        return self.decorated_region.series_at(point)
-
     def region_subset(self, region):
         return self.decorated_region.region_subset(region)
 
-    def interval_subset(self, ti):
-        return self.decorated_region.interval_subset(ti)
-
-    def subset(self, region, ti):
-        return self.decorated_region.subset(region, ti)
-
-    def repeat_series(self, series):
-        return self.decorated_region.repeat_series(series)
-
-    def repeat_point(self, point):
-        return self.decorated_region.repeat_point(point)
+    def series_at(self, point):
+        return self.decorated_region.series_at(point)
 
     def has_centroid(self):
         # if a centroid has been set at parent, honor it
+        # TODO we should avoid this?
         if self.centroid is not None:
             return True
         else:
@@ -247,6 +241,7 @@ class SpatioTemporalDecorator(SpatialDecorator, SpatioTemporalRegion):
 
     def get_centroid(self, distance_measure=None):
         # if a centroid has been set at parent, honor it
+        # TODO we should avoid this?
         if self.centroid is not None:
             return self.centroid
         else:
@@ -254,6 +249,22 @@ class SpatioTemporalDecorator(SpatialDecorator, SpatioTemporalRegion):
 
     def save(self):
         return self.decorated_region.save()
+
+    def descale(self):
+        '''
+        Handle descaling of scaled regions. Since a scaled region can be clustered
+        afterwards (or decorated in a different way), we need to be able to handle the
+        descaling call at any level of decoration, e.g. in SpatioTemporalCluster.
+
+        We do this by implementing the Chain of Responsibility pattern. By default, the decorated
+        region promises to handle the descaling, and the current level will wrap the result
+        in a way to keep other functionalities.
+        '''
+        # This approach should work because there is no other data to be saved from a descaled
+        # region, except for what we already have in this decorator. Other relevant data should
+        # be saved by new_spatio_temporal_region implementation.
+        descaled_region = self.decorated_region.descale()
+        return self.new_spatio_temporal_region(descaled_region.numpy_dataset)
 
     @property
     def all_point_indices(self):
@@ -292,19 +303,36 @@ class SpatioTemporalCluster(SpatialCluster, SpatioTemporalDecorator):
         super(SpatioTemporalCluster, self).__init__(decorated_region, partition, cluster_index,
                                                     region_metadata=region_metadata)
 
+    def new_spatio_temporal_region(self, numpy_dataset):
+        '''
+        Creates a new instance of SpatioTemporalCluster with the same partition and cluster index.
+        This will wrap a new decorated region, that was built by the original decorator
+        using Chain of Responsibility pattern.
+
+        Note: new_spatial_region is handled by SpatialCluster
+        '''
+        new_decorated_region = self.decorated_region.new_spatio_temporal_region(numpy_dataset)
+        return SpatioTemporalCluster(decorated_region=new_decorated_region,
+                                     partition=self.partition,
+                                     cluster_index=self.cluster_index,
+                                     region_metadata=self.region_metadata)
+
     def interval_subset(self, ti):
         '''
         ti: TimeInterval
         Will create a new spatio-temporal cluster with same partition and index
         '''
         self.logger.debug('{} interval_subset'.format(self))
+
+        # this should create a SpatioTemporalCluster, because of polymorphic call to
+        # new_spatio_temporal_region
         decorated_interval_subset = self.decorated_region.interval_subset(ti)
 
-        # we need to clone the partition!
-        # if we don't, training and observation will have the same iterators when forecasting
-        # TODO is this still true? Probably not...
-        return SpatioTemporalCluster(decorated_interval_subset, self.partition.clone(),
-                                     self.cluster_index)
+        # drop the metadata, it is not valid anymore...
+        decorated_interval_subset.metadata = None
+
+        # TODO clone the partition here??
+        return decorated_interval_subset
 
     def series_at(self, point):
         '''
@@ -319,22 +347,6 @@ class SpatioTemporalCluster(SpatialCluster, SpatioTemporalDecorator):
             return self.decorated_region.series_at(point)
         else:
             raise ValueError('Point not in cluster: {}'.format(point))
-
-    def repeat_series(self, series):
-        '''
-        Creates a new spatio-temporal cluster with this same shape, where all the series are the
-        same as the provided series.
-
-        The series is repeated over all points for simplicity, but calling series_at on points
-        outside the cluster should remain forbidden.
-
-        NOTE: no need to reimplement repeat_point, it should correctly use this method
-        polymorphically to create a SpatioTemporalCluster.
-        '''
-        self.logger.debug('{} repeat_series'.format(self))
-        repeated_region = self.decorated_region.repeat_series(series)
-        return SpatioTemporalCluster(repeated_region, self.partition, self.cluster_index,
-                                     self.region_metadata)
 
     @property
     def all_point_indices(self):

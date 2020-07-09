@@ -97,6 +97,8 @@ class FunctionRegionSeries(FunctionRegion):
 
         Lets the parameter region handle the call by default. This enables outputs that are
         subclasses of SpatioTemporalRegion, without the function knowing about the polymorphism.
+
+        TODO save output_len with a flag indicating validity?
         '''
         # the function passes itself, delegates computation to the region
         # visitor pattern: visitor.visitElementB(this)

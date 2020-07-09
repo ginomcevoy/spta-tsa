@@ -2,7 +2,7 @@ import numpy as np
 
 from . import Point
 from .temporal import SpatioTemporalRegion
-from .normalize import SpatioTemporalNormalized
+from .scaling import ScaleFunction
 from spta.dataset import temp_brazil
 
 from spta.util import log as log_util
@@ -150,8 +150,11 @@ class SpatioTemporalRegionMetadata(log_util.LoggerMixin):
         spt_region.region_metadata = self
 
         if self.normalized:
-            # replace region with normalized version
-            spt_region = SpatioTemporalNormalized(spt_region, region_metadata=self)
+            # replace region with scaled version
+            # TODO change the variable name
+            series_len, x_len, y_len = spt_region.shape
+            scale_function = ScaleFunction(x_len, y_len)
+            spt_region = scale_function.apply_to(spt_region, series_len)
 
         self.logger.info('Loaded dataset {}: {}'.format(self, self.region))
         return spt_region

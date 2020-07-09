@@ -34,15 +34,28 @@ class BaseRegion(log_util.LoggerMixin):
     def as_numpy(self):
         return self.numpy_dataset
 
+    def new_spatial_region(self, numpy_dataset):
+        '''
+        Creates a new instance of SpatialRegion with the underlying numpy data.
+        Subclasses must create an appropriate instance here.
+        Useful when using decorated regions.
+        '''
+        raise NotImplementedError
+
+    def new_spatio_temporal_region(self, numpy_dataset):
+        '''
+        Creates a new instance of SpatioTemporalRegion with the underlying numpy data.
+        Subclasses must create an appropriate instance here.
+        Useful when using decorated regions.
+        '''
+        raise NotImplementedError
+
     def empty_region_2d(self):
         '''
         Returns an empty SpatialRegion with the same shape as this region.
         '''
         empty_region_np = np.empty((self.x_len, self.y_len))
-
-        # move import here to avoid circular imports
-        import spta.region.spatial
-        return spta.region.spatial.SpatialRegion(empty_region_np)
+        return self.new_spatial_region(empty_region_np)
 
     def save_to(self, filename):
         '''
