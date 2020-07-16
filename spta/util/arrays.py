@@ -148,8 +148,16 @@ def regular_partitioning(x_len, y_len, k):
 
     # handle first scenario: add more lines per rows/columns as needed
 
+    # we have an "edge" case if div_* is large, in that case we cannot accommodate the first
+    # scenario to use an additional line per row/column
+    # this may happen when k is prime and the region is not large enough
+    # see test_regular_partitioning_whole_real_brazil_in_23 in test_arrays
+    def can_increase_lines_per_cluster(divisor, residue, lines_per_cluster):
+        return residue > divisor * (divisor - lines_per_cluster - 1)
+
     # handle row here
-    if residue_row > lines_per_row / 2:
+    if residue_row > lines_per_row / 2 and \
+            can_increase_lines_per_cluster(div_x, residue_row, lines_per_row):
         lines_per_row += 1
 
         # recompute the residue as negative!
@@ -157,7 +165,9 @@ def regular_partitioning(x_len, y_len, k):
         residue_row = x_len - lines_per_row * div_x
 
     # same for column
-    if residue_col > lines_per_col / 2:
+    if residue_col > lines_per_col / 2 and \
+            can_increase_lines_per_cluster(div_y, residue_col, lines_per_col):
+
         lines_per_col += 1
         residue_col = y_len - lines_per_col * div_y
 

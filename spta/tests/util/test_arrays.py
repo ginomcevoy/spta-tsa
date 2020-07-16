@@ -193,3 +193,19 @@ class TestSquarePartitioning(unittest.TestCase):
         matrix_11 = matrix[15:20, 8:11]
         expected_11 = np.repeat(11, 15).reshape(5, 3)
         self.assertIsNone(np.testing.assert_array_equal(matrix_11, expected_11))
+
+    def test_regular_partitioning_whole_real_brazil_in_23(self):
+
+        # special failing case
+        x_len = 90
+        y_len = 95
+        k = 23
+
+        # when
+        matrix = arrays_util.regular_partitioning(x_len, y_len, k)
+
+        # then we should get 23 regions
+        print(matrix[-1:])
+        self.assertEquals(matrix.shape, (90, 95))
+        unique_values = np.unique(matrix.reshape((90 * 95, 1)), return_counts=False)
+        self.assertEqual(len(unique_values), 23)
