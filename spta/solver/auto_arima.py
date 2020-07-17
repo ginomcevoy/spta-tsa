@@ -3,7 +3,6 @@ Produces temporal forecasts for points in the region, based on the model trained
 Uses a clustering algorithm to define clusters and medoids, and uses auto ARIMA for forecasting.
 '''
 import matplotlib.pyplot as plt
-from matplotlib.patches import Rectangle
 
 from collections import namedtuple
 import csv
@@ -84,6 +83,11 @@ class AutoARIMATrainer(log_util.LoggerMixin):
 
         # get the cluster partition and corresponding medoids
         partition, medoids = self.clustering_algorithm.partition(spt_region, with_medoids=True)
+
+        # partition will be saved for later predictions, go ahead and also save the medoids in it
+        partition.medoids = medoids
+
+        self.logger.info('Training solver: {}'.format(self.metadata))
 
         # use the partition to train ARIMA models at the cluster medoids and use them as
         # representatives for their own clusters. These models will be used to evalute and save
@@ -301,25 +305,23 @@ class AutoARIMASolver(log_util.LoggerMixin):
 
         x_len, y_len = self.partition.shape
 
-        # 1-d labels required for the plot
-        membership_1d = self.partition.as_numpy.reshape(x_len * y_len)
-        shape_2d = (x_len, y_len)
+        # get a description for this plot, using absolute coordinates
+        absolute_region = self.region_metadata.absolute_coordinates_of_region(prediction_region)
+        desc_txt = 'Region: ({}, {}) - ({}, {}) - ({}, {}) - ({}, {})'
+        desc = desc_txt.format(absolute_region.x1, absolute_region.y1,
+                               absolute_region.x1, absolute_region.y2,
+                               absolute_region.x2, absolute_region.y1,
+                               absolute_region.x2, absolute_region.y2)
 
-        # get info on the prediction region for plot
-        rectangle_data = self.get_rectangle_data(prediction_region)
+        # the clustering metadata should format as a nice string
+        title = '{}; {}'.format(self.clustering_metadata, desc)
 
-        # plot the partitioning, the clustering metadata should format as a nice string
-        title = '{}; {}'.format(self.clustering_metadata, rectangle_data.desc)
+        # plot the clustering partition: show each cluster with its medoid (mark_points), also
+        # show the rectangle corresponding to the prediction region
         fig, ax1 = plt.subplots(1, 1, figsize=(10, 8))
-        plot_util.plot_2d_clusters(membership_1d, shape_2d, title=title, subplot=ax1)
-
-        # https://stackoverflow.com/questions/52056475/python-plot-rectangles-of-known-size-at-scatter-points
-        ax1.add_patch(Rectangle(xy=rectangle_data.xy,
-                                width=rectangle_data.width,
-                                height=rectangle_data.height,
-                                linewidth=1,
-                                color='red',
-                                fill=False))
+        plot_util.plot_partition(self.partition, title=title, subplot=ax1,
+                                 rectangle_region=prediction_region,
+                                 mark_points=self.partition.medoids)
 
         # save figure
         fs_util.mkdir(self.metadata.plot_dir)
@@ -334,6 +336,8 @@ class AutoARIMASolver(log_util.LoggerMixin):
 
     def get_rectangle_data(self, prediction_region):
         '''
+        DELETEME
+
         Returns the following data: xy, width, height, so that the prediction region can be added
         to the partitioning plot.
 

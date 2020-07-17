@@ -23,3 +23,7 @@ class SolverMetadata(object):
     @property
     def plot_dir(self):
         return self.clustering_metadata.plot_dir(self.region_metadata, self.distance_measure)
+
+    def __str__(self):
+        return '{} {} {} {}'.format(self.region_metadata, self.clustering_metadata,
+                                    self.distance_measure, self.model_params)

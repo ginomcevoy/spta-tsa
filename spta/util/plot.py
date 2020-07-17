@@ -3,6 +3,8 @@ import numpy as np
 
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
+from matplotlib.patches import Rectangle
+
 from sklearn.metrics import silhouette_samples, silhouette_score
 
 
@@ -40,7 +42,8 @@ def plot_series_group_by_color(series_group, series_len, colors):
     plt.show()
 
 
-def plot_discrete_spatial_region(spatial_region, title='', clusters=True, subplot=None):
+def plot_discrete_spatial_region(spatial_region, title='', clusters=True, subplot=None,
+                                 mark_points=None):
     '''
     Plots a discrete spatial region with a scatter plot, where the values are assigned to colors.
     '''
@@ -67,12 +70,29 @@ def plot_discrete_spatial_region(spatial_region, title='', clusters=True, subplo
         label_colors_list = list(map(cm.nipy_spectral, label_np_array))
 
         # concatenate the lists into a single array, recover region shape and add the 4 RGBA
+        # FIXME COORDS this is rotated... but then again our coordinates are *also* rotated
         color_shape = (region_np_array.shape[0], region_np_array.shape[1], 4)
         color_region = np.concatenate(label_colors_list, axis=0).reshape(color_shape)
 
         # now call imshow with our (x_len, y_len, 4) color data
         imgplot = subplot.imshow(color_region)
         imgplot.set_cmap('nipy_spectral')
+
+        if mark_points is not None:
+            for point in mark_points:
+
+                point_pos = (point.x, point.y)
+
+                # add points as black 'x'...
+                point_symbol = 'xk'
+
+                # except for when the color is black, then we want to use white
+                # this idiom compares two arrays
+                if (color_region[point_pos] == np.array([0., 0., 0., 1.])).all():
+                    point_symbol = 'xw'
+
+                # FIXME COORDS see plot_partition on details of inversion
+                subplot.plot(point_pos[1], point_pos[0], point_symbol)
 
     else:
         # this does produce the colored heat map but colors won't match with a silhouette plot
@@ -98,6 +118,39 @@ def plot_2d_clusters(cluster_labels, shape_2d, title='', subplot=None):
     from spta.region.spatial import SpatialRegion
     label_region = SpatialRegion.create_from_1d(cluster_labels, x_len, y_len)
     return plot_discrete_spatial_region(label_region, title, True, subplot)
+
+
+def plot_partition(partition, title='', subplot=None, rectangle_region=None, mark_points=None):
+    '''
+    Convenience function for plotting a clustering partition.
+
+    If rectangle_region is provided, it will also draw a red rectangle representing a region of
+    interest within the partition plot. Useful for prediction regions in solvers.
+    '''
+    fig = plot_discrete_spatial_region(partition, title, True, subplot, mark_points)
+
+    plot_here = fig
+    if subplot is not None:
+        # if subplot is provided, then we draw in the subplot
+        plot_here = subplot
+
+    if rectangle_region is not None:
+
+        # FIXME COORDS The plot in plot_2d_clusters is "wrong", meaning that the axes are rotated.
+        # However, the x, y coordinates are *also* rotated (x is latitute, should be longitude).
+        # So the plot is "OK", but the rectangle region needs to be rotated here.
+
+        # When the (x, y) coordinates are changed to long/lat (instead of lat/long), then we
+        # can come back here again and revert this rotation.
+        xy = (rectangle_region.y1 - 0.5, rectangle_region.x1 - 0.5)
+        width = rectangle_region.y2 - rectangle_region.y1
+        height = rectangle_region.x2 - rectangle_region.x1
+
+        # https://stackoverflow.com/questions/52056475/python-plot-rectangles-of-known-size-at-scatter-points
+        plot_here.add_patch(Rectangle(xy=xy, width=width, height=height, linewidth=1,
+                                      color='red', fill=False))
+
+    return fig
 
 
 def plot_clustering_silhouette(distance_matrix, cluster_labels, subplot=None, show_graphs=True):
