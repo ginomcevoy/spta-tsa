@@ -317,22 +317,26 @@ class SpatioTemporalCluster(SpatialCluster, SpatioTemporalDecorator):
                                      cluster_index=self.cluster_index,
                                      region_metadata=self.region_metadata)
 
+    def region_subset(self, region):
+        # not allowed for now!
+        raise NotImplementedError
+
     def interval_subset(self, ti):
         '''
         ti: TimeInterval
         Will create a new spatio-temporal cluster with same partition and index
         '''
-        self.logger.debug('{} interval_subset'.format(self))
-
-        # this should create a SpatioTemporalCluster, because of polymorphic call to
-        # new_spatio_temporal_region
+        # ask the decorated region to do the subset, but this will not create a cluster.
         decorated_interval_subset = self.decorated_region.interval_subset(ti)
 
-        # drop the metadata, it is not valid anymore...
-        decorated_interval_subset.metadata = None
+        # use new_spatial_region for clusters with the resulting dataset, this will create
+        # the appropriate cluster
+        subset_cluster = self.new_spatio_temporal_region(decorated_interval_subset.numpy_dataset)
 
-        # TODO clone the partition here??
-        return decorated_interval_subset
+        # drop the metadata, it is not valid anymore...
+        # TODO do something smart here?
+        subset_cluster.region_metadata = None
+        return subset_cluster
 
     def series_at(self, point):
         '''
