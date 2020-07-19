@@ -2,7 +2,7 @@ from collections import namedtuple
 
 
 ArimaWithClusters = namedtuple('ArimaWithClusters', ('arima_suite_id', 'clustering_type',
-                               'clustering_suite_id', 'distance'))
+                                                     'clustering_suite_id', 'distance'))
 
 def experiments_for_arima_with_clusters():
 
@@ -43,23 +43,19 @@ def arima_clustering_experiments():
     }
 
 
-def arima_clustering_experiment_by_name(experiment_name):
-    return arima_clustering_experiments()[experiment_name]
-
-
-AutoArimaCluster = namedtuple('AutoArimaCluster', ('auto_arima_id', 'clustering_name',
-                                                   'clustering_id', 'distance'))
+AutoArimaCluster = namedtuple('AutoArimaCluster', ('auto_arima_id', 'clustering_type',
+                                                   'clustering_suite_id', 'distance'))
 
 
 def auto_arima_clustering_experiments():
 
     # add auto_arima experiments here
-    # AutoArimaCluster(<auto_arima_id>, <clustering_name>, <clustering_suite_id>, 'DistanceByDTW')
+    # AutoArimaCluster(<auto_arima_id>, <clustering_type>, <clustering_suite_id>, 'dtw')
 
     auto_arima_clustering_id = {
-        'simple_kmedoids_quick': AutoArimaCluster('simple', 'kmedoids', 'quick', 'DistanceByDTW'),
-        'simple_regular_quick': AutoArimaCluster('simple', 'regular', 'quick', 'DistanceByDTW'),
-        'simple_even': AutoArimaCluster('simple', 'kmedoids', 'even', 'DistanceByDTW'),
+        'simple_kmedoids_quick': AutoArimaCluster('simple', 'kmedoids', 'quick', 'dtw'),
+        'simple_regular_quick': AutoArimaCluster('simple', 'regular', 'quick', 'dtw'),
+        'simple_even': AutoArimaCluster('simple', 'kmedoids', 'even', 'dtw'),
     }
 
     return auto_arima_clustering_id

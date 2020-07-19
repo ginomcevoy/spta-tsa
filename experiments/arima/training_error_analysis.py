@@ -82,24 +82,21 @@ def processRequest():
     parser.add_argument('--log', help=log_help_msg, default='INFO', choices=log_options)
 
     args = parser.parse_args()
-    log_util.setup_log_argparse(args)
-    do_arima_error_analysis(args)
+    logger = log_util.setup_log_argparse(args)
+    do_arima_error_analysis(args, logger)
 
 
-def do_arima_error_analysis(args):
-
-    logger = log_util.logger_for_me(do_arima_error_analysis)
-
-    # get the region from metadata
-    spt_region_metadata = predefined_regions()[args.region]
-    spt_region = spt_region_metadata.create_instance()
-    _, x_len, y_len = spt_region.shape
+def do_arima_error_analysis(args, logger):
 
     # parse to get metadata
     region_metadata, clustering_suite, arima_suite, distance = metadata_from_args(args)
     error_type = args.error
 
-    # for now
+    # recover the spatio-temporal region
+    spt_region = region_metadata.create_instance()
+    _, x_len, y_len = spt_region.shape
+
+    # assume DTW for now
     assert distance == 'dtw'
 
     # use parallelization?
@@ -114,11 +111,8 @@ def do_arima_error_analysis(args):
 
     # use pre-computed distance matrix
     distance_measure = DistanceByDTW()
-    distance_measure.load_distance_matrix_2d(spt_region_metadata.distances_filename,
-                                             spt_region_metadata.region)
-
-    # recover the spatio-temporal region
-    spt_region = region_metadata.create_instance()
+    distance_measure.load_distance_matrix_2d(region_metadata.distances_filename,
+                                             region_metadata.region)
 
     for clustering_metadata in clustering_suite:
         logger.info('Clustering algorithm: {}'.format(clustering_metadata))
@@ -154,9 +148,9 @@ def do_arima_error_analysis_for_clustering(spt_region, clustering_algorithm, ari
     fs_util.mkdir(output_dir)
 
     # save results in CSV format: write header now
-    # error-analysis__<arima_suite_id>__<clustering>__<error>.csv
-    csv_filename = 'error-analysis__{}__{!r}__{}.csv'.format(arima_suite.name,
-                                                             clustering_algorithm, error_type)
+    # error-analysis__<clustering>__<arima_suite_id>__<error>.csv
+    csv_filename = 'error-analysis__{!r}__{}__{}.csv'.format(clustering_algorithm,
+                                                             arima_suite.name, error_type)
     csv_filepath = os.path.join(output_dir, csv_filename)
     with open(csv_filepath, 'w', newline='') as csv_file:
         csv_writer = csv.writer(csv_file, delimiter=' ', quotechar='|',
@@ -229,7 +223,7 @@ def do_arima_error_analysis_for_clustering(spt_region, clustering_algorithm, ari
 
 def metadata_from_args(args):
     '''
-    Metadata common to both train and predict.
+    Extract the experiment details from the request.
     '''
     # get the region metadata
     region_metadata = predefined_regions()[args.region]

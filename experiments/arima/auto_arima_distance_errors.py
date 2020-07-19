@@ -222,8 +222,8 @@ def metadata_from_args(args):
 
     # get the clustering metadata from the auto arima clustering id
     auto_arima_cluster = auto_arima_clustering_experiments()[args.auto_arima_cluster]
-    clustering_name = auto_arima_cluster.clustering_name
-    clustering_suite = get_suite(clustering_name, auto_arima_cluster.clustering_id)
+    clustering_type = auto_arima_cluster.clustering_type
+    clustering_suite = get_suite(clustering_type, auto_arima_cluster.clustering_suite_id)
 
     # get the auto arima params
     auto_arima_params = predefined_auto_arima()[auto_arima_cluster.auto_arima_id]
