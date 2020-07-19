@@ -64,7 +64,8 @@ class AutoARIMATrainer(log_util.LoggerMixin):
                                        model_params=self.auto_arima_params)
         self.prepared = True
 
-    def train(self, error_type, training_len=None, test_len=FORECAST_LENGTH):
+    def train(self, error_type, training_len=None, test_len=FORECAST_LENGTH,
+              output_prefix='outputs'):
         '''
         Partition the region into clusters, then train the ARIMA models on the cluster medoids.
 
@@ -81,8 +82,10 @@ class AutoARIMATrainer(log_util.LoggerMixin):
         splitter = SplitTrainingAndTestLast(test_len)
         (training_region, test_region) = splitter.split(spt_region)
 
-        # get the cluster partition and corresponding medoids
-        partition, medoids = self.clustering_algorithm.partition(spt_region, with_medoids=True)
+        # get the cluster partition and corresponding medoids, save the CSV
+        partition, medoids = self.clustering_algorithm.partition(spt_region,
+                                                                 with_medoids=True,
+                                                                 save_csv_at=output_prefix)
 
         # partition will be saved for later predictions, go ahead and also save the medoids in it
         partition.medoids = medoids
@@ -231,14 +234,16 @@ class AutoARIMASolver(log_util.LoggerMixin):
         # flag
         self.prepared = False
 
-    def predict(self, prediction_region, forecast_len=FORECAST_LENGTH, plot=True):
+    def predict(self, prediction_region, forecast_len=FORECAST_LENGTH, output_prefix='outputs',
+                plot=True):
+
         self.logger.debug('Predicting for region: {}'.format(prediction_region))
 
         if not self.prepared:
             self.prepare_for_predictions()
 
         # plot the whole region and the prediction region
-        self.plot_regions(prediction_region)
+        self.plot_regions(prediction_region, output_prefix)
 
         px1, px2, py1, py2 = prediction_region.x1, prediction_region.x2, prediction_region.y1, \
             prediction_region.y2
@@ -280,7 +285,8 @@ class AutoARIMASolver(log_util.LoggerMixin):
                                      prediction_region=prediction_region,
                                      partition=self.partition,
                                      spt_region=self.spt_region,
-                                     error_type=self.error_type)
+                                     error_type=self.error_type,
+                                     output_prefix=output_prefix)
 
     def prepare_for_predictions(self):
         '''
@@ -298,7 +304,7 @@ class AutoARIMASolver(log_util.LoggerMixin):
         # set prepared flag
         self.prepared = True
 
-    def plot_regions(self, prediction_region):
+    def plot_regions(self, prediction_region, output_prefix):
         '''
         Plot the partitioning, with the prediction region overlayed on top
         '''
@@ -324,59 +330,26 @@ class AutoARIMASolver(log_util.LoggerMixin):
                                  mark_points=self.partition.medoids)
 
         # save figure
-        fs_util.mkdir(self.metadata.plot_dir)
+        fs_util.mkdir(self.metadata.output_dir(output_prefix))
         plt.draw()
 
-        plot_name = self.get_plot_filename(prediction_region)
+        plot_name = self.get_plot_filename(prediction_region, output_prefix)
         plt.savefig(plot_name)
         self.logger.info('Saved figure: {}'.format(plot_name))
 
         # show figure
         plt.show()
 
-    def get_rectangle_data(self, prediction_region):
-        '''
-        DELETEME
-
-        Returns the following data: xy, width, height, so that the prediction region can be added
-        to the partitioning plot.
-
-        FIXME COORDS The plot in plot_2d_clusters is "wrong", meaning that the axes are rotated.
-        However, the x, y coordinates are *also* rotated (x is latitute, should be longitude).
-        So the plot is "OK", but the prediction region needs to be rotated here.
-
-        When the (x, y) coordinates are changed to long/lat (instead of lat/long), then we
-        can come back here again and revert this rotation.
-        '''
-        xy = (prediction_region.y1 - 0.5, prediction_region.x1 - 0.5)
-        width = prediction_region.y2 - prediction_region.y1
-        height = prediction_region.x2 - prediction_region.x1
-
-        # a meaningful description for the prediction region
-        # recover the original coordinates using the region metadata
-        # Representation: (top left) - (top right) - (bottom left) - (bottom right)
-        # note: xy still needs the offset, should not use absolute
-        absolute_region = self.region_metadata.absolute_coordinates_of_region(prediction_region)
-        desc_txt = 'Region: ({}, {}) - ({}, {}) - ({}, {}) - ({}, {})'
-        desc = desc_txt.format(absolute_region.x1, absolute_region.y1,
-                               absolute_region.x1, absolute_region.y2,
-                               absolute_region.x2, absolute_region.y1,
-                               absolute_region.x2, absolute_region.y2)
-
-        RectangleData = namedtuple('RectangleData', ('xy', 'width', 'height', 'desc'))
-        return RectangleData(xy, width, height, desc)
-
-    def get_plot_filename(self, prediction_region):
+    def get_plot_filename(self, prediction_region, output_prefix):
         '''
         Returns a string representing the filename for the plot.
-        Ex:
-            csv/nordeste_small_1y_1ppd_last/kmedoids_k8_seed1/dtw/region_1_4_2_4.pdf
         '''
-        solver_plot_dir = self.metadata.plot_dir
-        plot_filename = 'region_{}-{}-{}-{}.pdf'.format(prediction_region.x1,
-                                                        prediction_region.x2,
-                                                        prediction_region.y1,
-                                                        prediction_region.y2)
+        solver_plot_dir = self.metadata.output_dir(output_prefix)
+        plot_filename = 'query-{!r}__region-{}-{}-{}-{}.pdf'.format(self.clustering_metadata,
+                                                                    prediction_region.x1,
+                                                                    prediction_region.x2,
+                                                                    prediction_region.y1,
+                                                                    prediction_region.y2)
         return os.path.join(solver_plot_dir, plot_filename)
 
     def save(self):
@@ -414,7 +387,7 @@ class PredictionQueryResult(BaseRegion):
 
     def __init__(self, solver_metadata, distance_measure,
                  forecast_len, forecast_subregion, error_subregion, prediction_region,
-                 partition, spt_region, error_type):
+                 partition, spt_region, error_type, output_prefix):
         '''
         Constructor, uses a subset of the numpy matrix that backs the forecast region, the subset
         is taken using the prediction region coordinates.
@@ -440,6 +413,7 @@ class PredictionQueryResult(BaseRegion):
         self.partition = partition
         self.spt_region = spt_region
         self.error_type = error_type
+        self.output_prefix = output_prefix
 
     def forecast_at(self, relative_point):
         '''
@@ -477,17 +451,17 @@ class PredictionQueryResult(BaseRegion):
     def get_csv_file_path(self):
         '''
         Returns a string representing the CSV file for this query.
-        Ex:
-            csv/nordeste_small_1y_1ppd_last/kmedoids_k8_seed1/dtw/
-            region_1_4_2_4_forecast_8_sMAPE.csv
         '''
-        solver_csv_dir = self.metadata.csv_dir
-        csv_filename = 'region_{}-{}-{}-{}_forecast_{}_{}.csv'.format(self.prediction_region.x1,
-                                                                      self.prediction_region.x2,
-                                                                      self.prediction_region.y1,
-                                                                      self.prediction_region.y2,
-                                                                      self.forecast_len,
-                                                                      self.error_type)
+        solver_csv_dir = self.metadata.output_dir(self.output_prefix)
+        csv_t = 'query-{!r}__region-{}-{}-{}-{}__f{}__{}.csv'
+        csv_filename = csv_t.format(self.clustering_metadata,
+                                    self.prediction_region.x1,
+                                    self.prediction_region.x2,
+                                    self.prediction_region.y1,
+                                    self.prediction_region.y2,
+                                    self.forecast_len,
+                                    self.error_type)
+
         return os.path.join(solver_csv_dir, csv_filename)
 
     def save_as_csv(self):
@@ -495,8 +469,8 @@ class PredictionQueryResult(BaseRegion):
         Writes prediction results to CSV, at the file indicated by get_csv_file_path()
         '''
 
-        # ensure dir
-        fs_util.mkdir(self.metadata.csv_dir)
+        # ensure output dir
+        fs_util.mkdir(self.metadata.output_dir(self.output_prefix))
 
         np.set_printoptions(precision=3)
         csv_filename = self.get_csv_file_path()
@@ -532,8 +506,8 @@ class AutoARIMASolverPickler(log_util.LoggerMixin):
 
     |- pickle
         |- <region>
-            |- kmedoids_k<k>_seed<seed>
-                |- dtw
+            |- dtw
+                |- kmedoids_k<k>_seed<seed>
                     |- partition.pkl
                     |- auto_arima_<auto_arima_params>_model_region.pkl
                     |- auto_arima_<auto_arima_params>_errors_<error_type>.pkl
@@ -552,7 +526,7 @@ class AutoARIMASolverPickler(log_util.LoggerMixin):
         partition = auto_arima_solver.partition
         arima_model_region = auto_arima_solver.arima_model_region
         generalization_errors = auto_arima_solver.generalization_errors
-        solver_pickle_dir = self.metadata.pickle_dir
+        solver_pickle_dir = self.metadata.pickle_dir()
 
         # create the directory
         fs_util.mkdir(solver_pickle_dir)
@@ -619,17 +593,16 @@ class AutoARIMASolverPickler(log_util.LoggerMixin):
         Full path to pickle object of the partition, given the region, clustering and distance
         metadata.
         '''
-        solver_pickle_dir = self.metadata.pickle_dir
-        partition_filename = self.partition_filename()
-        return os.path.join(solver_pickle_dir, partition_filename)
+        solver_pickle_dir = self.metadata.pickle_dir()
+        return os.path.join(solver_pickle_dir, 'partition.pkl')
 
     def arima_model_pickle_path(self):
         '''
         Full path of the pickle object of the arima model region, given by the region, clustering,
         distance and auto arima metadata.
         '''
-        solver_pickle_dir = self.metadata.pickle_dir
-        arima_model_filename = self.auto_arima_model_filename()
+        solver_pickle_dir = self.metadata.pickle_dir()
+        arima_model_filename = 'model-region__{!r}.pkl'.format(self.metadata.model_params)
         return os.path.join(solver_pickle_dir, arima_model_filename)
 
     def generalization_errors_pickle_path(self):
@@ -637,23 +610,7 @@ class AutoARIMASolverPickler(log_util.LoggerMixin):
         Full path of the pickle object of the arima model region, given by the region, clustering,
         distance and auto arima metadata, also the error type.
         '''
-        solver_pickle_dir = self.metadata.pickle_dir
-        generalization_errors_filename = self.generalization_errors_filename()
+        solver_pickle_dir = self.metadata.pickle_dir()
+        generalization_errors_filename = 'errors__{!r}__{}.pkl'.format(self.metadata.model_params,
+                                                                       self.error_type)
         return os.path.join(solver_pickle_dir, generalization_errors_filename)
-
-    def partition_filename(self):
-        return 'partition.pkl'
-
-    def auto_arima_model_filename(self):
-        '''
-        auto_arima_<auto_arima_params>_model_region.pkl
-        See spta.arima.AutoArimaParams
-        '''
-        return 'auto_arima_{!r}_model_region.pkl'.format(self.metadata.model_params)
-
-    def generalization_errors_filename(self):
-        '''
-        auto_arima_<auto_arima_params>_errors_<error_type>.pkl
-        '''
-        return 'auto_arima_{!r}_errors_{}.pkl'.format(self.metadata.model_params,
-                                                      self.error_type)

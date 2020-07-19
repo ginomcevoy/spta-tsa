@@ -1,9 +1,11 @@
+import csv
 import os
 
 from spta.region.centroid import CalculateCentroid
 from spta.region.partition import PartitionRegion
 
 from spta.util import log as log_util
+from spta.util import fs as fs_util
 
 
 class ClusteringMetadata():
@@ -23,29 +25,27 @@ class ClusteringMetadata():
     def clustering_subdir(self, region_metadata, distance_measure):
         '''
         Sub-directory used for saving results.
+        <region>/<distance>/<clustering>
         '''
         region_subdir = '{!r}'.format(region_metadata)
-        clustering_metadata_subdir = '{!r}'.format(self)
         distance_subdir = '{!r}'.format(distance_measure)
-        return os.path.join(region_subdir, clustering_metadata_subdir, distance_subdir)
+        clustering_metadata_subdir = '{!r}'.format(self)
+        return os.path.join(region_subdir, distance_subdir, clustering_metadata_subdir)
 
-    def csv_dir(self, region_metadata, distance_measure):
+    def output_dir(self, output_prefix, region_metadata, distance_measure):
         '''
-        Directory to store CSV results.
+        Directory to store CSV and plots.
+        <output_prefix>/<region>/<distance>/<clustering>
         '''
-        return os.path.join('csv', self.clustering_subdir(region_metadata, distance_measure))
+        return os.path.join(output_prefix, self.clustering_subdir(region_metadata,
+                                                                  distance_measure))
 
     def pickle_dir(self, region_metadata, distance_measure):
         '''
         Directory to store pickle objects.
+        pickle/<region>/<distance>/<clustering>
         '''
         return os.path.join('pickle', self.clustering_subdir(region_metadata, distance_measure))
-
-    def plot_dir(self, region_metadata, distance_measure):
-        '''
-        Directory to store plots results.
-        '''
-        return os.path.join('plots', self.clustering_subdir(region_metadata, distance_measure))
 
     def __repr__(self):
         return '{}_k{}'.format(self.name, self.k)
@@ -64,13 +64,17 @@ class ClusteringAlgorithm(log_util.LoggerMixin):
         self.distance_measure = distance_measure
         self.k = metadata.k
 
-    def partition(self, spt_region, with_medoids=True):
+    def partition(self, spt_region, with_medoids=True, save_csv_at=None):
         '''
         Create a partition on a spatio-temporal region. A partition can be used to create
         spatio-temporal clusters.
 
         with_medoids
             Optionally return the medoids of the clusters
+
+        save_csv_at
+            Optionally save a CSV report, at the specified path
+            TODO this is ugly, improve?
         '''
         raise NotImplementedError
 
@@ -99,3 +103,50 @@ class ClusteringAlgorithm(log_util.LoggerMixin):
         ]
 
         return medoids
+
+    def save_to_csv(self, partition, region_metadata, output_prefix):
+        '''
+        Create a CSV report of the clustering partition.
+        Requires the region metadata to store the CSV in a proper path.
+
+        cluster points coverage(#points/#total points)
+        '''
+
+        # path to store CSV
+        csv_output_dir = self.metadata.output_dir(output_prefix=output_prefix,
+                                                  region_metadata=region_metadata,
+                                                  distance_measure=self.distance_measure)
+        fs_util.mkdir(csv_output_dir)
+
+        csv_filename = '{!r}.csv'.format(self)
+        csv_filepath = os.path.join(csv_output_dir, csv_filename)
+
+        with open(csv_filepath, 'w', newline='') as csv_file:
+            csv_writer = csv.writer(csv_file, delimiter=' ', quotechar='|',
+                                    quoting=csv.QUOTE_MINIMAL)
+            # header
+            csv_writer.writerow(['cluster', 'points', 'coverage'])
+
+            # total number of points in region, need to find the coverage
+            # abusing the partition a bit to get this
+            total_points = partition.shape[0] * partition.shape[1]
+
+            # iterate clusters in the partition, no need to create full-blown cluster objects
+            for i in range(0, self.k):
+
+                # points is the number of points in the cluster
+                points_i = partition.cluster_len(i)
+
+                # coverage is the % of points in the cluster, relative to total number of points
+                coverage_i = points_i * 100.0 / total_points
+                coverage_i_str = '{:.1f}'.format(coverage_i)
+
+                csv_writer.writerow([str(i), str(points_i), coverage_i_str])
+
+        self.logger.info('Saved {} CSV at: {}'.format(self, csv_filepath))
+
+    def __repr__(self):
+        return repr(self.metadata)
+
+    def __str__(self):
+        return str(self.metadata)

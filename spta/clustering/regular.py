@@ -29,7 +29,7 @@ class RegularClusteringAlgorithm(ClusteringAlgorithm):
         # The partition method also works for spatial regions, notice how the shape is extracted.
         return self.partition(spatial_region, with_medoids=False)
 
-    def partition(self, spt_region, with_medoids=True):
+    def partition(self, spt_region, with_medoids=True, save_csv_at=None):
         '''
         Create a regular partition on a spatio-temporal region. A partition can be used to create
         spatio-temporal clusters.
@@ -42,6 +42,10 @@ class RegularClusteringAlgorithm(ClusteringAlgorithm):
         x_len, y_len = spt_region.x_len, spt_region.y_len
 
         partition = PartitionRegionCrisp.with_regular_partition(self.k, x_len, y_len)
+
+        # save CSV?
+        if save_csv_at is not None:
+            self.save_to_csv(partition, spt_region.region_metadata, save_csv_at)
 
         if with_medoids:
             medoids = self.find_medoids_for_partition(spt_region, partition)

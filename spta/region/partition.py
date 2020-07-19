@@ -213,10 +213,6 @@ class PartitionRegionCrisp(PartitionRegion):
 
         super(PartitionRegionCrisp, self).__init__(numpy_dataset, k)
 
-        # TODO
-        # save number of members in cluster (constant for crisp clusters)
-        # self.cluster_len = np.count_nonzero(self.numpy_dataset == cluster_index)
-
     def is_member(self, point, cluster_index):
         '''
         Returns True iff the point is a member of the cluster with the specified index.
