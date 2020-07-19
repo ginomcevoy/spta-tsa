@@ -3,22 +3,23 @@ Execute this program to perform clustering on a spatio-temporal region, then app
 forecasting and error evaluation on each cluster.
 '''
 import argparse
-import csv
 from collections import namedtuple
+import csv
+import os
 
 from spta.arima.forecast import ArimaForecastingPDQ
 from spta.arima import analysis as arima_analysis
-from spta.distance.dtw import DistanceByDTW
-from spta.kmedoids import kmedoids
 
-from spta.region.partition import PartitionRegionCrisp
+from spta.clustering.factory import ClusteringFactory
+from spta.distance.dtw import DistanceByDTW
 from spta.region.error import error_functions
 
 from spta.util import fs as fs_util
 from spta.util import log as log_util
 
 from experiments.metadata.arima import arima_suite_by_name
-from experiments.metadata.arima_clustering import arima_clustering_experiments
+from experiments.metadata.arima_clustering import experiments_for_arima_with_clusters
+from experiments.metadata.clustering import get_suite as get_clustering_suite
 from experiments.metadata.region import predefined_regions
 
 
@@ -51,95 +52,120 @@ def processRequest():
     # parses the arguments
     desc = 'Perform clustering on a spatial-region, ' \
         'then call arima.evaluate_forecast_errors_arima on each cluster'
-    usage = '%(prog)s [-h] <region> <arima_clustering_experiment> <error> [--log=log_level]'
+    usage = '%(prog)s [-h] <region> <arima_clustering_experiment> [--error <error_type>] ' \
+        '[--log=log_level]'
     parser = argparse.ArgumentParser(prog='arima_forecast_cluster', description=desc, usage=usage)
 
     # for now, need name of region metadata and id of arima_clustering
     region_options = predefined_regions().keys()
     parser.add_argument('region', help='Name of the region metadata', choices=region_options)
 
-    arima_clustering_options = arima_clustering_experiments().keys()
-    parser.add_argument('arima_clustering', help='ID of arima clustering experiment',
+    arima_clustering_options = experiments_for_arima_with_clusters().keys()
+    parser.add_argument('arima_clustering_id', help='ID of arima clustering experiment',
                         choices=arima_clustering_options)
 
-    # need a specific error function
+    # error type is optional and defaults to sMAPE
     error_options = error_functions().keys()
-    parser.add_argument('error', help='Error type', choices=error_options)
+    error_help_msg = 'error type (default: %(default)s)'
+    parser.add_argument('--error', help=error_help_msg, default='sMAPE', choices=error_options)
 
-    # optional arguments
+    # optionally use parallelization
     parser.add_argument('--parallel', help='number of parallel workers')
+
+    # optionally create plots
     parser.add_argument('--plots', help='create relevant plots (distances vs errors)',
                         default=False, action='store_true')
-    parser.add_argument('--log', help='log level: WARN|INFO|DEBUG')
+
+    # logging
+    log_options = ('WARN', 'INFO', 'DEBUG')
+    log_help_msg = 'log level (default: %(default)s)'
+    parser.add_argument('--log', help=log_help_msg, default='INFO', choices=log_options)
 
     args = parser.parse_args()
     log_util.setup_log_argparse(args)
-    do_arima_forecast_cluster(args)
+    do_arima_error_analysis(args)
 
 
-def do_arima_forecast_cluster(args):
+def do_arima_error_analysis(args):
 
-    logger = log_util.logger_for_me(do_arima_forecast_cluster)
+    logger = log_util.logger_for_me(do_arima_error_analysis)
 
     # get the region from metadata
     spt_region_metadata = predefined_regions()[args.region]
     spt_region = spt_region_metadata.create_instance()
     _, x_len, y_len = spt_region.shape
 
-    # get experiment parameters including ARIMA suite
-    exp_params = arima_clustering_experiments()[args.arima_clustering]
-    (arima_experiment_id, clustering_id, distance_id, k, seed) = exp_params
-    arima_suite = arima_suite_by_name(arima_experiment_id)
+    # parse to get metadata
+    region_metadata, clustering_suite, arima_suite, distance = metadata_from_args(args)
+    error_type = args.error
+
+    # for now
+    assert distance == 'dtw'
 
     # use parallelization?
     parallel_workers = None
     if args.parallel:
         parallel_workers = int(args.parallel)
 
-    # for now
-    assert clustering_id == 'Kmedoids'
-    assert distance_id == 'DistanceByDTW'
+    # print plots?
+    with_plots = False
+    if args.plots:
+        with_plots = True
 
     # use pre-computed distance matrix
-    distance_dtw = DistanceByDTW()
-    distance_dtw.load_distance_matrix_2d(spt_region_metadata.distances_filename,
-                                         spt_region_metadata.region)
+    distance_measure = DistanceByDTW()
+    distance_measure.load_distance_matrix_2d(spt_region_metadata.distances_filename,
+                                             spt_region_metadata.region)
 
-    # faster... (whole_brazil_1y_1ppd, k=8, seed=0)
-    # initial_medoids = [5816, 1163, 4295, 4905, 3156, 2648, 172, 3764]
-    # initial_medoids = [3764, 2648, 5816, 4905, 4295, 172, 1163, 3156]
-    initial_medoids = None
+    # recover the spatio-temporal region
+    spt_region = region_metadata.create_instance()
 
-    # build a KmedoidsMetadata object
-    kmedoids_metadata = kmedoids.kmedoids_default_metadata(k, distance_measure=distance_dtw,
-                                                           random_seed=seed,
-                                                           initial_medoids=initial_medoids)
+    for clustering_metadata in clustering_suite:
+        logger.info('Clustering algorithm: {}'.format(clustering_metadata))
 
-    # run k-medoids
-    # KmedoidsResult(k, random_seed, medoids, labels, costs, tot_cost, dist_mat)
-    kmedoids_result = kmedoids.run_kmedoids_from_metadata(spt_region.as_2d, kmedoids_metadata)
+        # clustering algorithm to use
+        clustering_factory = ClusteringFactory(distance_measure)
+        clustering_algorithm = clustering_factory.instance(clustering_metadata)
 
-    # build the spatio-temporal clusters and pass the medoids as centroids
-    partition = PartitionRegionCrisp.from_membership_array(kmedoids_result.labels, x_len, y_len)
-    clusters = partition.create_all_spt_clusters(spt_region,
-                                                 centroid_indices=kmedoids_result.medoids)
+        do_arima_error_analysis_for_clustering(spt_region, clustering_algorithm, arima_suite,
+                                               error_type, parallel_workers, with_plots, logger)
+
+
+def do_arima_error_analysis_for_clustering(spt_region, clustering_algorithm, arima_suite,
+                                           error_type, parallel_workers, with_plots, logger,
+                                           output_prefix='outputs'):
+
+    # use the clustering algorithm to get the partition and medoids
+    # also save the partition details (needs region metadata)
+    partition, medoid_points = clustering_algorithm.partition(spt_region,
+                                                              with_medoids=True,
+                                                              save_csv_at=output_prefix)
+
+    clusters = partition.create_all_spt_clusters(spt_region, medoids=medoid_points)
+
+    # create the output dir
+    # outputs/<region>/<distance>/<clustering>/arima-<arima_suite_id>
+    clustering_output_dir = clustering_algorithm.output_dir(output_prefix,
+                                                            spt_region.region_metadata)
 
     # ensure output dir
-    output_dir = 'csv'
+    arima_subdir = 'arima-{}'.format(arima_suite.name)
+    output_dir = os.path.join(clustering_output_dir, arima_subdir)
     fs_util.mkdir(output_dir)
 
     # save results in CSV format: write header now
-    csv_filename = '{}/arima_{}_{}_{}.csv'.format(output_dir, args.region, args.arima_clustering,
-                                                  args.error)
-    with open(csv_filename, 'w', newline='') as csv_file:
+    # error-analysis__<arima_suite_id>__<clustering>__<error>.csv
+    csv_filename = 'error-analysis__{}__{!r}__{}.csv'.format(arima_suite.name,
+                                                             clustering_algorithm, error_type)
+    csv_filepath = os.path.join(output_dir, csv_filename)
+    with open(csv_filepath, 'w', newline='') as csv_file:
         csv_writer = csv.writer(csv_file, delimiter=' ', quotechar='|',
                                 quoting=csv.QUOTE_MINIMAL)
         # header
         csv_writer.writerow(ArimaClusterResult._fields)
 
     # iterate the spatio-temporal clusters
-    # for i in range(2, 3):
-    for i in range(0, k):
+    for i in range(0, clustering_algorithm.k):
 
         # the medoid will be used as centroid for the ARIMA analysis
         cluster_i = clusters[i]
@@ -158,7 +184,7 @@ def do_arima_forecast_cluster(args):
             analysis_pdq = arima_analysis.ArimaErrorAnalysis(forecasting_pdq)
 
             arima_forecasting, overall_errors, forecast_time, compute_time = \
-                analysis_pdq.evaluate_forecast_errors(cluster_i, args.error)
+                analysis_pdq.evaluate_forecast_errors(cluster_i, error_type)
 
             # prepare to save experiment result
             t_forecast = '{:.3f}'.format(forecast_time)
@@ -179,41 +205,62 @@ def do_arima_forecast_cluster(args):
                                                   error_min_local, error_medoid, error_max)
 
             # partial results in CSV format
-            with open(csv_filename, 'a', newline='') as csv_file:
+            with open(csv_filepath, 'a', newline='') as csv_file:
                 csv_writer = csv.writer(csv_file, delimiter=' ', quotechar='|',
                                         quoting=csv.QUOTE_MINIMAL)
                 logger.info('Writing partial result: {}'.format(arima_experiment))
                 csv_writer.writerow(arima_experiment)
 
             # plot distances to medoid vs forecast errors using medoid model?
-            if args.plots:
+            if with_plots:
 
-                plot_name, plot_desc = plot_info_distances_vs_errors(kmedoids_result, arima_params,
-                                                                     cluster_i, args)
+                plot_name = plot_name_distances_vs_errors(clustering_algorithm, error_type,
+                                                          cluster_i, arima_params, output_dir)
+                plot_desc = '{!r}'.format(clustering_algorithm)
                 arima_forecasting.plot_distances_vs_errors(centroid_i,
                                                            arima_analysis.FORECAST_LENGTH,
-                                                           args.error,
-                                                           distance_dtw,
+                                                           error_type,
+                                                           clustering_algorithm.distance_measure,
                                                            plot_name=plot_name,
                                                            plot_desc=plot_desc)
 
-    logger.info('CSV output at: {}'.format(csv_filename))
+    logger.info('CSV output at: {}'.format(csv_filepath))
 
 
-def plot_info_distances_vs_errors(kmedoids_result, arima_params, cluster, args):
+def metadata_from_args(args):
+    '''
+    Metadata common to both train and predict.
+    '''
+    # get the region metadata
+    region_metadata = predefined_regions()[args.region]
+
+    # get the clustering metadata from ARIMA clustering experiment
+    arima_clustering_id = experiments_for_arima_with_clusters()[args.arima_clustering_id]
+    clustering_suite = get_clustering_suite(clustering_type=arima_clustering_id.clustering_type,
+                                            suite_id=arima_clustering_id.clustering_suite_id)
+
+    # get the arima suite, patch in the name of the suite
+    arima_suite = arima_suite_by_name(arima_clustering_id.arima_suite_id)
+    arima_suite.name = arima_clustering_id.arima_suite_id
+
+    # e.g. DTW
+    distance_measure = arima_clustering_id.distance
+
+    return region_metadata, clustering_suite, arima_suite, distance_measure
+
+
+def plot_name_distances_vs_errors(clustering_algorithm, error_type, cluster, arima_params,
+                                  output_dir):
     '''
     Name and description about distances vs errors plot
+    <output_dir>/dist-error__<clustering>__<error>__<cluster>__arima-<arima_params>.pdf
     '''
-
-    k, random_seed = kmedoids_result.k, kmedoids_result.random_seed
     p, d, q = arima_params.p, arima_params.d, arima_params.q
-
-    plot_name_str = 'plots/arima_distance_error_{}_k{}_seed{}_{}_pdq{}-{}-{}_{}.pdf'
-    plot_name = plot_name_str.format(args.region, k, random_seed, cluster.name, p, d, q,
-                                     args.error)
-
-    plot_desc = 'k-medoids: k={} seed={}'.format(k, random_seed)
-    return plot_name, plot_desc
+    plot_name = 'dist-error__{!r}__{}__{}__arima-p{}-d{}-q{}.pdf'.format(clustering_algorithm,
+                                                                         error_type, cluster.name,
+                                                                         p, d, q)
+    plot_filepath = os.path.join(output_dir, plot_name)
+    return plot_filepath
 
 
 if __name__ == '__main__':

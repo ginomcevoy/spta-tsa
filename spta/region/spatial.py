@@ -321,7 +321,7 @@ class SpatialCluster(SpatialDecorator):
     def new_spatial_region(self, numpy_dataset):
         '''
         Creates a new instance of SpatialCluster with the same partition and cluster index.
-        This will wrap a new decorated region, that was built by the original decorator
+        This will wrap a new decorated region, that was built by the decorated spatial region
         using Chain of Responsibility pattern.
         '''
         new_decorated_region = self.decorated_region.new_spatial_region(numpy_dataset)
@@ -330,8 +330,18 @@ class SpatialCluster(SpatialDecorator):
                               cluster_index=self.cluster_index)
 
     def new_spatio_temporal_region(self, numpy_dataset):
-        # We need a decorated SpatioTemporalRegion, which we don't have.
-        raise NotImplementedError
+        '''
+        Creates a new instance of SpatioTemporalCluster with the same partition and cluster index.
+        This will wrap a new decorated region, that was built by the decorated spatial region
+        using Chain of Responsibility pattern.
+        '''
+        new_decorated_region = self.decorated_region.new_spatio_temporal_region(numpy_dataset)
+
+        # avoid circular imports
+        from .temporal import SpatioTemporalCluster
+        return SpatioTemporalCluster(decorated_region=new_decorated_region,
+                                     partition=self.partition,
+                                     cluster_index=self.cluster_index)
 
     def region_subset(self, region):
         '''

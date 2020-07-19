@@ -1,6 +1,23 @@
 from collections import namedtuple
 
 
+ArimaWithClusters = namedtuple('ArimaWithClusters', ('arima_suite_id', 'clustering_type',
+                               'clustering_suite_id', 'distance'))
+
+def experiments_for_arima_with_clusters():
+
+    # add experiments that use ARIMA with clusters here
+    # arima_clustering_id = ArimaWithClusters(<arima_suite_id>, <clustering_type>, <clustering_id>,
+    #                                         'dtw')
+    arima_clustering_ids = {
+        'arima_simple_quick': ArimaWithClusters('arima_simple', 'kmedoids', 'quick', 'dtw'),
+        'arima_two_quick': ArimaWithClusters('arima_two', 'kmedoids', 'quick', 'dtw'),
+        'arima_whole_brazil': ArimaWithClusters('arima_sweep', 'kmedoids', 'even', 'dtw')
+    }
+
+    return arima_clustering_ids
+
+
 def arima_clustering_experiments():
 
     # add ARIMA clustering experiments here

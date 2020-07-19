@@ -104,6 +104,14 @@ class ClusteringAlgorithm(log_util.LoggerMixin):
 
         return medoids
 
+    def output_dir(self, output_prefix, region_metadata):
+        '''
+        Directory for CSV files and plots, delegates to clustering metadata
+        '''
+        return self.metadata.output_dir(output_prefix=output_prefix,
+                                        region_metadata=region_metadata,
+                                        distance_measure=self.distance_measure)
+
     def save_to_csv(self, partition, region_metadata, output_prefix):
         '''
         Create a CSV report of the clustering partition.
@@ -113,12 +121,10 @@ class ClusteringAlgorithm(log_util.LoggerMixin):
         '''
 
         # path to store CSV
-        csv_output_dir = self.metadata.output_dir(output_prefix=output_prefix,
-                                                  region_metadata=region_metadata,
-                                                  distance_measure=self.distance_measure)
+        csv_output_dir = self.output_dir(output_prefix, region_metadata)
         fs_util.mkdir(csv_output_dir)
 
-        csv_filename = '{!r}.csv'.format(self)
+        csv_filename = 'clustering__{!r}.csv'.format(self)
         csv_filepath = os.path.join(csv_output_dir, csv_filename)
 
         with open(csv_filepath, 'w', newline='') as csv_file:

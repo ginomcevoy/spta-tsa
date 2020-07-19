@@ -37,17 +37,16 @@ def regular_suites():
     }
 
 
-def get_suite(clustering_type, clustering_suite_id):
+def get_suite(clustering_type, suite_id):
     '''
     Get one of the clustering suites.
     '''
     if clustering_type == 'kmedoids':
-        clustering_suite = kmedoids_suites()[clustering_suite_id]
+        clustering_suite = kmedoids_suites()[suite_id]
     elif clustering_type == 'regular':
-        clustering_suite = regular_suites()[clustering_suite_id]
+        clustering_suite = regular_suites()[suite_id]
 
     return clustering_suite
-
 
 
 def suite_options():

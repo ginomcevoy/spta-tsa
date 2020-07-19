@@ -2,8 +2,10 @@
 raw/
 plots/
 csv/
-pickle
+pickle/
 results/
+outputs/
+ideas/
 
 .ipynb_checkpoints/
 
