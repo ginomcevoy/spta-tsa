@@ -15,7 +15,8 @@ from spta.region.error import ErrorAnalysis
 
 from spta.util import log as log_util
 
-from .training import ArimaTrainer, ExtractAicFromArima, ExtractPDQFromAutoArima
+# from .training import ArimaTrainer, ExtractAicFromArima, ExtractPDQFromAutoArima
+from . import training
 
 
 class ArimaModelRegion(ForecastModelRegion):
@@ -293,7 +294,8 @@ class ArimaForecastingPDQ(ArimaForecasting):
 
         # a function region with produces trained models when applied to a training region
         # using p, d, q
-        arima_trainers = ArimaTrainer.with_hyperparameters(arima_hyperparams, x_len, y_len)
+        arima_trainers = training.ArimaTrainer.with_hyperparameters(arima_hyperparams,
+                                                                    x_len, y_len)
 
         # train the models: this returns an instance of ArimaModelRegion, that has an instance of
         # statsmodels.tsa.arima.model.ARIMAResults at each point
@@ -303,7 +305,7 @@ class ArimaForecastingPDQ(ArimaForecasting):
         arima_models.missing_count = arima_trainers.missing_count
 
         # create a spatial region with AIC values and store it inside the arima_models object.
-        extract_aic = ExtractAicFromArima(x_len, y_len)
+        extract_aic = training.ExtractAicFromArima(x_len, y_len)
         arima_models.aic_region = extract_aic.apply_to(arima_models)
 
         aic_0_0 = arima_models.aic_region.value_at(Point(0, 0))
@@ -327,7 +329,7 @@ class ArimaForecastingAutoArima(ArimaForecasting):
 
         # a function region with produces trained models when applied to a training region
         # using auto_arima
-        arima_trainers = ArimaTrainer.with_auto_arima(auto_arima_params, x_len, y_len)
+        arima_trainers = training.ArimaTrainer.with_auto_arima(auto_arima_params, x_len, y_len)
 
         # train the models: this returns an instance of ArimaModelRegion, that has an instance of
         # statsmodels.tsa.arima.model.ARIMAResults at each point
@@ -339,11 +341,11 @@ class ArimaForecastingAutoArima(ArimaForecasting):
         arima_models.missing_count = arima_trainers.missing_count
 
         # create a spatial region with AIC values and store it inside the arima_models object.
-        extract_aic = ExtractAicFromArima(x_len, y_len)
+        extract_aic = training.ExtractAicFromArima(x_len, y_len)
         arima_models.aic_region = extract_aic.apply_to(arima_models)
 
         # create a spatio-temporal region with (p, d, q) values and store it inside arima_models.
-        extract_pdq = ExtractPDQFromAutoArima(x_len, y_len)
+        extract_pdq = training.ExtractPDQFromAutoArima(x_len, y_len)
         arima_models.pdq_region = extract_pdq.apply_to(arima_models, 3)
 
         aic_0_0 = arima_models.aic_region.value_at(Point(0, 0))

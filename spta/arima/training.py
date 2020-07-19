@@ -193,6 +193,20 @@ class ArimaTrainer(FunctionRegionScalarSame):
         return ArimaTrainer(auto_arima_with_params, x_len, y_len)
 
 
+def extract_aic(fitted_arima_at_point):
+    '''
+    Extracts the aic value of an ARIMA model after it has been trained.
+    '''
+    # Problem: ArimaModelRegion is always a full spatial region, so it does not iterate
+    # like a cluster if it was generated for a cluster.
+    # In points outside of the cluster, the 'value' (fitted_arima_at_point) is 0.
+    # Also, if ARIMA training/fitting fails, the model is None.
+    if fitted_arima_at_point == 0 or fitted_arima_at_point is None:
+        return np.nan
+    else:
+        return fitted_arima_at_point.aic
+
+
 class ExtractAicFromArima(FunctionRegionScalarSame):
     '''
     Get the AIC value that was obtained while fitting an ARIMA model. This function should be
@@ -200,22 +214,25 @@ class ExtractAicFromArima(FunctionRegionScalarSame):
     '''
 
     def __init__(self, x_len, y_len):
-
-        def extract_aic(fitted_arima_at_point):
-            '''
-            The function applied to each point of an ArimaModelRegion instance.
-            Extracts the aic value.
-            '''
-            # Problem: ArimaModelRegion is always a full spatial region, so it does not iterate
-            # like a cluster if it was generated for a cluster.
-            # In points outside of the cluster, the 'value' (fitted_arima_at_point) is 0.
-            # Also, if ARIMA training/fitting fails, the model is None.
-            if fitted_arima_at_point == 0 or fitted_arima_at_point is None:
-                return np.nan
-            else:
-                return fitted_arima_at_point.aic
-
+        # use extract_aic as the function to be applied at each point of an ArimaModelRegion
+        # instance.
         super(ExtractAicFromArima, self).__init__(extract_aic, x_len, y_len)
+
+
+def extract_pdq(fitted_arima_at_point):
+    '''
+    Extracts the (p, d, q) order and returns it as a series, so that it can be stored
+    in the resulting SpatioTemporalRegion
+    '''
+    # Problem: ArimaModelRegion is always a full spatial region, so it does not iterate
+    # like a cluster if it was generated for a cluster.
+    # In points outside of the cluster, the 'value' (fitted_arima_at_point) is 0.
+    # Also, if ARIMA training/fitting fails, the model is None.
+    if fitted_arima_at_point == 0 or fitted_arima_at_point is None:
+        (p, d, q) = ORDER_WHEN_NO_MODEL
+    else:
+        (p, d, q) = fitted_arima_at_point.model.order
+    return np.array([p, d, q])
 
 
 class ExtractPDQFromAutoArima(FunctionRegionSeriesSame):
@@ -225,23 +242,8 @@ class ExtractPDQFromAutoArima(FunctionRegionSeriesSame):
     '''
 
     def __init__(self, x_len, y_len):
-
-        def extract_pdq(fitted_arima_at_point):
-            '''
-            The function applied to each point of an ArimaModelRegion instance.
-            Extracts the (p, d, q) order and returns it as a series, so that it can be stored
-            in the resulting SpatioTemporalRegion
-            '''
-            # Problem: ArimaModelRegion is always a full spatial region, so it does not iterate
-            # like a cluster if it was generated for a cluster.
-            # In points outside of the cluster, the 'value' (fitted_arima_at_point) is 0.
-            # Also, if ARIMA training/fitting fails, the model is None.
-            if fitted_arima_at_point == 0 or fitted_arima_at_point is None:
-                (p, d, q) = ORDER_WHEN_NO_MODEL
-            else:
-                (p, d, q) = fitted_arima_at_point.model.order
-
-            return np.array([p, d, q])
+        # use extract_pdq as the function to be applied at each point of an ArimaModelRegion
+        # instance.
 
         # create a spatio-temporal region of integer values for the ARIMA order
         # integers are needed because they are passed to an ARIMA model

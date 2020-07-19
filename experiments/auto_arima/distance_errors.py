@@ -6,6 +6,7 @@ import csv
 import numpy as np
 import os
 
+from spta.arima.training import extract_pdq
 from spta.distance.dtw import DistanceByDTW
 
 from spta.region.error import ErrorAnalysis, error_functions
@@ -99,7 +100,8 @@ def do_auto_arima_distance_errors(args, logger):
 
 
 def do_auto_arima_distance_errors_for_cluster(cluster, trainer, partition, forecast_len,
-                                              error_type, with_plots, logger):
+                                              error_type, with_plots, logger,
+                                              output_prefix='outputs'):
 
     _, x_len, y_len = cluster.shape
 
@@ -134,6 +136,11 @@ def do_auto_arima_distance_errors_for_cluster(cluster, trainer, partition, forec
     arima_at_medoid = arima_model_region.function_at(cluster.centroid)
     forecast_series = arima_at_medoid(None)
 
+    # use extract_pdq to get the pdq values calculated by autoARIMA
+    # need these for the CSV filename
+    arima_results_at_medoid = arima_model_region.value_at(cluster.centroid)
+    (p_medoid, d_medoid, q_medoid) = extract_pdq(arima_results_at_medoid)
+
     # calculate the forecast error in the entire region, then for each medoid
     # TODO handle normalization somewhere!
     # ideally inside ErrorAnalysis
@@ -148,12 +155,16 @@ def do_auto_arima_distance_errors_for_cluster(cluster, trainer, partition, forec
     ]
 
     # prepare the CSV output at:
-    # csv/<region>/<clustering>/<distance>/<auto_arima>_distance_errors_cluster<i>.csv
-    csv_dir = trainer.metadata.csv_dir
+    # outputs/<region>/<distance>/<clustering>/<auto_arima_params>
+    # dist-error__<clustering>__<error>__<cluster>__auto-arima-<arima_params>.csv
+    csv_dir = trainer.metadata.output_dir(output_prefix)
     fs_util.mkdir(csv_dir)
 
-    csv_filename = '{!r}_distance_errors_cluster_{}.csv'.format(trainer.metadata.model_params,
-                                                                cluster.name)
+    # csv_filename = '{!r}_distance_errors_cluster_{}.csv'.format(trainer.metadata.model_params,
+    #                                                             cluster.name)
+    output_template = 'dist-error__{!r}__{}__{}__auto-arima-p{}-d{}-q{}.{}'
+    csv_filename = output_template.format(trainer.clustering_metadata, error_type, cluster.name,
+                                          p_medoid, d_medoid, q_medoid, 'csv')
     csv_full_path = os.path.join(csv_dir, csv_filename)
 
     # the CSV has this format:
@@ -198,11 +209,15 @@ def do_auto_arima_distance_errors_for_cluster(cluster, trainer, partition, forec
             'ARIMA: {}'.format(arima_order),
             '{}'.format(trainer.clustering_metadata)))
 
-        # save the plot here
-        plot_dir = trainer.metadata.plot_dir
-        fs_util.mkdir(plot_dir)
-        plot_name = '{!r}_distance_errors_cluster_{}.pdf'.format(trainer.metadata.model_params,
-                                                                 cluster.name)
+        # save the plot
+        # outputs/<region>/<distance>/<clustering>/<auto_arima_params>
+        # dist-error__<clustering>__<error>__<cluster>__auto-arima-<arima_params>.pdf
+        plot_dir = trainer.metadata.output_dir(output_prefix)
+        # plot_name = '{!r}_distance_errors_cluster_{}.pdf'.format(trainer.metadata.model_params,
+        #                                                          cluster.name)
+        output_template = 'dist-error__{!r}__{}__{}__auto-arima-p{}-d{}-q{}.{}'
+        plot_name = output_template.format(trainer.clustering_metadata, error_type, cluster.name,
+                                           p_medoid, d_medoid, q_medoid, 'pdf')
         plot_full_path = os.path.join(plot_dir, plot_name)
 
         plot_util.plot_distances_vs_forecast_errors(distances_to_point=distances_to_medoid,
