@@ -47,6 +47,11 @@ class ClusteringMetadata():
         '''
         return os.path.join('pickle', self.clustering_subdir(region_metadata, distance_measure))
 
+    def as_dict(self):
+        '''
+        Returns a representation of this metadata as a list of elements
+        '''
+
     def __repr__(self):
         return '{}_k{}'.format(self.name, self.k)
 

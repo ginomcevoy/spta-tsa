@@ -270,13 +270,13 @@ class DistanceHistogramClusters(DistanceHistogram):
     See spta.util.maths.two_balanced_divisors_order_x_y for details.
     '''
 
-    def __init__(self, clusters, distance_measure, random_points=None, bins='auto'):
+    def __init__(self, clusters, clustering_algorithm, random_points=None, bins='auto'):
         '''
         clusters
             a list of SpatioTemporalCluster instances
 
-        distance_measure
-            e.g. DistanceByDTW
+        clustering_algorithm
+            a clustering algorithm, used to extract metadata
 
         random_points
             Indicates how many random points will be added from other clusters to each hist. plot.
@@ -292,9 +292,11 @@ class DistanceHistogramClusters(DistanceHistogram):
             assert cluster.has_centroid()
 
         self.clusters = clusters
-        self.distance_measure = distance_measure
+        self.clustering_algorithm = clustering_algorithm
         self.random_points = random_points
         self.bins = bins
+
+        distance_measure = clustering_algorithm.distance_measure
 
         # composite pattern: this histogram plot has k histogram subplots inside it.
         self.histograms = [
@@ -305,6 +307,7 @@ class DistanceHistogramClusters(DistanceHistogram):
 
         # if random_points is provided, then also add their histograms to existing subplots.
         self.random_histograms = None
+        self.random_points = random_points
         if random_points is not None:
             self.random_histograms = [
                 DistanceHistogramRandomOutsidePoints(cluster, distance_measure, bins=bins,
@@ -348,7 +351,7 @@ class DistanceHistogramClusters(DistanceHistogram):
     def statistics(self):
         raise NotImplementedError
 
-    def plot(self, with_statistics=True, plot_name=None, alpha=0.5):
+    def plot(self, with_statistics=True, plot_dir=None, alpha=0.5):
         '''
         Composes a plot with subplots, one or each cluster.
         '''
@@ -367,6 +370,18 @@ class DistanceHistogramClusters(DistanceHistogram):
 
         # use maximum distance to override x_lim of all subplots
         max_override = self.max_distance()
+
+        # if saving plot, the filename is calculated using the clustering algorithm and possible
+        # random points
+        plot_name = None
+        if plot_dir is not None:
+            plot_partial_name = 'variance-histograms__{!r}'.format(self.clustering_algorithm)
+
+            if self.random_points is not None:
+                # if random points are provided, change the filename to avoid overwrite
+                plot_partial_name = plot_partial_name + '__random{}'.format(self.random_points)
+
+            plot_name = '{}/{}.pdf'.format(plot_dir, plot_partial_name)
 
         # plot histogram of each cluster, use the grid subplots
         for i, cluster in enumerate(self.clusters):
@@ -412,15 +427,16 @@ class DistanceHistogramClusters(DistanceHistogram):
         plt.show()
 
     @classmethod
-    def cluster_histograms(cls, clusters, distance_measure, random_points=None, bins='auto',
-                           with_statistics=True, plot_name=None, alpha=0.5):
+    def cluster_histograms(cls, clusters, clustering_algorithm, random_points=None, bins='auto',
+                           with_statistics=True, plot_dir=None, alpha=0.5):
         '''
         Create a figure with histogram subplots for each cluster, with distances relative
         to the centroid of each cluster.
         '''
-        cluster_hist = DistanceHistogramClusters(clusters, distance_measure, random_points, bins)
+        cluster_hist = DistanceHistogramClusters(clusters, clustering_algorithm, random_points,
+                                                 bins)
         cluster_hist.plot(with_statistics=with_statistics,
-                          plot_name=plot_name,
+                          plot_dir=plot_dir,
                           alpha=alpha)
 
 
@@ -455,9 +471,9 @@ if __name__ == '__main__':
     clusters = partition.create_all_spt_clusters(spt_region, medoids=medoids)
 
     DistanceHistogramClusters.cluster_histograms(clusters=clusters,
-                                                 distance_measure=distance_measure,
+                                                 clustering_algorithm=regular_clustering,
                                                  random_points=0,
                                                  bins='auto',
                                                  with_statistics=True,
-                                                 plot_name='plots/variance_test2.pdf',
+                                                 plot_dir='plots',
                                                  alpha=0.5)
