@@ -76,6 +76,13 @@ class DistanceHistogram(log_util.LoggerMixin):
         '''
         Caculates some statistics about the distances, and returns them as text.
         '''
+
+        # min is the minimum distance after removing the mandatory 0 value from the point of
+        # interest, this idiom puts the second-lowest distance at the right place
+        # https://stackoverflow.com/a/22546769
+        min_distance_not_zero = np.partition(distances, 1)[1]
+        max_distance = np.max(distances)
+
         mean = np.mean(distances)
         sigma = np.std(distances)
         median = np.median(distances)
@@ -83,6 +90,8 @@ class DistanceHistogram(log_util.LoggerMixin):
         textstr = '\n'.join((
             '{}'.format(self.spt_region),
             'n = {}'.format(len(self.point_indices)),
+            'min = {:.2f}'.format(min_distance_not_zero),
+            'max =  {:.2f}'.format(max_distance),
             'x̅ = {:.2f}'.format(mean),
             's = {:.2f}'.format(sigma),
             'M = {:0.2f}'.format(median)))
@@ -144,8 +153,8 @@ class DistanceHistogram(log_util.LoggerMixin):
         if with_statistics:
             # place a text box in upper right in axes coords (0.05, 0.95 for left)
             textstr = self.statistics(distances)
-            subplot.text(0.75, 0.95, textstr, transform=subplot.transAxes,
-                         verticalalignment='top')
+            subplot.text(0.70, 0.95, textstr, transform=subplot.transAxes,
+                         verticalalignment='top', bbox=dict(edgecolor='black', fill=False))
 
         # Save figure
         if plot_name and not as_subplot:
@@ -179,6 +188,153 @@ class DistanceHistogram(log_util.LoggerMixin):
                            plot_name=plot_name)
 
         return distance_hist
+
+
+class DistanceHistogramWithRandomPointsOtherClusters(DistanceHistogram):
+    '''
+    Given a distance histogram of a spatio-temporal cluster, adds a histogram of random points
+    from other clusters on top of it, using the decorator pattern.
+    Assumes that the provided spatio-temporal region is a subset of the whole region given by
+    its (x_len, y_len) coordinates. Also assumes that a subplot is provided for adding the hist.
+
+    See point_indices for details on calculating the random points.
+    '''
+
+    def __init__(self, cluster_histogram, num_points=0):
+        self.cluster_histogram = cluster_histogram
+        self.num_points = num_points
+
+        self.spt_region = cluster_histogram.spt_region
+        self.distance_measure = cluster_histogram.distance_measure
+
+        # assuming a cluster
+        self.spt_cluster = self.spt_region
+
+    @property
+    def point_indices(self):
+        '''
+        Here, random indices outside of the cluster are calculated.
+        The random points are calculated using the x_len, y_len region of the cluster, and calling
+        spta.util.maths.evaluate_random_array_of_integers to get points in (x_len, y_len) Region
+        that do not belong to the points in the current cluster.
+
+        Will fail if there are no points outside of the cluster!
+        '''
+        indices_of_cluster = self.spt_cluster.all_point_indices
+
+        _, x_len, y_len = self.spt_cluster.shape
+        num_remaining_points_in_region = x_len * y_len - len(indices_of_cluster)
+
+        # requested number of random points, same number of points in cluster by default
+        if self.num_points == 0:
+            self.num_points = len(indices_of_cluster)
+
+        # fall back to available points if there are not enough to meet request
+        if self.num_points > num_remaining_points_in_region:
+            self.num_points = num_remaining_points_in_region
+
+        # Find random indices outside of cluster.
+        # If request is too high, then it finds all points outside the cluster.
+        return maths_util.random_integers_with_blacklist(n=self.num_points,
+                                                         min_value=0,
+                                                         max_value=(x_len * y_len - 1),
+                                                         blacklist=indices_of_cluster)
+
+    def distances_to_point(self, point_of_interest):
+        '''
+        Compute the distances to the point of interest, e.g. centroid.
+        Here we decorate original behavior to compute the original histogram distances *and* the
+        random distances.
+        '''
+        cluster_distances = self.cluster_histogram.distances_to_point(point_of_interest)
+
+        # leverage original behavior
+        parent = super(DistanceHistogramWithRandomPointsOtherClusters, self)
+        random_distances = parent.distances_to_point(point_of_interest)
+        return (cluster_distances, random_distances)
+
+    def max_distance(self, distances, max_override=None):
+        '''
+        Calculate the max distance considering cluster and random distances
+        '''
+        # idiom to use max_override only if provided
+        if max_override is None:
+            max_override = -np.inf
+
+        cluster_distances, random_distances = distances
+
+        # overall maximum value
+        return np.max([np.max(cluster_distances), np.max(random_distances), max_override])
+
+    def statistics(self, distances):
+        '''
+        Decorates the statistics
+        '''
+
+        # get the normal statistics
+        cluster_distances, random_distances = distances
+        textstr_cluster = self.cluster_histogram.statistics(cluster_distances)
+
+        # add statistics from random points: number of points, number of points that 'intersect'
+        # the original histogram
+        # the interesection is calculated by counting how many random_distances are lower than the
+        # maximum cluster distance
+        smaller_random_distances = np.where(random_distances < np.max(cluster_distances))[0]
+        textstr = '\n'.join((
+            textstr_cluster,
+            '#rand = {}'.format(len(random_distances)),
+            '∩rand = {}'.format(len(smaller_random_distances)),
+        ))
+
+        return textstr
+
+    def plot(self, distances, subplot=False, with_statistics=True, max_override=None,
+             plot_name=None, alpha=1):
+
+        # only valid within an existing subplot
+        assert subplot is not None
+
+        # assume distances_to_point was called... ugly yes
+        cluster_distances, random_distances = distances
+
+        # logging only
+        mean_cost_random = np.mean(random_distances)
+        np.set_printoptions(precision=3)
+        self.logger.debug('Cost from random points histogram = {:.3f}'.format(mean_cost_random))
+
+        # plot the original histogram in the subplot
+        # does not save this plot, does not add statistics
+        self.cluster_histogram.plot(distances=cluster_distances,
+                                    subplot=subplot,
+                                    with_statistics=False,
+                                    plot_name=None,
+                                    alpha=alpha)
+
+        # add the histogram of provided distances
+        # useful for adding a second histogram to existing plot
+        subplot.hist(random_distances, label='random', bins=self.cluster_histogram.bins,
+                     alpha=alpha)
+
+        if with_statistics:
+            # use the decorated statistics
+            # place a text box in upper right in axes coords (0.05, 0.95 for left)
+            textstr = self.statistics(distances)
+            subplot.text(0.70, 0.95, textstr, transform=subplot.transAxes,
+                         verticalalignment='top', bbox=dict(edgecolor='black', fill=False))
+
+        if max_override:
+            # for visual comparison in grid plot
+            subplot.set_xlim((0, max_override))
+
+        subplot.legend(loc='upper left')
+
+        # Save figure
+        if plot_name:
+            plt.draw()
+            plt.savefig(plot_name)
+            self.logger.info('Saved figure: {}'.format(plot_name))
+
+        return subplot
 
 
 class DistanceHistogramRandomOutsidePoints(DistanceHistogram):
@@ -299,22 +455,37 @@ class DistanceHistogramClusters(DistanceHistogram):
         distance_measure = clustering_algorithm.distance_measure
 
         # composite pattern: this histogram plot has k histogram subplots inside it.
-        self.histograms = [
-            DistanceHistogram(cluster, distance_measure, bins)
-            for cluster
-            in clusters
-        ]
+        self.histograms = []
+        for cluster in clusters:
 
-        # if random_points is provided, then also add their histograms to existing subplots.
-        self.random_histograms = None
+            # histogram for the points in a cluster
+            histogram = DistanceHistogram(cluster, distance_measure, bins)
+
+            if random_points is not None:
+                # also add the histogram of random points on top of the clustering,
+                # done by decorating the original histogram
+                histogram = DistanceHistogramWithRandomPointsOtherClusters(histogram,
+                                                                           random_points)
+            self.histograms.append(histogram)
+
+        # saved as a flag for plot name
         self.random_points = random_points
-        if random_points is not None:
-            self.random_histograms = [
-                DistanceHistogramRandomOutsidePoints(cluster, distance_measure, bins=bins,
-                                                     num_points=random_points)
-                for cluster
-                in clusters
-            ]
+
+        # self.histograms = [
+        #     DistanceHistogram(cluster, distance_measure, bins)
+        #     for cluster
+        #     in clusters
+        # ]
+
+        # # if random_points is provided, then also add their histograms to existing subplots.
+        # self.random_histograms = None
+        # if random_points is not None:
+            # self.random_histograms = [
+            #     DistanceHistogramRandomOutsidePoints(cluster, distance_measure, bins=bins,
+            #                                          num_points=random_points)
+            #     for cluster
+            #     in clusters
+            # ]
 
     @property
     def point_indices(self):
@@ -334,16 +505,20 @@ class DistanceHistogramClusters(DistanceHistogram):
         # iterate clusters and access all histograms
         for i, cluster_i in enumerate(self.clusters):
             cluster_i_hist = self.histograms[i]
+
+            # find the distances to the centroid
+            # should also work with decorated histograms
             cluster_i_dists = cluster_i_hist.distances_to_point(cluster_i.centroid)
 
             # since max_distance keeps maximum, use this instead of asking which is larger
+            # should also work with decorated histograms
             max_dist = cluster_i_hist.max_distance(cluster_i_dists, max_dist)
 
-            # also evaluate random histograms if available
-            if self.random_histograms:
-                random_i_hist = self.random_histograms[i]
-                random_i_dists = random_i_hist.distances_to_point(cluster_i.centroid)
-                max_dist = random_i_hist.max_distance(random_i_dists, max_dist)
+            # # also evaluate random histograms if available
+            # if self.random_histograms:
+            #     random_i_hist = self.random_histograms[i]
+            #     random_i_dists = random_i_hist.distances_to_point(cluster_i.centroid)
+            #     max_dist = random_i_hist.max_distance(random_i_dists, max_dist)
 
         # at the end of the loop, the maximum distance between each point and its centroid is found
         return max_dist
@@ -400,25 +575,27 @@ class DistanceHistogramClusters(DistanceHistogram):
 
             # access each histogram and compose
             # don't pass plot_name to avoid saving each subplot
+            # should also work with decorated histograms
             histogram_i = self.histograms[i]
             distances_i = histogram_i.distances_to_point(cluster.centroid)
             histogram_i.plot(distances=distances_i,
                              subplot=subplot,
                              with_statistics=with_statistics,
                              plot_name=None,
-                             alpha=alpha)
+                             alpha=alpha,
+                             max_override=max_override)
 
-            # if there are random histograms, add them to the corresponding subplot
-            if self.random_histograms:
-                random_hist_i = self.random_histograms[i]
-                random_distances_i = random_hist_i.distances_to_point(cluster.centroid)
+            # # if there are random histograms, add them to the corresponding subplot
+            # if self.random_histograms:
+            #     random_hist_i = self.random_histograms[i]
+            #     random_distances_i = random_hist_i.distances_to_point(cluster.centroid)
 
-                # this will add the random histogram to the histogram of this cluster
-                # also override x_lim for visual comparison
-                random_hist_i.plot(distances=random_distances_i,
-                                   subplot=subplot,
-                                   alpha=alpha,
-                                   max_override=max_override)
+            #     # this will add the random histogram to the histogram of this cluster
+            #     # also override x_lim for visual comparison
+            #     random_hist_i.plot(distances=random_distances_i,
+            #                        subplot=subplot,
+            #                        alpha=alpha,
+            #                        max_override=max_override)
         # Save figure
         if plot_name:
             plt.draw()
@@ -469,6 +646,14 @@ if __name__ == '__main__':
                                                     distance_measure)
     partition, medoids = regular_clustering.partition(spt_region, with_medoids=True)
     clusters = partition.create_all_spt_clusters(spt_region, medoids=medoids)
+
+    DistanceHistogramClusters.cluster_histograms(clusters=clusters,
+                                                 clustering_algorithm=regular_clustering,
+                                                 random_points=None,
+                                                 bins='auto',
+                                                 with_statistics=True,
+                                                 plot_dir='plots',
+                                                 alpha=0.5)
 
     DistanceHistogramClusters.cluster_histograms(clusters=clusters,
                                                  clustering_algorithm=regular_clustering,
