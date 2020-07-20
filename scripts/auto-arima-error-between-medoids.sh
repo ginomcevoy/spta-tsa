@@ -4,4 +4,4 @@
 SCRIPTS_DIR="$( cd "$( dirname "$0" )" && pwd )"
 
 cd $SCRIPTS_DIR/..
-PYTHONPATH=$PWD python3 -m experiments.arima.auto_arima_errors $@
+PYTHONPATH=$PWD python3 -m experiments.auto_arima.error_between_medoids $@

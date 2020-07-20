@@ -1,6 +1,14 @@
 '''
-Execute this program to perform ARIMA forecasting and error evaluation on an entire region.
+Execute this program to:
+
+1. Partition a spatio-temporal region using a clustering algorithm (e.g. k-medoids)
+2. Train auto ARIMA models at the medoids of the resulting clusters.
+3. For each cluster, calculate the distance (e.g. DTW) between each point and the corresponding
+   medoid, and the generalization error (forecast error using training data) when using the auto
+   ARIMA model at the medoid to forecast the series of each point.
+4. Plot the distances vs the forecast errors, and save the values as CSV.
 '''
+
 import argparse
 import csv
 import numpy as np
@@ -27,9 +35,11 @@ from experiments.metadata.region import predefined_regions
 def processRequest():
 
     # parses the arguments
-    desc = 'Perform various clustering partitions on a spatial-region, and analyze distances ' \
-        'vs. forecast errors for each cluster.'
-    usage = '%(prog)s [-h] <region> <auto_arima_cluster_id> [--forecast_len <int>] ' \
+    desc = '''Given a partitioned spatio-temporal region and a clustering algorithm, train auto
+ARIMA models at the medoids of the resulting clusters. Then analyze distances vs. forecast errors
+for each cluster.'''
+
+    usage = '%(prog)s [-h] <region> <auto_arima_cluster_id> [--flen <forecast_length>] ' \
         '[--error <error_type>] [--plots] [--log <log_level>]'
     parser = argparse.ArgumentParser(prog='auto-arima-distance-errors', description=desc,
                                      usage=usage)
@@ -43,9 +53,9 @@ def processRequest():
     parser.add_argument('auto_arima_cluster', help='ID of auto arima clustering experiment',
                         choices=auto_arima_clustering_options)
 
-    # forecast_len is optional and defaults to 8
+    # flen (forecast length) is optional and defaults to 8
     forecast_help_msg = 'number of samples for forecast/testing (default: %(default)s)'
-    parser.add_argument('--forecast_len', help=forecast_help_msg, default=8, type=int)
+    parser.add_argument('--flen', help=forecast_help_msg, default=8, type=int)
 
     # error type is optional and defaults to sMAPE
     error_options = error_functions().keys()
@@ -72,7 +82,7 @@ def do_auto_arima_distance_errors(args, logger):
 
     # parse to get metadata
     region_metadata, clustering_suite, auto_arima_params = metadata_from_args(args)
-    forecast_len = args.forecast_len
+    forecast_len = args.flen
     error_type = args.error
 
     # recover the spatio-temporal region
@@ -95,13 +105,14 @@ def do_auto_arima_distance_errors(args, logger):
         clusters = partition.create_all_spt_clusters(spt_region, medoids=medoids)
 
         for cluster in clusters:
-            do_auto_arima_distance_errors_for_cluster(cluster, trainer, partition, forecast_len,
-                                                      error_type, args.plots, logger)
+
+            # will do distance vs errors and errors between medoids
+            distance_vs_errors_for_cluster(cluster, trainer, partition, forecast_len, error_type,
+                                           args.plots, logger)
 
 
-def do_auto_arima_distance_errors_for_cluster(cluster, trainer, partition, forecast_len,
-                                              error_type, with_plots, logger,
-                                              output_prefix='outputs'):
+def distance_vs_errors_for_cluster(cluster, trainer, partition, forecast_len, error_type,
+                                   with_plots, logger, output_prefix='outputs'):
 
     _, x_len, y_len = cluster.shape
 

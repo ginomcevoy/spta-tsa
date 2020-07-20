@@ -36,7 +36,7 @@ def processRequest():
 ARIMA models at the medoids of the resulting clusters. Then compute the generalization errors
 of each model at all the cluster medoids, resulting in k*k errors.'''
 
-    usage = '%(prog)s [-h] <region> <auto_arima_cluster_id> ' \
+    usage = '%(prog)s [-h] <region> <auto_arima_cluster_id> [--flen <forecast_length>]' \
         '[--error error_type] [--log=log_level]'
     parser = argparse.ArgumentParser(prog='auto-arima-errors', description=desc, usage=usage)
 
@@ -49,9 +49,9 @@ of each model at all the cluster medoids, resulting in k*k errors.'''
     parser.add_argument('auto_arima_cluster', help='ID of auto arima clustering experiment',
                         choices=auto_arima_clustering_options)
 
-    # forecast_len is optional and defaults to 8
+    # flen (forecast length) is optional and defaults to 8
     forecast_help_msg = 'number of samples for forecast/testing (default: %(default)s)'
-    parser.add_argument('--forecast_len', help=forecast_help_msg, default=8, type=int)
+    parser.add_argument('--flen', help=forecast_help_msg, default=8, type=int)
 
     # error type is optional and defaults to sMAPE
     error_options = error_functions().keys()
@@ -69,7 +69,8 @@ of each model at all the cluster medoids, resulting in k*k errors.'''
 def do_auto_arima_errors(args, logger):
 
     # parse to get metadata
-    region_metadata, clustering_suite, auto_arima_params = metadata_from_args(args)
+    region_metadata, clustering_suite, auto_arima_params, forecast_len, error_type = \
+        metadata_from_args(args)
 
     # recover the spatio-temporal region
     spt_region = region_metadata.create_instance()
@@ -78,10 +79,10 @@ def do_auto_arima_errors(args, logger):
         logger.info('Clustering algorithm: {}'.format(clustering_metadata))
 
         do_auto_arima_errors_for_clustering(spt_region, region_metadata, clustering_metadata,
-                                            auto_arima_params, args, logger)
+                                            auto_arima_params, forecast_len, error_type, logger)
 
 def do_auto_arima_errors_for_clustering(spt_region, region_metadata, clustering_metadata,
-                                        auto_arima_params, args, logger):
+                                        auto_arima_params, forecast_len, error_type, logger):
 
     # prepare to train a solver based on auto ARIMA
     trainer = AutoARIMATrainer(region_metadata=region_metadata,
@@ -94,7 +95,7 @@ def do_auto_arima_errors_for_clustering(spt_region, region_metadata, clustering_
     partition, medoids = trainer.clustering_algorithm.partition(spt_region, with_medoids=True)
 
     # create training/test regions
-    splitter = SplitTrainingAndTestLast(args.forecast_len)
+    splitter = SplitTrainingAndTestLast(forecast_len)
     (training_region, test_region) = splitter.split(spt_region)
 
     # this will evaluate the forecast errors
@@ -105,10 +106,11 @@ def do_auto_arima_errors_for_clustering(spt_region, region_metadata, clustering_
     arima_model_region = trainer.train_auto_arima_at_medoids(training_region, partition, medoids)
 
     # prepare the CSV output for this clustering partition
-    csv_dir = trainer.metadata.csv_dir
+    csv_dir = trainer.metadata.output_dir('outputs')
     fs_util.mkdir(csv_dir)
 
-    csv_filename = 'auto_arima_{}_errors_at_medoids.csv'.format(auto_arima_params)
+    # csv_filename = 'auto_arima_{}_errors_at_medoids.csv'.format(auto_arima_params)
+    csv_filename = 'error-between-medoids__{!r}__{}.csv'.format(clustering_metadata, error_type)
     csv_full_path = os.path.join(csv_dir, csv_filename)
 
     with open(csv_full_path, 'w', newline='') as csv_file:
@@ -127,24 +129,22 @@ def do_auto_arima_errors_for_clustering(spt_region, region_metadata, clustering_
 
     for i, medoid in enumerate(medoids):
         find_auto_arima_errors_for_medoid(spt_region, error_analysis, arima_model_region, i,
-                                          medoid, medoids, csv_full_path, args, logger)
+                                          medoid, medoids, csv_full_path, forecast_len, error_type,
+                                          logger)
 
     logger.info('Saved CSV to {}'.format(csv_full_path))
 
 def find_auto_arima_errors_for_medoid(spt_region, error_analysis, arima_model_region, i, medoid,
-                                      medoids, csv_full_path, args, logger):
+                                      medoids, csv_full_path, forecast_len, error_type, logger):
 
     # use the model at the medoid to create a forecast
     # the model does not require any other parameters, but needs forecast_len set
-    arima_model_region.forecast_len = args.forecast_len
+    arima_model_region.forecast_len = forecast_len
     arima_at_medoid = arima_model_region.function_at(medoid)
     forecast_series = arima_at_medoid(None)
 
-    # may need denormalization, so keep a backup
-    # forecast_series_ready = forecast_series
-
     # calculate the forecast error in the entire region, then for each medoid
-    error_region = error_analysis.with_repeated_forecast(forecast_series, args.error)
+    error_region = error_analysis.with_repeated_forecast(forecast_series, error_type)
     errors_at_medoids = [
         error_region.value_at(other_medoid)
         for other_medoid
@@ -167,24 +167,6 @@ def find_auto_arima_errors_for_medoid(spt_region, error_analysis, arima_model_re
                                 quoting=csv.QUOTE_MINIMAL)
         csv_writer.writerow([str(i)] + errors_at_medoids_str)
 
-    # for other_medoid in medoids:
-    #     TODO normalized forecast should be denormalized before calculating prediction errors!?
-
-    #     # denormalize forecast?
-    #     if spt_region.region_metadata.normalized:
-
-    #         # get the normalization info for this domain point
-    #         norm_min = spt_region.normalization_min.value_at(other_medoid)
-    #         norm_max = spt_region.normalization_max.value_at(other_medoid)
-    #         logger.debug('point {}: norm_min={}, norm_max={}'.format(other_medoid, norm_min,
-    #                                                                  norm_max))
-
-    #         # denormalize
-    #         forecast_series_ready = (norm_max - norm_min) * forecast_series + norm_min
-
-    #         log_msg = 'Forecast for model in medoid {} for the other medoid {} -> {}'
-    #         logger.debug(log_msg.format(medoid, other_medoid, forecast_series_ready))
-
 
 def metadata_from_args(args):
     '''
@@ -201,7 +183,10 @@ def metadata_from_args(args):
     # get the auto arima params
     auto_arima_params = predefined_auto_arima()[auto_arima_cluster.auto_arima_id]
 
-    return region_metadata, clustering_suite, auto_arima_params
+    forecast_len = args.flen
+    error_type = args.error
+
+    return region_metadata, clustering_suite, auto_arima_params, forecast_len, error_type
 
 
 if __name__ == '__main__':
