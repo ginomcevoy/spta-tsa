@@ -22,6 +22,7 @@ from spta.region.scaling import SpatioTemporalScaled
 from spta.region.spatial import SpatialCluster
 from spta.region.train import SplitTrainingAndTestLast
 
+from spta.util import arrays as arrays_util
 from spta.util import fs as fs_util
 from spta.util import log as log_util
 from spta.util import plot as plot_util
@@ -448,13 +449,16 @@ class PredictionQueryResult(BaseRegion):
         # now get the absolute coordinates, because the domain region can be a subset too
         return self.region_metadata.absolute_position_of_point(domain_point)
 
-    def get_csv_file_path(self):
+    def get_csv_file_path(self, prefix):
         '''
-        Returns a string representing the CSV file for this query.
+        Returns a string representing a CSV file for this query.
+        The prefix can be used to differentiate between the CSV of the query and the CSV of the
+        query summary.
         '''
         solver_csv_dir = self.metadata.output_dir(self.output_prefix)
-        csv_t = 'query-{!r}__region-{}-{}-{}-{}__f{}__{}.csv'
-        csv_filename = csv_t.format(self.clustering_metadata,
+        csv_t = '{}-{!r}__region-{}-{}-{}-{}__f{}__{}.csv'
+        csv_filename = csv_t.format(prefix,
+                                    self.clustering_metadata,
                                     self.prediction_region.x1,
                                     self.prediction_region.x2,
                                     self.prediction_region.y1,
@@ -466,16 +470,30 @@ class PredictionQueryResult(BaseRegion):
 
     def save_as_csv(self):
         '''
-        Writes prediction results to CSV, at the file indicated by get_csv_file_path()
+        Writes two CSV files:
+        1. The prediction results (query-result-[...]), one tuple for each point in the prediction
+           query, and with these columns:
+            1.a. the absolute coordinates of the point
+            1.b. the index of the cluster that contains the point
+            1.c. generalization error at the point (see error_at())
+            1.d. the forecasted series at the point (see forecast_at())
+
+        2. The prediction summary (query-summary-[...]), a single tuple with the following info:
+            2.a. clustering columns, e.g. k, seed
+            2.b. number of clusters that intersect the prediction region
+            2.c. MSE of the generalization errors in the prediction result
+
+        The get_csv_file_path(prefix) method is used to calculate the file paths.
         '''
 
         # ensure output dir
         fs_util.mkdir(self.metadata.output_dir(self.output_prefix))
 
         np.set_printoptions(precision=3)
-        csv_filename = self.get_csv_file_path()
 
-        with open(csv_filename, 'w', newline='') as csv_file:
+        # write the prediction results
+        result_csv_file = self.get_csv_file_path('query-result')
+        with open(result_csv_file, 'w', newline='') as csv_file:
             csv_writer = csv.writer(csv_file, delimiter=' ', quotechar='|',
                                     quoting=csv.QUOTE_MINIMAL)
 
@@ -484,16 +502,63 @@ class PredictionQueryResult(BaseRegion):
 
             # write a tuple for each point in prediction region
             for relative_point in self:
+
+                # 1.a. the absolute coordinates of the point
                 coords = self.absolute_coordinates_of(relative_point)
+
+                # 1.b. the index of the cluster that contains the point
                 cluster_index = self.cluster_index_of(relative_point)
 
+                # 1.c. generalization error at the point
                 error = self.error_at(relative_point)
                 error_str = '{:.3f}'.format(error)
 
+                # 1.d. the forecasted series at the point
                 forecast = self.forecast_at(relative_point)
                 csv_writer.writerow([coords, cluster_index, error_str, forecast])
 
-        self.logger.info('Wrote CSV result at: {}'.format(csv_filename))
+        self.logger.info('Wrote CSV of prediction result at: {}'.format(result_csv_file))
+
+        # write the prediction summary
+        summary_csv_file = self.get_csv_file_path('query-summary')
+        with open(summary_csv_file, 'w', newline='') as csv_file:
+            csv_writer = csv.writer(csv_file, delimiter=' ', quotechar='|',
+                                    quoting=csv.QUOTE_MINIMAL)
+
+            # write header, the clustering algorithm may have many columns
+            clustering_dict = self.clustering_metadata.as_dict()
+            clustering_header = clustering_dict.keys()
+            csv_header = list(clustering_header)
+            csv_header.extend(['clusters', 'mse'])
+            csv_writer.writerow(csv_header)
+
+            # 2.a. clustering columns, e.g. k, seed
+            clustering_data = clustering_dict.values()
+
+            # 2.b. number of clusters that intersect the prediction region
+            clusters_each_point = [
+                self.cluster_index_of(relative_point)
+                for relative_point
+                in self
+            ]
+            unique_clusters = list(set(clusters_each_point))
+            cluster_count = len(unique_clusters)
+
+            # 2.c. MSE of the generalization errors in the prediction result
+            generalization_errors = [
+                self.error_at(relative_point)
+                for relative_point
+                in self
+            ]
+            mse_error = arrays_util.mean_squared(generalization_errors)
+            mse_error_str = '{:.3f}'.format(mse_error)
+
+            # write a single row with this data
+            csv_row = list(clustering_data)
+            csv_row.extend([str(cluster_count), mse_error_str])
+            csv_writer.writerow(csv_row)
+
+        self.logger.info('Wrote CSV of prediction summary at: {}'.format(summary_csv_file))
 
 
 class AutoARIMASolverPickler(log_util.LoggerMixin):

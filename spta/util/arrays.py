@@ -77,12 +77,19 @@ def root_sum_squared(array):
     return np.sum(np.array(array)**2)**.5
 
 
-def root_mean_squared(array):
+def mean_squared(array):
     '''
-    Root Mean Squared calculation, ignores NaN values. This implementation does not let NaN
+    Mean Squared calculation, ignores NaN values. This implementation does not let NaN
     values affect the weight of other values.
     '''
-    return (np.nanmean(np.array(array)**2))**0.5
+    return np.nanmean(np.array(array)**2)
+
+
+def root_mean_squared(array):
+    '''
+    Root Mean Squared calculation, just the square root of mean_squared().
+    '''
+    return (mean_squared(array))**0.5
 
 
 def list_of_2d_points(x_len, y_len):
