@@ -51,6 +51,7 @@ class ClusteringMetadata():
         '''
         Returns a representation of this metadata as a list of elements
         '''
+        pass
 
     def __repr__(self):
         return '{}_k{}'.format(self.name, self.k)
@@ -155,6 +156,9 @@ class ClusteringAlgorithm(log_util.LoggerMixin):
                 csv_writer.writerow([str(i), str(points_i), coverage_i_str])
 
         self.logger.info('Saved {} CSV at: {}'.format(self, csv_filepath))
+
+    def as_dict(self):
+        return self.metadata.as_dict()
 
     def __repr__(self):
         return repr(self.metadata)

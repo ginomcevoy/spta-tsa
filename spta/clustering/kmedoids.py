@@ -22,6 +22,13 @@ class KmedoidsClusteringMetadata(ClusteringMetadata):
         self.tol = tol
         self.verbose = verbose
 
+    def as_dict(self):
+        return {
+            'type': 'kmedoids',
+            'k': self.k,
+            'seed': self.random_seed
+        }
+
     def __repr__(self):
         r = '{}_k{}_seed{}'.format(self.name, self.k, self.random_seed)
         if self.initial_medoids is not None:

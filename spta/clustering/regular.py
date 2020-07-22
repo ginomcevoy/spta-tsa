@@ -11,6 +11,12 @@ class RegularClusteringMetadata(ClusteringMetadata):
     def __init__(self, k):
         super(RegularClusteringMetadata, self).__init__('regular', k)
 
+    def as_dict(self):
+        return {
+            'type': 'regular',
+            'k': self.k,
+        }
+
 
 def regular_metadata_generator(k_values):
     '''
