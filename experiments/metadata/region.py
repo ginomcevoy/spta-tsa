@@ -39,6 +39,22 @@ def predefined_regions():
 
         'whole_brazil_1y_1ppd_norm': SpatioTemporalRegionMetadata(
             'whole_brazil', Region(20, 100, 15, 95), series_len=365, ppd=1, last=True,
+            normalized=True),
+
+        'whole_real_brazil_1y_1ppd': SpatioTemporalRegionMetadata(
+            'whole_real_brazil', Region(5, 95, 15, 110), series_len=365, ppd=1, last=True,
+            normalized=False),
+
+        'whole_real_brazil_1y_1ppd_norm': SpatioTemporalRegionMetadata(
+            'whole_real_brazil', Region(5, 95, 15, 110), series_len=365, ppd=1, last=True,
+            normalized=True),
+
+        'whole_real_brazil_5y_1ppd': SpatioTemporalRegionMetadata(
+            'whole_real_brazil', Region(5, 95, 15, 110), series_len=365, ppd=1, last=True,
+            normalized=False),
+
+        'whole_real_brazil_5y_1ppd_norm': SpatioTemporalRegionMetadata(
+            'whole_real_brazil', Region(5, 95, 15, 110), series_len=365, ppd=1, last=True,
             normalized=True)
     }
 

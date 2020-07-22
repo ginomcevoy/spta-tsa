@@ -21,7 +21,7 @@ def kmedoids_suites():
     return {
         'quick': kmedoids_metadata_generator(k_values=range(2, 4), seed_values=range(0, 2)),
         'large': kmedoids_metadata_generator(k_values=range(12, 15), seed_values=range(0, 2)),
-        'even': kmedoids_metadata_generator(k_values=[8, 18, 28], seed_values=range(0, 3)),
+        'even': kmedoids_metadata_generator(k_values=range(2, 51), seed_values=range(0, 3)),
     }
 
 
@@ -33,20 +33,21 @@ def regular_suites():
     # add new here
     return {
         'quick': regular_metadata_generator(k_values=range(2, 4)),
-        'even': regular_metadata_generator(k_values=[8, 18, 28]),
+        'even': regular_metadata_generator(k_values=range(73, 101)),
     }
 
 
-def get_suite(clustering_type, suite_id):
+def get_suite(clustering_type, clustering_suite_id):
     '''
     Get one of the clustering suites.
     '''
     if clustering_type == 'kmedoids':
-        clustering_suite = kmedoids_suites()[suite_id]
+        clustering_suite = kmedoids_suites()[clustering_suite_id]
     elif clustering_type == 'regular':
-        clustering_suite = regular_suites()[suite_id]
+        clustering_suite = regular_suites()[clustering_suite_id]
 
     return clustering_suite
+
 
 
 def suite_options():
