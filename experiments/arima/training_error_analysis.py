@@ -230,8 +230,8 @@ def metadata_from_args(args):
 
     # get the clustering metadata from ARIMA clustering experiment
     arima_clustering_id = experiments_for_arima_with_clusters()[args.arima_clustering_id]
-    clustering_suite = get_clustering_suite(clustering_type=arima_clustering_id.clustering_type,
-                                            suite_id=arima_clustering_id.clustering_suite_id)
+    clustering_suite = get_clustering_suite(arima_clustering_id.clustering_type,
+                                            arima_clustering_id.clustering_suite_id)
 
     # get the arima suite, patch in the name of the suite
     arima_suite = arima_suite_by_name(arima_clustering_id.arima_suite_id)

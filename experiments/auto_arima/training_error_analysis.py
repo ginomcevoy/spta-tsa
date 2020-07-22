@@ -264,8 +264,8 @@ def metadata_from_args(args):
     # get the clustering metadata from auto-ARIMA clustering experiment
     experiment = auto_arima_clustering_experiments()[args.auto_arima_clustering_id]
 
-    clustering_suite = get_clustering_suite(clustering_type=experiment.clustering_type,
-                                            suite_id=experiment.clustering_suite_id)
+    clustering_suite = get_clustering_suite(experiment.clustering_type,
+                                            experiment.clustering_suite_id)
 
     # get the auto-ARIMA params
     auto_arima_params = predefined_auto_arima()[experiment.auto_arima_id]
