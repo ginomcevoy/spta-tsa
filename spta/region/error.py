@@ -76,15 +76,17 @@ class MeasureForecastingError(FunctionRegionScalar):
 
         # save the observation and training regions which are necessary to calculate errors
         # handle descaling here (early) so we don't have to handle at each point
-        if hasattr(observation_region, 'scale_min'):
+        if observation_region.has_scaling():
+            self.logger.debug('About to descale observation and training regions')
             self.observation_region = observation_region.descale()
             self.training_region = training_region.descale()
         else:
+            self.logger.debug('MeasureForecastingError - No scaling detected')
             self.observation_region = observation_region
             self.training_region = training_region
 
-        self.logger.debug('Got observation region: {!r}'.format(observation_region))
-        self.logger.debug('Got training region: {!r}'.format(training_region))
+        # self.logger.debug('Got observation region: {!r}'.format(observation_region))
+        # self.logger.debug('Got training region: {!r}'.format(training_region))
 
     def function_at(self, point):
         '''
@@ -115,13 +117,12 @@ class MeasureForecastingError(FunctionRegionScalar):
     def apply_to(self, forecast_region):
         '''
         Decorate the default apply_to implementation to return an ErrorRegion.
-        Using the default error_combine_func (RMSE) until others are considered.
         '''
-        self.logger.debug('Got forecast_region: {!r}'.format(forecast_region))
 
         # handle descaling here:
         forecast_region_ok = forecast_region
-        if hasattr(forecast_region, 'scale_min'):
+        if forecast_region.has_scaling():
+            self.logger.debug('About to descale forecast region')
             forecast_region_ok = forecast_region.descale()
 
         spatial_region = super(MeasureForecastingError, self).apply_to(forecast_region_ok)

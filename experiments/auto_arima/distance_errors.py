@@ -116,6 +116,8 @@ def distance_vs_errors_for_cluster(cluster, trainer, partition, forecast_len, er
 
     _, x_len, y_len = cluster.shape
 
+    logger.debug('Cluster has scaling: {}'.format(cluster.has_scaling()))
+
     # split cluster in training/test cluster regions
     # assuming forecast length = test length
     splitter = SplitTrainingAndTestLast(forecast_len)
@@ -146,6 +148,13 @@ def distance_vs_errors_for_cluster(cluster, trainer, partition, forecast_len, er
     arima_model_region.forecast_len = forecast_len
     arima_at_medoid = arima_model_region.function_at(cluster.centroid)
     forecast_series = arima_at_medoid(None)
+
+    # debugging only
+    np.set_printoptions(precision=3)
+    obs_debug_msg = 'Observation series at medoid: {}'
+    fct_debug_msg = 'Forecast series from medoid: {}'
+    logger.debug(obs_debug_msg.format(observation_cluster.series_at(cluster.centroid)))
+    logger.debug(fct_debug_msg.format(forecast_series))
 
     # use extract_pdq to get the pdq values calculated by autoARIMA
     # need these for the CSV filename

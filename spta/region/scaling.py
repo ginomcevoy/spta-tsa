@@ -150,6 +150,12 @@ class SpatioTemporalScaled(SpatioTemporalDecorator):
                                     scale_min=scale_min_subset,
                                     scale_max=scale_max_subset)
 
+    def has_scaling(self):
+        '''
+        Flag to indicate that the region can be descaled (yes here!)
+        '''
+        return True
+
     def descale(self):
         '''
         Revert the scale process. This will create a spatio-temporal region with the

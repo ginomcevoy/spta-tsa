@@ -7,7 +7,7 @@ import unittest
 
 from spta.region import Point
 from spta.region.scaling import ScaleFunction
-from spta.region.temporal import SpatioTemporalRegion, SpatioTemporalCluster
+from spta.region.temporal import SpatioTemporalCluster
 from spta.region.partition import PartitionRegionCrisp
 
 from spta.tests.stub import stub_region
@@ -77,6 +77,24 @@ class TestSpatioTemporalScaled(unittest.TestCase):
 
 
 class TestClusteringAndScaling(unittest.TestCase):
+
+    def test_scaling_then_clustering_then_can_be_descaled(self):
+
+        # given a scaled region
+        spt_region = stub_region.spatio_temporal_region_stub()
+        series_len, x_len, y_len = spt_region.shape
+        scale_function = ScaleFunction(x_len, y_len)
+        scaled_region = scale_function.apply_to(spt_region, spt_region.series_len)
+
+        # given a cluster of the scaled region
+        mask = np.array([1, 0, 0, 1, 0, 1])
+        k = 2
+        cluster_index = 1
+        partition = PartitionRegionCrisp(mask.reshape((2, 3)), k)
+        cluster = SpatioTemporalCluster(scaled_region, partition, cluster_index, None)
+
+        # then this cluster can be descaled
+        self.assertTrue(cluster.has_scaling())
 
     def test_scaling_then_clustering_then_descaling(self):
 

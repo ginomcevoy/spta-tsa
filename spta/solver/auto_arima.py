@@ -107,6 +107,7 @@ class AutoARIMATrainer(log_util.LoggerMixin):
                                                       training_region, test_region,
                                                       forecast_len=test_len,
                                                       error_type=error_type)
+        self.logger.info('Overall error: {:.4f}'.format(generalization_errors.overall_error))
 
         # we have the errors, these will be saved
         # now we need to re-train the models at the medoids with the full dataset
@@ -269,7 +270,7 @@ class AutoARIMASolver(log_util.LoggerMixin):
             # as such. As a workaround, use the original spatio-temporal region (which HAS the
             # scaling data) and to retrieve appropriate descaling info for this forecast subregion.
             # TODO make this work: forecast_subregion = forecast_subregion.descale()
-            self.logger.debug('About to descale: {}'.format(forecast_subregion))
+            self.logger.debug('About to descale manually: {}'.format(forecast_subregion))
             spt_subset_with_scaling_data = self.spt_region.region_subset(prediction_region)
             scaled_forecast_subregion = \
                 SpatioTemporalScaled(forecast_subregion,

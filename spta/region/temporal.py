@@ -143,6 +143,12 @@ class SpatioTemporalRegion(DomainRegion):
         # delegate
         self.pickle_to(self.region_metadata.pickle_filename)
 
+    def has_scaling(self):
+        '''
+        Flag indicating that this region cannot be descaled.
+        '''
+        return False
+
     def descale(self):
         '''
         This region cannot be descaled, since it was not scaled here. However, we write this
@@ -250,6 +256,13 @@ class SpatioTemporalDecorator(SpatialDecorator, SpatioTemporalRegion):
     def save(self):
         return self.decorated_region.save()
 
+    def has_scaling(self):
+        '''
+        Flag to indicate that the region can be descaled. Ask the decorated region for this
+        info. See descale() for details.
+        '''
+        return self.decorated_region.has_scaling()
+
     def descale(self):
         '''
         Handle descaling of scaled regions. Since a scaled region can be clustered
@@ -259,6 +272,9 @@ class SpatioTemporalDecorator(SpatialDecorator, SpatioTemporalRegion):
         We do this by implementing the Chain of Responsibility pattern. By default, the decorated
         region promises to handle the descaling, and the current level will wrap the result
         in a way to keep other functionalities.
+
+        has_scaling() should be called before calling descale(), because trying to descale a
+        region that has not been scaled will raise an error.
         '''
         # This approach should work because there is no other data to be saved from a descaled
         # region, except for what we already have in this decorator. Other relevant data should
