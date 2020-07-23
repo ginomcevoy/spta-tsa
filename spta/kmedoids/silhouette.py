@@ -19,8 +19,9 @@ logging.getLogger('matplotlib.backends.backend_ps').disabled = True
 
 ''' The metadata for a silhouette analysis '''
 SilhouetteMetadata = namedtuple('SilhouetteMetadata',
-                                ('k_values', 'seed_values', 'distance_measure', 'initial_medoids',
-                                 'max_iter', 'tol', 'verbose', 'show_graphs', 'save_graphs'))
+                                ('k_values', 'seed_values', 'kmedoids_mode', 'distance_measure',
+                                 'initial_medoids', 'max_iter', 'tol', 'verbose', 'show_graphs',
+                                 'save_graphs'))
 
 
 class KmedoidsWithSilhouette(object):
@@ -280,7 +281,9 @@ def kmedoids_metadata_from_silhouette_metadata(k, random_seed, silhouette_metada
         k_initial_medoids = silhouette_metadata.initial_medoids[0:k]
 
     return kmedoids.KmedoidsMetadata(k=k, distance_measure=silhouette_metadata.distance_measure,
-                                     initial_medoids=k_initial_medoids, random_seed=random_seed,
+                                     initial_medoids=k_initial_medoids,
+                                     random_seed=random_seed,
+                                     mode=silhouette_metadata.kmedoids_mode,
                                      max_iter=silhouette_metadata.max_iter,
                                      tol=silhouette_metadata.tol,
                                      verbose=silhouette_metadata.verbose)
@@ -289,9 +292,10 @@ def kmedoids_metadata_from_silhouette_metadata(k, random_seed, silhouette_metada
 DEFAULT_SAVE_GRAPHS = 'plots/silhouette'
 
 
-def silhouette_default_metadata(k_values, seed_values, distance_measure=DistanceByDTW(),
-                                initial_medoids=None, max_iter=1000, tol=0.001, verbose=True,
-                                show_graphs=True, save_graphs=DEFAULT_SAVE_GRAPHS, plot_name=None):
+def silhouette_default_metadata(k_values, seed_values, kmedoids_mode='lite',
+                                distance_measure=DistanceByDTW(), initial_medoids=None,
+                                max_iter=1000, tol=0.001, verbose=True, show_graphs=True,
+                                save_graphs=DEFAULT_SAVE_GRAPHS, plot_name=None):
     '''
     Metadata for Silhouette analysis with default values. Still needs k_values and seed_values.
     Adds plot_name, will define save_graphs if present.
@@ -301,9 +305,9 @@ def silhouette_default_metadata(k_values, seed_values, distance_measure=Distance
         save_graphs = 'plots/{}'.format(plot_name)
 
     return SilhouetteMetadata(k_values=k_values, seed_values=seed_values,
-                              distance_measure=distance_measure, initial_medoids=initial_medoids,
-                              max_iter=max_iter, tol=tol, verbose=verbose, show_graphs=show_graphs,
-                              save_graphs=save_graphs)
+                              kmedoids_mode=kmedoids_mode, distance_measure=distance_measure,
+                              initial_medoids=initial_medoids, max_iter=max_iter, tol=tol,
+                              verbose=verbose, show_graphs=show_graphs, save_graphs=save_graphs)
 
 
 if __name__ == '__main__':
@@ -322,7 +326,7 @@ if __name__ == '__main__':
     # need to specify k/seeds for silhouette analysis
     k_values = [2, 3, 4]
     seed_values = [0, 1]
-    silhouette_md = silhouette_default_metadata(k_values, seed_values,
+    silhouette_md = silhouette_default_metadata(k_values=k_values, seed_values=seed_values,
                                                 save_graphs='plots/sp_small')
 
     sp_small_analysis = KmedoidsWithSilhouette(sp_small_md, silhouette_md)

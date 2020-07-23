@@ -21,7 +21,10 @@ def kmedoids_suites():
     return {
         'quick': kmedoids_metadata_generator(k_values=range(2, 4), seed_values=range(0, 2)),
         'large': kmedoids_metadata_generator(k_values=range(12, 15), seed_values=range(0, 2)),
+        'test': kmedoids_metadata_generator(k_values=range(2, 21), seed_values=range(0, 2)),
         'even': kmedoids_metadata_generator(k_values=range(2, 51), seed_values=range(0, 3)),
+        'k50s2': kmedoids_metadata_generator(k_values=range(50, 51), seed_values=range(2, 3)),
+        'k100s2': kmedoids_metadata_generator(k_values=range(100, 101), seed_values=range(2, 3)),
     }
 
 

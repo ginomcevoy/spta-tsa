@@ -9,6 +9,7 @@ import numpy as np
 from copy import deepcopy
 from collections import namedtuple
 from numpy.random import choice, seed
+import time
 
 from spta.distance.dtw import DistanceByDTW
 
@@ -18,11 +19,12 @@ logger = logging.getLogger()
 
 ''' The metadata for a K-medoids run '''
 KmedoidsMetadata = namedtuple('KmedoidsMetadata', ('k', 'distance_measure', 'initial_medoids',
-                                                   'random_seed', 'max_iter', 'tol', 'verbose'))
+                                                   'random_seed', 'mode', 'max_iter', 'tol',
+                                                   'verbose'))
 
 ''' A K-mediods result '''
-KmedoidsResult = namedtuple('KmedoidsResult', ('k', 'random_seed', 'medoids', 'labels', 'costs',
-                                               'total_cost', 'medoid_distances'))
+KmedoidsResult = namedtuple('KmedoidsResult', ('k', 'random_seed', 'mode', 'medoids', 'labels',
+                                               'costs', 'total_cost', 'medoid_distances'))
 
 
 def choose_initial_medoids(X, k, random_seed, initial_indices=None):
@@ -97,9 +99,30 @@ def _get_cost(X, medoids, distance_measure):
     return labels, costs, total_cost, dist_mat
 
 
-def run_kmedoids(X, k, distance_measure, initial_medoids=None, random_seed=1, max_iter=1000,
-                 tol=0.001, verbose=True):
+def candidate_generator_for_lite_kmedoids(n_samples, labels, cluster_label):
+    '''
+    The "lite" k-medoids implementation looks for a better medoid among the current members of
+    this cluster.
+    '''
+    cluster_indices = np.where(labels == cluster_label)[0]
+    for index in cluster_indices:
+        yield index
+
+
+def candidate_generator_for_robust_kmedoids(n_samples, labels, cluster_label):
+    '''
+    The "robust" k-medoids implementation looks for a better medoid in all samples,
+    even in other clusters.
+    '''
+    for index in range(0, n_samples):
+        yield index
+
+
+def run_kmedoids(X, k, distance_measure, initial_medoids=None, random_seed=1, mode='lite',
+                 max_iter=1000, tol=0.001, verbose=True):
     '''run algorithm return centers, labels, and etc.'''
+
+    start_time = time.time()
 
     # initial medoids
     n_samples, n_features = X.shape
@@ -109,6 +132,12 @@ def run_kmedoids(X, k, distance_measure, initial_medoids=None, random_seed=1, ma
     labels, costs, tot_cost, dist_mat = _get_cost(X, medoids, distance_measure)
     cc, SWAPPED = 0, True
 
+    # robust or lite?
+    if mode == 'robust':
+        candidate_generator = candidate_generator_for_robust_kmedoids
+    elif mode == 'lite':
+        candidate_generator = candidate_generator_for_lite_kmedoids
+
     while True:
 
         # at the beginning of this loop, set SWAPPED flag to false
@@ -116,14 +145,19 @@ def run_kmedoids(X, k, distance_measure, initial_medoids=None, random_seed=1, ma
         # then medoids provide a local minimum cost, and the algorithm can exit
         SWAPPED = False
         medoid_indices = get_medoid_indices(medoids)
-        logger.debug('medoid indices {}'.format(medoid_indices))
+        logger.debug('medoid indices at iteration {}: {}'.format(cc, medoid_indices))
 
-        # look for better medoids that reduce the total cost (sum of distances) of the clusters
-        # this implementation looks for a better medoid in all samples, even in other clusters
-        for i in range(0, n_samples):
+        # iterate clusters: j from 0 to k
+        for j in range(0, k):
 
-            # iterate clusters: j from 0 to k
-            for j in range(0, k):
+            # look for better medoids that reduce the total cost (sum of distances) of the current
+            # cluster. The search space is determined by the mode:
+            # - The "robust" k-medoids implementation looks for a better medoid in all samples,
+            #   even in other clusters.
+            # - The "lite" k-medoids implementation looks for a better medoid among the current
+            #   members of this cluster.
+
+            for i in candidate_generator(n_samples, labels, j):
 
                 if i in medoid_indices:
                     # this sample is already a medoid of a cluster, don't consider it
@@ -163,25 +197,31 @@ def run_kmedoids(X, k, distance_measure, initial_medoids=None, random_seed=1, ma
             break
         cc += 1
 
-    np.set_printoptions(precision=3)
-    logger.debug(costs)
-    logger.debug(tot_cost)
+    elapsed_time = time.time() - start_time
 
-    result = KmedoidsResult(k, random_seed, get_medoid_indices(medoids), labels, costs, tot_cost,
-                            dist_mat)
-    show_report(result)
+    np.set_printoptions(precision=3)
+    logger.debug('Intra-cluster costs: {}'.format(costs))
+
+    result = KmedoidsResult(k, random_seed, mode, get_medoid_indices(medoids), labels, costs,
+                            tot_cost, dist_mat)
+
+    if verbose:
+        show_report(result, elapsed_time)
 
     return result
 
 
-def show_report(result):
+def show_report(result, elapsed_time):
 
     medoids = result.medoids
 
-    logger.info('----------------------------')
-    logger.info('K-medoids for k={}, seed={}'.format(result.k, result.random_seed))
-    logger.info('----------------------------')
+    logger.info('-------------------------------------------')
+    logger.info('K-medoids for k={}, seed={}, mode={}'.format(result.k, result.random_seed,
+                                                              result.mode))
+    logger.info('-------------------------------------------')
     logger.info('Medoids={}'.format(medoids))
+    logger.info('Sum of intra-cluster costs: {}'.format(result.total_cost))
+    logger.info('Elapsed time: {:.2f}s'.format(elapsed_time))
 
     # calculate size of each cluster: count the number of members for each label
     _, points_per_cluster = np.unique(result.labels, return_counts=True)
@@ -196,23 +236,23 @@ def show_report(result):
 
 
 def kmedoids_default_metadata(k, distance_measure=DistanceByDTW(), initial_medoids=None,
-                              random_seed=1, max_iter=1000, tol=0.001, verbose=True):
+                              random_seed=1, mode='lite', max_iter=1000, tol=0.001, verbose=True):
     '''
     Metadata for K-medoids with default values. Still needs a value for k.
     '''
     return KmedoidsMetadata(k=k, distance_measure=distance_measure,
-                            initial_medoids=initial_medoids, random_seed=random_seed,
+                            initial_medoids=initial_medoids, random_seed=random_seed, mode=mode,
                             max_iter=max_iter, tol=tol, verbose=verbose)
 
 
 def run_kmedoids_from_metadata(X, kmediods_metadata):
     return run_kmedoids(X, kmediods_metadata.k, kmediods_metadata.distance_measure,
                         kmediods_metadata.initial_medoids, kmediods_metadata.random_seed,
-                        kmediods_metadata.max_iter, kmediods_metadata.tol,
+                        kmediods_metadata.mode, kmediods_metadata.max_iter, kmediods_metadata.tol,
                         kmediods_metadata.verbose)
 
 
-def kmedoids_suite_metadata(k_values, seed_values, distance_measure=DistanceByDTW(),
+def kmedoids_suite_metadata(k_values, seed_values, distance_measure=DistanceByDTW(), mode='lite',
                             initial_medoids=None, max_iter=1000, tol=0.001, verbose=True):
     '''
     Builds a list of KmedoidsMetadata based on the cartesian product of k_values and seed_values.
@@ -222,7 +262,7 @@ def kmedoids_suite_metadata(k_values, seed_values, distance_measure=DistanceByDT
         for random_seed in seed_values:
             yield KmedoidsMetadata(k=k, distance_measure=distance_measure,
                                    initial_medoids=initial_medoids, random_seed=random_seed,
-                                   max_iter=max_iter, tol=tol, verbose=verbose)
+                                   mode=mode, max_iter=max_iter, tol=tol, verbose=verbose)
 
 
 if __name__ == '__main__':

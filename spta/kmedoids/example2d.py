@@ -90,7 +90,10 @@ def main():
     ks = [2, 3, 4]
     random_seeds = (1,)
 
-    metadata = silhouette.silhouette_default_metadata(ks, random_seeds, distance_measure)
+    metadata = silhouette.silhouette_default_metadata(k_values=ks,
+                                                      seed_values=random_seeds,
+                                                      kmedoids_mode='lite',
+                                                      distance_measure=distance_measure)
     best_k, _, best_medoids, best_membership = silhouette.do_silhouette_analysis(spt_region,
                                                                                  metadata)
 
