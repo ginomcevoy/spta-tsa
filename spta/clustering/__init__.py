@@ -40,12 +40,13 @@ class ClusteringMetadata():
         return os.path.join(output_prefix, self.clustering_subdir(region_metadata,
                                                                   distance_measure))
 
-    def pickle_dir(self, region_metadata, distance_measure):
+    def pickle_dir(self, region_metadata, distance_measure, pickle_prefix='pickle'):
         '''
         Directory to store pickle objects.
         pickle/<region>/<distance>/<clustering>
         '''
-        return os.path.join('pickle', self.clustering_subdir(region_metadata, distance_measure))
+        return os.path.join(pickle_prefix, self.clustering_subdir(region_metadata,
+                                                                  distance_measure))
 
     def as_dict(self):
         '''
@@ -63,6 +64,7 @@ class ClusteringMetadata():
 class ClusteringAlgorithm(log_util.LoggerMixin):
     '''
     A clustering algorithm that will produce a partition when applied to a region.
+    Subclasses must implement the method partition_impl(spt_region, with_medoids)
     '''
 
     def __init__(self, metadata, distance_measure):
@@ -70,17 +72,56 @@ class ClusteringAlgorithm(log_util.LoggerMixin):
         self.distance_measure = distance_measure
         self.k = metadata.k
 
-    def partition(self, spt_region, with_medoids=True, save_csv_at=None):
+        # filename to store partitions
+        self.partition_pickle_filename = 'partition_{!r}.pkl'.format(self.metadata)
+
+    def partition(self, spt_region, with_medoids=True, save_csv_at=None, pickle_prefix=None):
         '''
         Create a partition on a spatio-temporal region. A partition can be used to create
-        spatio-temporal clusters.
+        spatio-temporal clusters. Calls subclass implementation of partition_impl
 
         with_medoids
             Optionally return the medoids of the clusters
 
         save_csv_at
-            Optionally save a CSV report, at the specified path
+            Optionally save a CSV report, at the specified prefix
             TODO this is ugly, improve?
+
+        pickle_prefix
+            Optionally save the partition as a pickle object at the specified prefix
+        '''
+
+        # if we can load the partition, then use saved result
+        # can only be done if region metadata is available
+        loaded_from_pickle = False
+        if pickle_prefix is not None and spt_region.region_metadata is not None:
+            the_partition = self.try_load_previous_partition(spt_region.region_metadata,
+                                                             pickle_prefix)
+
+            # flag to avoid saving a loaded partition
+            if the_partition is not None:
+                loaded_from_pickle = True
+
+        if not loaded_from_pickle:
+
+            # could not find previous partition, call the logic of a subclass to find the partition
+            the_partition = self.partition_impl(spt_region, with_medoids)
+
+        if save_csv_at is not None:
+            # creates a CSV report of this clustering, assumes region metadata is available
+            self.save_to_csv(the_partition, spt_region.region_metadata, save_csv_at)
+
+        if pickle_prefix is not None and not loaded_from_pickle:
+            # saves the partition as a pickle object for later retrieval, assumes region metadata
+            # is available
+            self.save_partition(the_partition, spt_region.region_metadata, pickle_prefix)
+
+        return the_partition
+
+    def partition_impl(self, spt_region, with_medoids):
+        '''
+        Create a partition on a spatio-temporal region. A partition can be used to create
+        spatio-temporal clusters. Subclass must implementat this.
         '''
         raise NotImplementedError
 
@@ -143,7 +184,7 @@ class ClusteringAlgorithm(log_util.LoggerMixin):
             # abusing the partition a bit to get this
             total_points = partition.shape[0] * partition.shape[1]
 
-            # iterate clusters in the partition, no need to create full-blown cluster objects
+            # iterate indices in the partition, no need to create full-blown cluster objects
             for i in range(0, self.k):
 
                 # points is the number of points in the cluster
@@ -156,6 +197,59 @@ class ClusteringAlgorithm(log_util.LoggerMixin):
                 csv_writer.writerow([str(i), str(points_i), coverage_i_str])
 
         self.logger.info('Saved {} CSV at: {}'.format(self, csv_filepath))
+
+    def save_partition(self, partition, region_metadata, pickle_prefix='pickle'):
+        '''
+        Saves a partition as a pickle objct, using its to_pickle(path) method. The path is
+        calculated by the clustering metadata.
+        '''
+        pickle_full_path = self.pickle_full_path(region_metadata)
+
+        # the partition can save itself
+        partition.to_pickle(pickle_full_path)
+
+    def try_load_previous_partition(self, region_metadata, pickle_prefix='pickle'):
+        '''
+        Tries to load a partition that has been previously calculated with this clustering
+        algorithm for the specified region metadata, and returns the partition instance.
+
+        Should be successful if save_partition() was called before.
+        If no saved partition is found, returns None without raising errors.
+        '''
+        # try and load the partition object, this call may fail
+        partition = None
+        try:
+            partition = self.load_previous_partition(region_metadata, pickle_prefix)
+        except Exception:
+            # attempt failed, return None without exception
+            self.logger.debug('Attempt to load a partition with {!r} failed.'.format(self))
+
+        return partition
+
+    def load_previous_partition(self, region_metadata, pickle_prefix='pickle'):
+        '''
+        Load a partition that has been previously calculated with this clustering
+        algorithm for the specified region metadata, and returns the partition instance.
+
+        Should be successful if save_partition() was called before, will raise an exception
+        if no saved partition is found.
+        '''
+        pickle_full_path = self.pickle_full_path(region_metadata)
+        partition = PartitionRegion.try_from_pickle(pickle_full_path)
+
+        self.logger.debug('Loaded partition {} OK'.format(partition))
+        return partition
+
+    def pickle_full_path(self, region_metadata):
+        '''
+        Calculates the path for persisting partition objects via pickle. The path is calculated by
+        the clustering metadata.
+        '''
+        # path to store/load pickle objects given metadata
+        pickle_dir = self.metadata.pickle_dir(region_metadata, self.distance_measure)
+
+        # use a fixed name, assuming that the metadata uniquely identifies the created partition...
+        return os.path.join(pickle_dir, self.partition_pickle_filename)
 
     def as_dict(self):
         return self.metadata.as_dict()

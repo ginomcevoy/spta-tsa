@@ -66,7 +66,7 @@ def kmedoids_metadata_generator(k_values, seed_values, mode='lite', initial_medo
 
 class KmedoidsClusteringAlgorithm(ClusteringAlgorithm):
 
-    def partition(self, spt_region, with_medoids=True, save_csv_at=None):
+    def partition_impl(self, spt_region, with_medoids=True):
         '''
         Create a k-medoids partition on a spatio-temporal region.
         A partition can be used to create spatio-temporal clusters.
@@ -93,10 +93,6 @@ class KmedoidsClusteringAlgorithm(ClusteringAlgorithm):
         partition = PartitionRegionCrisp.from_membership_array(kmedoids_result.labels,
                                                                x_len, y_len)
 
-        # save CSV?
-        if save_csv_at is not None:
-            self.save_to_csv(partition, spt_region.region_metadata, save_csv_at)
-
         if with_medoids:
 
             # run_kmedoids returns indices, not Point instances
@@ -106,8 +102,7 @@ class KmedoidsClusteringAlgorithm(ClusteringAlgorithm):
                 in kmedoids_result.medoids
             ]
 
-            return partition, medoids
+            # save medoids as member of the partition!
+            partition.medoids = medoids
 
-        else:
-            # no medoids
-            return partition
+        return partition

@@ -1,10 +1,14 @@
 import numpy as np
+import os
+import pickle
 
 from . import Point
 from .base import BaseRegion
 from .spatial import SpatialRegion, SpatialCluster
 from .temporal import SpatioTemporalCluster
 
+from spta.util import fs as fs_util
+from spta.util import log as log_util
 from spta.util import arrays as arrays_util
 
 
@@ -47,6 +51,9 @@ class PartitionRegion(BaseRegion):
 
     (6) create_spt_cluster(spt_region, index):
         Returns an instance of SpatioTemporalCluster for this partition and given index.
+
+    (7) to_pickle(path):
+        Saves this instance as a pickle object, can later be retrieved using try_from_pickle(path).
     '''
 
     def __init__(self, numpy_dataset, k):
@@ -156,6 +163,8 @@ class PartitionRegion(BaseRegion):
         medoids
             an array of medoid point instances to use as centroids. Cannot be used with
             centroid_indices
+
+        TODO omit medoids argument if partition already has medoids in it
         '''
 
         # only one
@@ -181,6 +190,34 @@ class PartitionRegion(BaseRegion):
             clusters.append(cluster_i)
 
         return clusters
+
+    def to_pickle(self, pickle_full_path):
+        '''
+        Saves this partition as a pickle object to the given file path, overwrites the file.
+        The directory containing the file is created if it does not exist.
+        '''
+
+        # create parent dir
+        fs_util.mkdir(os.path.dirname(pickle_full_path))
+
+        # call pickle
+        with open(pickle_full_path, 'wb') as pickle_file:
+            pickle.dump(self, pickle_file)
+            self.logger.debug('Saved partition with k={} at {}'.format(self.k, pickle_full_path))
+
+    @classmethod
+    def try_from_pickle(cls, pickle_full_path):
+        '''
+        Tries to load a partition via pickle given a file path, and returns the instance.
+        Raises an exception if the pickle fails, e.g. if the file does not exist.
+        '''
+        logger = log_util.LoggerMixin().logger
+        logger.debug('Attempting to load cluster partition at {}'.format(pickle_full_path))
+        partition = None
+        with open(pickle_full_path, 'rb') as pickle_file:
+            partition = pickle.load(pickle_file)
+
+        return partition
 
 
 class PartitionRegionCrisp(PartitionRegion):

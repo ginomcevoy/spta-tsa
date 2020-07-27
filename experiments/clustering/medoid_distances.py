@@ -68,8 +68,9 @@ def do_medoid_distances(args, logger):
         clustering_factory = ClusteringFactory(distance_measure)
         clustering_algorithm = clustering_factory.instance(clustering_metadata)
 
-        # use the clustering algorithm to get the medoids, don't need the partition
-        _, medoid_points = clustering_algorithm.partition(spt_region, with_medoids=True)
+        # use the clustering algorithm to get the medoids
+        partition = clustering_algorithm.partition(spt_region, with_medoids=True)
+        medoid_points = partition.medoids
 
         # the distance matrix uses the point index, calculate point indices of medoids
         medoid_indices = [

@@ -644,8 +644,8 @@ if __name__ == '__main__':
     # use regular partitioning for clusters
     regular_clustering = RegularClusteringAlgorithm(RegularClusteringMetadata(k=4),
                                                     distance_measure)
-    partition, medoids = regular_clustering.partition(spt_region, with_medoids=True)
-    clusters = partition.create_all_spt_clusters(spt_region, medoids=medoids)
+    partition = regular_clustering.partition(spt_region, with_medoids=True)
+    clusters = partition.create_all_spt_clusters(spt_region, medoids=partition.medoids)
 
     DistanceHistogramClusters.cluster_histograms(clusters=clusters,
                                                  clustering_algorithm=regular_clustering,

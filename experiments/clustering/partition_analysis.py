@@ -12,7 +12,6 @@ and optionally a PDF of the variance histograms.
 
 import argparse
 import csv
-import numpy as np
 import os
 
 from experiments.metadata.region import predefined_regions
@@ -21,7 +20,6 @@ from experiments.metadata.clustering import get_suite, suite_options
 from spta.clustering.factory import ClusteringFactory
 from spta.distance.dtw import DistanceByDTW
 from spta.distance.variance import DistanceHistogramClusters
-from spta.kmedoids import kmedoids, medoids_to_absolute_coordinates
 
 from spta.util import fs as fs_util
 from spta.util import log as log_util
@@ -133,13 +131,16 @@ def analyze_partition(region_metadata, clustering_algorithm, output_prefix, logg
     _, x_len, y_len = spt_region.shape
 
     # use the clustering algorithm to get the partition and medoids
-    partition, medoid_points = clustering_algorithm.partition(spt_region, with_medoids=True,
-                                                              save_csv_at=output_prefix)
+    # will try to leverage pickle and load previous attempts, otherwise calculate and save
+    partition = clustering_algorithm.partition(spt_region, with_medoids=True,
+                                               save_csv_at=output_prefix,
+                                               pickle_prefix='pickle')
+
     distance_measure = clustering_algorithm.distance_measure
 
     # keep track of total cost of the each cluster by adding the distances to the point
     intra_cluster_costs = []
-    clusters = partition.create_all_spt_clusters(spt_region, medoids=medoid_points)
+    clusters = partition.create_all_spt_clusters(spt_region, medoids=partition.medoids)
 
     # format the medoids for CSV output
     medoids_str = ''

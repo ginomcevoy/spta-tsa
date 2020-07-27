@@ -4,7 +4,6 @@ Uses a clustering algorithm to define clusters and medoids, and uses auto ARIMA 
 '''
 import matplotlib.pyplot as plt
 
-from collections import namedtuple
 import csv
 import numpy as np
 import pickle
@@ -83,13 +82,13 @@ class AutoARIMATrainer(log_util.LoggerMixin):
         splitter = SplitTrainingAndTestLast(test_len)
         (training_region, test_region) = splitter.split(spt_region)
 
-        # get the cluster partition and corresponding medoids, save the CSV
-        partition, medoids = self.clustering_algorithm.partition(spt_region,
-                                                                 with_medoids=True,
-                                                                 save_csv_at=output_prefix)
-
-        # partition will be saved for later predictions, go ahead and also save the medoids in it
-        partition.medoids = medoids
+        # get the cluster partition and corresponding medoids, save the CSV and pickle
+        # when the partition is saved, the medoids are saved in it
+        partition = self.clustering_algorithm.partition(spt_region,
+                                                        with_medoids=True,
+                                                        save_csv_at=output_prefix,
+                                                        pickle_prefix='pickle')
+        medoids = partition.medoids
 
         self.logger.info('Training solver: {}'.format(self.metadata))
 
@@ -583,25 +582,25 @@ class AutoARIMASolverPickler(log_util.LoggerMixin):
 
         # solver metadata
         self.metadata = solver_metadata
+
+        self.distance_measure = self.metadata.distance_measure
+        self.clustering_metadata = self.metadata.clustering_metadata
+        self.region_metadata = self.metadata.region_metadata
+
         self.error_type = error_type
 
     def save_solver(self, auto_arima_solver):
         '''
         persist the solver details as pickle objects.
         '''
-        partition = auto_arima_solver.partition
         arima_model_region = auto_arima_solver.arima_model_region
         generalization_errors = auto_arima_solver.generalization_errors
-        solver_pickle_dir = self.metadata.pickle_dir()
 
         # create the directory
+        solver_pickle_dir = self.metadata.pickle_dir()
         fs_util.mkdir(solver_pickle_dir)
 
-        # save the partition
-        partition_path = self.partition_pickle_path()
-        with open(partition_path, 'wb') as pickle_file:
-            pickle.dump(partition, pickle_file)
-            self.logger.debug('Saved partition at {}'.format(partition_path))
+        # the clustering algorithm is already managing partition persistence when it creates it
 
         # save the arima model region
         arima_model_path = self.arima_model_pickle_path()
@@ -624,10 +623,13 @@ class AutoARIMASolverPickler(log_util.LoggerMixin):
         '''
 
         # load the cluster partition
-        partition_path = self.partition_pickle_path()
-        self.logger.debug('Attempting to load cluster partition at {}'.format(partition_path))
-        with open(partition_path, 'rb') as pickle_file:
-            partition = pickle.load(pickle_file)
+        # the clustering algorithm can manage partition persistence,
+        # but need to create an instance of this algorithm to delegate task
+        # TODO get a better handle for the functionality?
+        clustering_factory = ClusteringFactory(self.distance_measure)
+        clustering_algorithm = clustering_factory.instance(self.clustering_metadata)
+        partition = clustering_algorithm.load_previous_partition(self.region_metadata,
+                                                                 pickle_prefix='pickle')
 
         # load the arima model region
         arima_model_path = self.arima_model_pickle_path()
