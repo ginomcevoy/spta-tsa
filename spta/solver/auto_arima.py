@@ -94,31 +94,34 @@ class AutoARIMATrainer(log_util.LoggerMixin):
 
         # use the partition to train ARIMA models at the cluster medoids and use them as
         # representatives for their own clusters. These models will be used to evalute and save
-        # the prediction, but will not be the final models.
+        # the generalization error. They can also be used for prediction, unless the future flag
+        # is set (see below).
         # The output is a single spatial region with k different models!
-        arima_model_region_for_error = self.train_auto_arima_at_medoids(training_region,
-                                                                        partition, medoids)
+        arima_model_region_training = self.train_auto_arima_at_medoids(training_region, partition,
+                                                                       medoids)
 
         # calculate the generalization error for these ARIMA models: it is the prediction error
         # that is calculated using the test dataset.
         # TODO a lot of assumptions here, work them out later
-        generalization_errors = self.calculate_errors(arima_model_region_for_error,
+        generalization_errors = self.calculate_errors(arima_model_region_training,
                                                       training_region, test_region,
                                                       forecast_len=test_len,
                                                       error_type=error_type)
         self.logger.info('Overall error: {:.4f}'.format(generalization_errors.overall_error))
 
-        # we have the errors, these will be saved
-        # now we need to re-train the models at the medoids with the full dataset
-        # which will be used for prediction
-        arima_model_region_for_predict = self.train_auto_arima_at_medoids(spt_region,
-                                                                          partition, medoids)
+        # If the user sets the future flag for prediction, we want to use the entire series
+        # to make out-of-sample predictions (out of sample)
+        # For that, we need to re-train the models at the medoids again, these time using the
+        # full dataset (not the training subset, which uses a series subset)
+        arima_model_region_whole = self.train_auto_arima_at_medoids(spt_region, partition,
+                                                                    medoids)
 
         # create a solver with the data acquired, this solver can answer queries
         solver = AutoARIMASolver(solver_metadata=self.metadata,
                                  error_type=error_type,
                                  partition=partition,
-                                 arima_model_region=arima_model_region_for_predict,
+                                 arima_model_region_training=arima_model_region_training,
+                                 arima_model_region_whole=arima_model_region_whole,
                                  generalization_errors=generalization_errors)
         return solver
 
@@ -215,8 +218,8 @@ class AutoARIMASolver(log_util.LoggerMixin):
     point in the subregion, the forecast at the medoid of the cluster for which each point is
     a member.
     '''
-    def __init__(self, solver_metadata, error_type, partition, arima_model_region,
-                 generalization_errors):
+    def __init__(self, solver_metadata, error_type, partition, arima_model_region_training,
+                 arima_model_region_whole, generalization_errors):
 
         # user input
         self.metadata = solver_metadata
@@ -229,19 +232,20 @@ class AutoARIMASolver(log_util.LoggerMixin):
 
         # calculated during training
         self.partition = partition
-        self.arima_model_region = arima_model_region
+        self.arima_model_region_training = arima_model_region_training
+        self.arima_model_region_whole = arima_model_region_whole
         self.generalization_errors = generalization_errors
 
         # flag
         self.prepared = False
 
-    def predict(self, prediction_region, forecast_len=FORECAST_LENGTH, output_prefix='outputs',
-                plot=True):
+    def predict(self, prediction_region, is_future, forecast_len=FORECAST_LENGTH,
+                output_prefix='outputs', plot=True):
 
         self.logger.debug('Predicting for region: {}'.format(prediction_region))
 
         if not self.prepared:
-            self.prepare_for_predictions()
+            self.prepare_for_predictions(forecast_len)
 
         # plot the whole region and the prediction region
         self.plot_regions(prediction_region, output_prefix)
@@ -252,10 +256,27 @@ class AutoARIMASolver(log_util.LoggerMixin):
         # the generalization errors are precalculated, just subset them
         error_subregion = self.generalization_errors.region_subset(prediction_region)
 
+        # in-sample (is_future False) or out-of-sample (is_future True)?
+        if is_future:
+            # this ARIMA model was trained with the whole dataset, so it will produce out-of-sample
+            # predictions
+            arima_model_region = self.arima_model_region_whole
+
+            # no test data available for out-of-sample
+            test_subregion = None
+
+        else:
+            # this ARIMA model was trained with the training dataset, so it will produce in-sample
+            # predictions (comparable to the test)
+            arima_model_region = self.arima_model_region_training
+
+            # extract the test data for the prediction region
+            test_subregion = self.test_region.region_subset(prediction_region)
+
         # compute the prediction: create a forecast over the region
         # to do this, obtain a subset of the model region
         # TODO better support for this...
-        arima_models_subset_np = self.arima_model_region.as_numpy[px1:px2, py1:py2]
+        arima_models_subset_np = arima_model_region.as_numpy[px1:px2, py1:py2]
         arima_model_subset = ArimaModelRegion(arima_models_subset_np)
 
         # here we just need an empty region with the correct shape
@@ -281,7 +302,9 @@ class AutoARIMASolver(log_util.LoggerMixin):
         return PredictionQueryResult(solver_metadata=self.metadata,
                                      distance_measure=self.distance_measure,
                                      forecast_len=forecast_len,
+                                     is_future=is_future,
                                      forecast_subregion=forecast_subregion,
+                                     test_subregion=test_subregion,
                                      error_subregion=error_subregion,
                                      prediction_region=prediction_region,
                                      partition=self.partition,
@@ -289,10 +312,12 @@ class AutoARIMASolver(log_util.LoggerMixin):
                                      error_type=self.error_type,
                                      output_prefix=output_prefix)
 
-    def prepare_for_predictions(self):
+    def prepare_for_predictions(self, forecast_len):
         '''
         Prepare to attend prediction requests. For now, this is called on-demand.
         In a distant future, it can be used to lazily instantiate a solver.
+
+        forecast_len: the length of the forecasted series, here used to get the test series
         '''
 
         # load the region again
@@ -301,6 +326,12 @@ class AutoARIMASolver(log_util.LoggerMixin):
         self.spt_region = self.region_metadata.create_instance()
         self.logger.debug('Loaded spt_region for predictions: {} {!r}'.format(self.spt_region,
                                                                               self.spt_region))
+
+        # get test region, apply scaling if needed
+        splitter = SplitTrainingAndTestLast(forecast_len)
+        (_, self.test_region) = splitter.split(self.spt_region)
+        if self.test_region.has_scaling():
+            self.test_region = self.test_region.descale()
 
         # set prepared flag
         self.prepared = True
@@ -387,7 +418,8 @@ class PredictionQueryResult(BaseRegion):
     '''
 
     def __init__(self, solver_metadata, distance_measure,
-                 forecast_len, forecast_subregion, error_subregion, prediction_region,
+                 forecast_len, is_future, forecast_subregion, test_subregion,
+                 error_subregion, prediction_region,
                  partition, spt_region, error_type, output_prefix):
         '''
         Constructor, uses a subset of the numpy matrix that backs the forecast region, the subset
@@ -403,7 +435,9 @@ class PredictionQueryResult(BaseRegion):
 
         # query-specific
         self.forecast_len = forecast_len
+        self.is_future = is_future
         self.forecast_subregion = forecast_subregion
+        self.test_subregion = test_subregion
         self.error_subregion = error_subregion
 
         # the offset caused by changing coordinates to the prediction region
@@ -421,6 +455,15 @@ class PredictionQueryResult(BaseRegion):
         Forecast at point, where (0, 0) is the corner of the prediction region.
         '''
         return self.forecast_subregion.series_at(relative_point)
+
+    def test_at(self, relative_point):
+        '''
+        Test series at point, where (0, 0) is the corner of the prediction region.
+        Should only be used when is_future is False
+        '''
+        if self.is_future:
+            raise ValueError('Cannot extract test data for out-of-sample')
+        return self.test_subregion.series_at(relative_point)
 
     def error_at(self, relative_point):
         '''
@@ -477,6 +520,9 @@ class PredictionQueryResult(BaseRegion):
             1.b. the index of the cluster that contains the point
             1.c. generalization error at the point (see error_at())
             1.d. the forecasted series at the point (see forecast_at())
+            1.e. (is_future False only) the test series at the point (see test_at())
+
+           The name of the CSV indicates the forecast length and is_future flag.
 
         2. The prediction summary (query-summary-[...]), a single tuple with the following info:
             2.a. clustering columns, e.g. k, seed
@@ -489,16 +535,29 @@ class PredictionQueryResult(BaseRegion):
         # ensure output dir
         fs_util.mkdir(self.metadata.output_dir(self.output_prefix))
 
-        np.set_printoptions(precision=3)
+        np.set_printoptions(formatter={'float': '{: 0.3f}'.format})
+
+        # take of future flag here... ugly but necessary because summary is independant of flag
+        future_str = ''
+        if self.is_future:
+            future_str = '-future'
+        result_prefix = 'query-result{}'.format(future_str)
 
         # write the prediction results
-        result_csv_file = self.get_csv_file_path('query-result')
+        result_csv_file = self.get_csv_file_path(result_prefix)
         with open(result_csv_file, 'w', newline='') as csv_file:
             csv_writer = csv.writer(csv_file, delimiter=' ', quotechar='|',
                                     quoting=csv.QUOTE_MINIMAL)
 
+            # the header
+            header_row = ['Point', 'cluster_index', 'error', 'forecast_series']
+
+            # when in-sample, add the test series
+            if not self.is_future:
+                header_row.append('test_series')
+
             # write header
-            csv_writer.writerow(['Point', 'cluster_index', 'error', 'forecast_series'])
+            csv_writer.writerow(header_row)
 
             # write a tuple for each point in prediction region
             for relative_point in self:
@@ -515,7 +574,14 @@ class PredictionQueryResult(BaseRegion):
 
                 # 1.d. the forecasted series at the point
                 forecast = self.forecast_at(relative_point)
-                csv_writer.writerow([coords, cluster_index, error_str, forecast])
+
+                point_tuple = [coords, cluster_index, error_str, forecast]
+
+                # 1.e. (is_future False only) the test series at the point
+                if not self.is_future:
+                    point_tuple.append(self.test_at(relative_point))
+
+                csv_writer.writerow(point_tuple)
 
         self.logger.info('Wrote CSV of prediction result at: {}'.format(result_csv_file))
 
@@ -593,7 +659,8 @@ class AutoARIMASolverPickler(log_util.LoggerMixin):
         '''
         persist the solver details as pickle objects.
         '''
-        arima_model_region = auto_arima_solver.arima_model_region
+        arima_model_region_training = auto_arima_solver.arima_model_region_training
+        arima_model_region_whole = auto_arima_solver.arima_model_region_whole
         generalization_errors = auto_arima_solver.generalization_errors
 
         # create the directory
@@ -602,11 +669,17 @@ class AutoARIMASolverPickler(log_util.LoggerMixin):
 
         # the clustering algorithm is already managing partition persistence when it creates it
 
-        # save the arima model region
-        arima_model_path = self.arima_model_pickle_path()
-        with open(arima_model_path, 'wb') as pickle_file:
-            pickle.dump(arima_model_region, pickle_file)
-            self.logger.debug('Saved arima_model region at {}'.format(arima_model_path))
+        # save the arima model region based on training dataset
+        arima_model_training_path = self.arima_model_training_pickle_path()
+        with open(arima_model_training_path, 'wb') as pickle_file:
+            pickle.dump(arima_model_region_training, pickle_file)
+            self.logger.debug('Saved arima_model (training): {}'.format(arima_model_training_path))
+
+        # save the arima model region for whole dataset
+        arima_model_whole_path = self.arima_model_whole_pickle_path()
+        with open(arima_model_whole_path, 'wb') as pickle_file:
+            pickle.dump(arima_model_region_whole, pickle_file)
+            self.logger.debug('Saved arima_model (whole): {}'.format(arima_model_whole_path))
 
         # save the generalization errors
         generalization_errors_path = self.generalization_errors_pickle_path()
@@ -631,11 +704,17 @@ class AutoARIMASolverPickler(log_util.LoggerMixin):
         partition = clustering_algorithm.load_previous_partition(self.region_metadata,
                                                                  pickle_prefix='pickle')
 
-        # load the arima model region
-        arima_model_path = self.arima_model_pickle_path()
-        self.logger.debug('Attempting to load arima model region at {}'.format(arima_model_path))
-        with open(arima_model_path, 'rb') as pickle_file:
-            arima_model_region = pickle.load(pickle_file)
+        # load the arima model region based on training data
+        arima_model_training_path = self.arima_model_training_pickle_path()
+        self.logger.debug('Loading arima models (training): {}'.format(arima_model_training_path))
+        with open(arima_model_training_path, 'rb') as pickle_file:
+            arima_model_region_training = pickle.load(pickle_file)
+
+        # load the arima model region based on whole data
+        arima_model_whole_path = self.arima_model_whole_pickle_path()
+        self.logger.debug('Loading arima models (whole): {}'.format(arima_model_whole_path))
+        with open(arima_model_whole_path, 'rb') as pickle_file:
+            arima_model_region_whole = pickle.load(pickle_file)
 
         # load the generalization errors
         generalization_errors_path = self.generalization_errors_pickle_path()
@@ -653,7 +732,8 @@ class AutoARIMASolverPickler(log_util.LoggerMixin):
         return AutoARIMASolver(solver_metadata=self.metadata,
                                error_type=self.error_type,
                                partition=partition,
-                               arima_model_region=arima_model_region,
+                               arima_model_region_training=arima_model_region_training,
+                               arima_model_region_whole=arima_model_region_whole,
                                generalization_errors=generalization_errors)
 
     def partition_pickle_path(self):
@@ -664,13 +744,23 @@ class AutoARIMASolverPickler(log_util.LoggerMixin):
         solver_pickle_dir = self.metadata.pickle_dir()
         return os.path.join(solver_pickle_dir, 'partition.pkl')
 
-    def arima_model_pickle_path(self):
+    def arima_model_training_pickle_path(self):
         '''
-        Full path of the pickle object of the arima model region, given by the region, clustering,
-        distance and auto arima metadata.
+        Full path of the pickle object of the arima model region based on training dataset; given
+        by the region, clustering, distance and auto arima metadata.
         '''
         solver_pickle_dir = self.metadata.pickle_dir()
-        arima_model_filename = 'model-region__{!r}.pkl'.format(self.metadata.model_params)
+        arima_model_filename = 'model-region-training__{!r}.pkl'.format(self.metadata.model_params)
+        return os.path.join(solver_pickle_dir, arima_model_filename)
+
+    def arima_model_whole_pickle_path(self):
+        '''
+        Full path of the pickle object of the arima model region based on the whole dataset
+        (as opposed to just the training dataset); given by the region, clustering, distance and
+        auto arima metadata.
+        '''
+        solver_pickle_dir = self.metadata.pickle_dir()
+        arima_model_filename = 'model-region-whole__{!r}.pkl'.format(self.metadata.model_params)
         return os.path.join(solver_pickle_dir, arima_model_filename)
 
     def generalization_errors_pickle_path(self):

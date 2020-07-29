@@ -124,6 +124,10 @@ def configure_predict_parser(predict_parser):
     predict_parser.add_argument('long1', help='First longitude index relative to region (west)')
     predict_parser.add_argument('long2', help='Second longitude index relative to region (east)')
 
+    # optionally request out-of-sample predictions, instead of in-sample
+    predict_parser.add_argument('--future', help='predict a future series (out-of-sample) instead',
+                                default=False, action='store_true')
+
     # function called after action is parsed
     predict_parser.set_defaults(func=predict_request)
 
@@ -179,20 +183,36 @@ def predict_request(args):
     print('')
 
     # for printing forecast and error values
-    np.set_printoptions(precision=3)
+    np.set_printoptions(formatter={'float': '{: 0.3f}'.format})
 
-    # this has all the necessary information and can be iterated
-    prediction_result = solver.predict(prediction_region)
+    # make a prediction, the forecast may be in-sample (future=False) or out-of-sample
+    # (future=True)
+    # The prediction result has all the necessary information and can be iterated by point
+    # TODO handle this inside the prediction result class!
+    prediction_result = solver.predict(prediction_region, is_future=args.future)
 
     for relative_point in prediction_result:
 
         coords = prediction_result.absolute_coordinates_of(relative_point)
         cluster_index = prediction_result.cluster_index_of(relative_point)
+
+        # the forecast, description changes if "--future" was passed
         forecast = prediction_result.forecast_at(relative_point)
+        forecast_str = 'Forecast:'
+        if args.future:
+            forecast_str = 'Forecast (future):'
+
         error = prediction_result.error_at(relative_point)
         print('*********************************')
         print('Point: {} (cluster {})'.format(coords, cluster_index))
-        print('Forecast: {}'.format(forecast))
+        print('{:<20} {}'.format(forecast_str, forecast))
+
+        if not args.future:
+            # also show test series
+            test_str = 'Test:'
+            test_series = prediction_result.test_at(relative_point)
+            print('{:<20} {}'.format(test_str, test_series))
+
         print('Error ({}): {:.3f}'.format(args.error, error))
 
     prediction_result.save_as_csv()
