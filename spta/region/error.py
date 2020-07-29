@@ -12,6 +12,28 @@ from spta.util import error as error_util
 from spta.util import log as log_util
 
 
+def error_functions():
+    '''
+    New error functions must be specified here.
+    '''
+    return {
+        'MASE': error_util.mase,
+        'sMAPE': error_util.smape,
+        'MSE': error_util.mse
+    }
+
+
+def get_error_func(error_type):
+    '''
+    Choose an error function.
+    '''
+    # check availability of error_type
+    if error_type not in error_functions().keys():
+        raise ValueError('Error type not supported: {}'.format(error_type))
+
+    return error_functions()[error_type]
+
+
 class ErrorRegion(SpatialDecorator):
     '''
     A spatial region where each value represents the forecast error of a model.
@@ -299,27 +321,6 @@ class ErrorAnalysis(log_util.LoggerMixin):
         return overall_error_region
 
 
-def error_functions():
-    '''
-    New error functions must be specified here.
-    '''
-    return {
-        'MASE': error_util.mase,
-        'sMAPE': error_util.smape
-    }
-
-
-def get_error_func(error_type):
-    '''
-    Choose an error function.
-    '''
-    # check availability of error_type
-    if error_type not in error_functions().keys():
-        raise ValueError('Error type not supported: {}'.format(error_type))
-
-    return error_functions()[error_type]
-
-
 def get_overall_error_func(error_type):
     '''
     Choose an overall error function. New error functions must be specified here and implemented
@@ -331,7 +332,8 @@ def get_overall_error_func(error_type):
     '''
     overall_error_functions = {
         'MASE': overall_error_mase,
-        'sMAPE': overall_error_smape
+        'sMAPE': overall_error_smape,
+        'MSE': overall_error_mse
     }
 
     # check availability of error_type
@@ -357,6 +359,16 @@ def overall_error_smape(point, forecast_series, observation_region, training_reg
     Apply overall_error_generic using the sMAPE error.
     '''
     smape_func = get_error_func('sMAPE')
+    return overall_error_generic(smape_func, point, forecast_series, observation_region,
+                                 training_region, with_print)
+
+
+def overall_error_mse(point, forecast_series, observation_region, training_region,
+                      with_print=True):
+    '''
+    Apply overall_error_generic using the sMAPE error.
+    '''
+    smape_func = get_error_func('MSE')
     return overall_error_generic(smape_func, point, forecast_series, observation_region,
                                  training_region, with_print)
 

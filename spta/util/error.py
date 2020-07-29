@@ -1,5 +1,7 @@
 import numpy as np
 
+from . import arrays
+
 
 def mase(forecast_series, observation_series, training_series):
     '''
@@ -32,3 +34,13 @@ def smape(forecast_series, observation_series, *args):
     et = forecast_series - observation_series
     pt = 200 * (np.abs(et) / (forecast_series + observation_series))
     return np.mean(pt)
+
+
+def mse(forecast_series, observation_series, *args):
+    '''
+    Calculates MSE:
+
+    mse = sum((et)^2) / n
+    '''
+    et = forecast_series - observation_series
+    return arrays.mean_squared(et)
