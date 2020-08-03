@@ -50,7 +50,7 @@ class TestKmedoidsClusteringMetadata(unittest.TestCase):
         r = '{!r}'.format(metadata)
 
         # then
-        self.assertEqual('kmedoids_k5_seed2', r)
+        self.assertEqual('kmedoids_k5_seed2_lite', r)
 
     def test_repr_with_initial_medoids(self):
         # given
@@ -64,7 +64,7 @@ class TestKmedoidsClusteringMetadata(unittest.TestCase):
         r = '{!r}'.format(metadata)
 
         # then
-        self.assertEqual('kmedoids_k3_seed2_im1-2-3', r)
+        self.assertEqual('kmedoids_k3_seed2_lite_im1-2-3', r)
 
     def test_str(self):
         # given
@@ -76,4 +76,4 @@ class TestKmedoidsClusteringMetadata(unittest.TestCase):
         s = '{}'.format(metadata)
 
         # then
-        self.assertEqual('Kmedoids: k=5 seed=2', s)
+        self.assertEqual('Kmedoids: k=5 seed=2 mode=lite', s)
