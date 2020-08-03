@@ -1,4 +1,5 @@
 import numpy as np
+import os
 
 from . import Point, Region
 from .temporal import SpatioTemporalRegion
@@ -29,7 +30,7 @@ class SpatioTemporalRegionMetadata(log_util.LoggerMixin):
     '''
 
     def __init__(self, name, region, series_len, ppd, last=True, centroid=None,
-                 normalized=True, dataset_dir='raw', pickle_dir='pickle'):
+                 normalized=True, dataset_dir='raw'):
         self.name = name
         self.region = region
         self.series_len = series_len
@@ -37,51 +38,6 @@ class SpatioTemporalRegionMetadata(log_util.LoggerMixin):
         self.last = last
         self.normalized = normalized
         self.dataset_dir = dataset_dir
-        self.pickle_dir = pickle_dir
-
-    def index_to_absolute_point(self, index):
-        '''
-        Given a 2d index, recover the original Point coordinates.
-        This is useful when applied to a medoid index, because it will give the medoid position
-        in the original dataset.
-
-        Assumes that the medoid index has been calculated from the region specified in this
-        metadata instance.
-        '''
-        y_len = self.region.y2 - self.region.y1
-
-        # get (i, j) position relative to the region
-        x_region = int(index / y_len)
-        y_region = index % y_len
-
-        # add region offset like this
-        return self.absolute_position_of_point(Point(x_region, y_region))
-
-    def absolute_position_of_point(self, point):
-        '''
-        Given a point, recover its original coordinates.
-        Assumes that the provided point has been calculated from the region specified in this
-        metadata instance.
-        '''
-        # get the region offset and add to point
-        x_offset, y_offset = self.region.x1, self.region.y1
-        return Point(point.x + x_offset, point.y + y_offset)
-
-    def absolute_coordinates_of_region(self, region):
-        '''
-        Given a rectangle region, recover its original coordinates.
-        Assumes that the provided points have been calculated from the region specified in this
-        metadata instance.
-        '''
-        # get the offset of (x1, y1) and (x2, y2)
-        corner1 = Point(region.x1, region.y1)
-        corner1_absolute = self.absolute_position_of_point(corner1)
-        corner2 = Point(region.x2, region.y2)
-        corner2_absolute = self.absolute_position_of_point(corner2)
-
-        # build a new Region with the absolute coordinates
-        return Region(corner1_absolute.x, corner2_absolute.x,
-                      corner1_absolute.y, corner2_absolute.y)
 
     @property
     def years(self):
@@ -130,12 +86,49 @@ class SpatioTemporalRegionMetadata(log_util.LoggerMixin):
         '''
         return '{}/{}_max.npy'.format(self.dataset_dir, self)
 
-    @property
-    def pickle_filename(self):
+    def index_to_absolute_point(self, index):
         '''
-        Ex 'pickle/sp_small_1y_4ppd_norm.pickle'
+        Given a 2d index, recover the original Point coordinates.
+        This is useful when applied to a medoid index, because it will give the medoid position
+        in the original dataset.
+
+        Assumes that the medoid index has been calculated from the region specified in this
+        metadata instance.
         '''
-        return '{}/{}.pickle'.format(self.pickle_dir, self)
+        y_len = self.region.y2 - self.region.y1
+
+        # get (i, j) position relative to the region
+        x_region = int(index / y_len)
+        y_region = index % y_len
+
+        # add region offset like this
+        return self.absolute_position_of_point(Point(x_region, y_region))
+
+    def absolute_position_of_point(self, point):
+        '''
+        Given a point, recover its original coordinates.
+        Assumes that the provided point has been calculated from the region specified in this
+        metadata instance.
+        '''
+        # get the region offset and add to point
+        x_offset, y_offset = self.region.x1, self.region.y1
+        return Point(point.x + x_offset, point.y + y_offset)
+
+    def absolute_coordinates_of_region(self, region):
+        '''
+        Given a rectangle region, recover its original coordinates.
+        Assumes that the provided points have been calculated from the region specified in this
+        metadata instance.
+        '''
+        # get the offset of (x1, y1) and (x2, y2)
+        corner1 = Point(region.x1, region.y1)
+        corner1_absolute = self.absolute_position_of_point(corner1)
+        corner2 = Point(region.x2, region.y2)
+        corner2_absolute = self.absolute_position_of_point(corner2)
+
+        # build a new Region with the absolute coordinates
+        return Region(corner1_absolute.x, corner2_absolute.x,
+                      corner1_absolute.y, corner2_absolute.y)
 
     def create_instance(self):
         '''
@@ -174,6 +167,25 @@ class SpatioTemporalRegionMetadata(log_util.LoggerMixin):
 
         self.logger.info('Loaded dataset {}: {}'.format(self, self.region))
         return spt_region
+
+    def output_dir(self, output_home):
+        '''
+        Directory to store outputs relevant to this region metadata.
+        '''
+        return os.path.join(output_home, repr(self))
+
+    def pickle_dir(self, pickle_home='pickle'):
+        '''
+        Directory to store pickle files relevant to this region metadata.
+        '''
+        return os.path.join(pickle_home, repr(self))
+
+    def pickle_filename(self, pickle_home='pickle'):
+        '''
+        Ex 'pickle/sp_small_1y_4ppd_norm//sp_small_1y_4ppd_norm.pickle'
+        '''
+        pickle_dir = self.pickle_dir(pickle_home)
+        return '{}/{!r}.pickle'.format(pickle_dir, self)
 
     def __repr__(self):
         '''

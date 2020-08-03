@@ -103,7 +103,7 @@ def do_auto_arima_distance_errors(args, logger):
         partition = trainer.clustering_algorithm.partition(spt_region,
                                                            with_medoids=True,
                                                            save_csv_at='outputs',
-                                                           pickle_prefix='pickle')
+                                                           pickle_home='pickle')
 
         # use the partition to get k clusters
         clusters = partition.create_all_spt_clusters(spt_region, medoids=partition.medoids)
@@ -116,7 +116,7 @@ def do_auto_arima_distance_errors(args, logger):
 
 
 def distance_vs_errors_for_cluster(cluster, trainer, partition, forecast_len, error_type,
-                                   with_plots, logger, output_prefix='outputs'):
+                                   with_plots, logger, output_home='outputs'):
 
     _, x_len, y_len = cluster.shape
 
@@ -181,7 +181,7 @@ def distance_vs_errors_for_cluster(cluster, trainer, partition, forecast_len, er
     # prepare the CSV output at:
     # outputs/<region>/<distance>/<clustering>/<auto_arima_params>
     # dist-error__<clustering>__<error>__<cluster>__auto-arima-<arima_params>.csv
-    csv_dir = trainer.metadata.output_dir(output_prefix)
+    csv_dir = trainer.metadata.output_dir(output_home)
     fs_util.mkdir(csv_dir)
 
     # csv_filename = '{!r}_distance_errors_cluster_{}.csv'.format(trainer.metadata.model_params,
@@ -236,7 +236,7 @@ def distance_vs_errors_for_cluster(cluster, trainer, partition, forecast_len, er
         # save the plot
         # outputs/<region>/<distance>/<clustering>/<auto_arima_params>
         # dist-error__<clustering>__<error>__<cluster>__auto-arima-<arima_params>.pdf
-        plot_dir = trainer.metadata.output_dir(output_prefix)
+        plot_dir = trainer.metadata.output_dir(output_home)
         # plot_name = '{!r}_distance_errors_cluster_{}.pdf'.format(trainer.metadata.model_params,
         #                                                          cluster.name)
         output_template = 'dist-error__{!r}__{}__{}__auto-arima-p{}-d{}-q{}.{}'

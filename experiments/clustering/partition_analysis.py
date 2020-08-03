@@ -78,7 +78,7 @@ def analyze_suite(args, logger):
     region_metadata, clustering_suite, suite_desc = metadata_from_args(args)
 
     # default...
-    output_prefix = 'outputs'
+    output_home = 'outputs'
 
     # TODO assuming DTW
     distance_measure = DistanceByDTW()
@@ -90,7 +90,7 @@ def analyze_suite(args, logger):
 
     # prepare the CSV output now (header)
     # <output>/<region>/<distance>/clustering__<clustering_type>-<clustering_suite>.csv
-    csv_dir = '{}/{!r}/{!r}'.format(output_prefix, region_metadata, distance_measure)
+    csv_dir = '{}/{!r}/{!r}'.format(output_home, region_metadata, distance_measure)
     fs_util.mkdir(csv_dir)
 
     csv_filename = 'clustering__{}.csv'.format(suite_desc)
@@ -111,7 +111,7 @@ def analyze_suite(args, logger):
         clustering_algorithm = clustering_factory.instance(clustering_metadata)
 
         # work on this clustering
-        partial_result = analyze_partition(region_metadata, clustering_algorithm, output_prefix,
+        partial_result = analyze_partition(region_metadata, clustering_algorithm, output_home,
                                            logger, args)
 
         # write partial result
@@ -124,7 +124,7 @@ def analyze_suite(args, logger):
     logger.info('CSV output at: {}'.format(csv_filepath))
 
 
-def analyze_partition(region_metadata, clustering_algorithm, output_prefix, logger, args):
+def analyze_partition(region_metadata, clustering_algorithm, output_home, logger, args):
 
     # recover the regions
     spt_region = region_metadata.create_instance()
@@ -133,8 +133,8 @@ def analyze_partition(region_metadata, clustering_algorithm, output_prefix, logg
     # use the clustering algorithm to get the partition and medoids
     # will try to leverage pickle and load previous attempts, otherwise calculate and save
     partition = clustering_algorithm.partition(spt_region, with_medoids=True,
-                                               save_csv_at=output_prefix,
-                                               pickle_prefix='pickle')
+                                               save_csv_at=output_home,
+                                               pickle_home='pickle')
 
     distance_measure = clustering_algorithm.distance_measure
 
@@ -183,7 +183,7 @@ def analyze_partition(region_metadata, clustering_algorithm, output_prefix, logg
             random_points = int(args.random)
 
         # build a suitable name for the current plot: need info on region, k
-        plot_dir = clustering_algorithm.output_dir(output_prefix, region_metadata)
+        plot_dir = clustering_algorithm.output_dir(output_home, region_metadata)
         fs_util.mkdir(plot_dir)
 
         # perform the variance analysis

@@ -22,8 +22,8 @@ from spta.util import fs as fs_util
 from spta.util import log as log_util
 from spta.util import plot as plot_util
 
-from .metadata import SolverMetadata
-from .result import PredictionQueryResult
+from .metadata import SolverMetadataBuilder
+from .result import PredictionQueryResultBuilder
 
 # default forecast length
 FORECAST_LENGTH = 8
@@ -57,14 +57,16 @@ class AutoARIMATrainer(log_util.LoggerMixin):
         clustering_factory = ClusteringFactory(self.distance_measure)
         self.clustering_algorithm = clustering_factory.instance(self.clustering_metadata)
 
-        self.metadata = SolverMetadata(region_metadata=self.region_metadata,
-                                       clustering_metadata=self.clustering_metadata,
-                                       distance_measure=self.distance_measure,
-                                       model_params=self.auto_arima_params,
-                                       error_type=self.error_type)
+        # create metadata with clustering support
+        builder = SolverMetadataBuilder(region_metadata=self.region_metadata,
+                                        model_params=self.auto_arima_params,
+                                        error_type=self.error_type)
+        self.metadata = builder.with_clustering(clustering_metadata=self.clustering_metadata,
+                                                distance_measure=self.distance_measure).build()
+
         self.prepared = True
 
-    def train(self, training_len=None, test_len=FORECAST_LENGTH, output_prefix='outputs'):
+    def train(self, training_len=None, test_len=FORECAST_LENGTH, output_home='outputs'):
         '''
         Partition the region into clusters, then train the ARIMA models on the cluster medoids.
 
@@ -85,8 +87,8 @@ class AutoARIMATrainer(log_util.LoggerMixin):
         # when the partition is saved, the medoids are saved in it
         partition = self.clustering_algorithm.partition(spt_region,
                                                         with_medoids=True,
-                                                        save_csv_at=output_prefix,
-                                                        pickle_prefix='pickle')
+                                                        save_csv_at=output_home,
+                                                        pickle_home='pickle')
         medoids = partition.medoids
 
         self.logger.info('Training solver: {}'.format(self.metadata))
@@ -143,7 +145,6 @@ class AutoARIMATrainer(log_util.LoggerMixin):
         arima_medoids_numpy = np.empty((x_len, y_len), dtype=object)
 
         # iterate the training clusters to produce an ARIMA cluster for each one
-        # using enumerate to also get the cluster index in [0, k-1]
         arima_clusters = []
         for training_cluster in training_clusters:
 
@@ -235,7 +236,7 @@ class AutoARIMASolver(log_util.LoggerMixin):
         self.prepared = False
 
     def predict(self, prediction_region, is_future, forecast_len=FORECAST_LENGTH,
-                output_prefix='outputs', plot=True):
+                output_home='outputs', plot=True):
 
         self.logger.debug('Predicting for region: {}'.format(prediction_region))
 
@@ -243,7 +244,7 @@ class AutoARIMASolver(log_util.LoggerMixin):
             self.prepare_for_predictions(forecast_len)
 
         # plot the whole region and the prediction region
-        self.plot_regions(prediction_region, output_prefix)
+        self.plot_regions(prediction_region, output_home)
 
         px1, px2, py1, py2 = prediction_region.x1, prediction_region.x2, prediction_region.y1, \
             prediction_region.y2
@@ -293,18 +294,22 @@ class AutoARIMASolver(log_util.LoggerMixin):
                                      scale_max=spt_subset_with_scaling_data.scale_max)
             forecast_subregion = scaled_forecast_subregion.descale()
 
-        # this has all the required information and can be iterated
-        return PredictionQueryResult(solver_metadata=self.metadata,
-                                     distance_measure=self.distance_measure,
-                                     forecast_len=forecast_len,
-                                     is_future=is_future,
-                                     forecast_subregion=forecast_subregion,
-                                     test_subregion=test_subregion,
-                                     error_subregion=error_subregion,
-                                     prediction_region=prediction_region,
-                                     partition=self.partition,
-                                     spt_region=self.spt_region,
-                                     output_prefix=output_prefix)
+        # create the result object using the builder:
+        # is_future True -> out-of-sample forecast
+        # is_future False -> in-sample forecast
+        builder = PredictionQueryResultBuilder(solver_metadata=self.metadata,
+                                               forecast_len=forecast_len,
+                                               forecast_subregion=forecast_subregion,
+                                               test_subregion=test_subregion,
+                                               error_subregion=error_subregion,
+                                               prediction_region=prediction_region,
+                                               spt_region=self.spt_region,
+                                               output_home=output_home,
+                                               is_future=is_future)
+
+        # add clustering information to results via the partition
+        result = builder.with_partition(self.partition).build()
+        return result
 
     def prepare_for_predictions(self, forecast_len):
         '''
@@ -330,7 +335,7 @@ class AutoARIMASolver(log_util.LoggerMixin):
         # set prepared flag
         self.prepared = True
 
-    def plot_regions(self, prediction_region, output_prefix):
+    def plot_regions(self, prediction_region, output_home):
         '''
         Plot the partitioning, with the prediction region overlayed on top
         '''
@@ -356,21 +361,21 @@ class AutoARIMASolver(log_util.LoggerMixin):
                                  mark_points=self.partition.medoids)
 
         # save figure
-        fs_util.mkdir(self.metadata.output_dir(output_prefix))
+        fs_util.mkdir(self.metadata.output_dir(output_home))
         plt.draw()
 
-        plot_name = self.get_plot_filename(prediction_region, output_prefix)
+        plot_name = self.get_plot_filename(prediction_region, output_home)
         plt.savefig(plot_name)
         self.logger.info('Saved figure: {}'.format(plot_name))
 
         # show figure
         plt.show()
 
-    def get_plot_filename(self, prediction_region, output_prefix):
+    def get_plot_filename(self, prediction_region, output_home):
         '''
         Returns a string representing the filename for the plot.
         '''
-        solver_plot_dir = self.metadata.output_dir(output_prefix)
+        solver_plot_dir = self.metadata.output_dir(output_home)
         plot_filename = 'query-{!r}__region-{}-{}-{}-{}.pdf'.format(self.clustering_metadata,
                                                                     prediction_region.x1,
                                                                     prediction_region.x2,
@@ -411,7 +416,7 @@ class AutoARIMASolverPickler(log_util.LoggerMixin):
     |- pickle
         |- <region>
             |- dtw
-                |- kmedoids_k<k>_seed<seed>
+                |- <clustering>
                     |- partition.pkl
                     |- auto_arima_<auto_arima_params>_model_region.pkl
                     |- auto_arima_<auto_arima_params>_errors_<error_type>.pkl
@@ -422,9 +427,9 @@ class AutoARIMASolverPickler(log_util.LoggerMixin):
         # solver metadata
         self.metadata = solver_metadata
 
-        self.distance_measure = self.metadata.distance_measure
-        self.clustering_metadata = self.metadata.clustering_metadata
         self.region_metadata = self.metadata.region_metadata
+        self.clustering_metadata = self.metadata.clustering_metadata
+        self.distance_measure = self.metadata.distance_measure
         self.error_type = self.metadata.error_type
 
     def save_solver(self, auto_arima_solver):
@@ -474,7 +479,7 @@ class AutoARIMASolverPickler(log_util.LoggerMixin):
         clustering_factory = ClusteringFactory(self.distance_measure)
         clustering_algorithm = clustering_factory.instance(self.clustering_metadata)
         partition = clustering_algorithm.load_previous_partition(self.region_metadata,
-                                                                 pickle_prefix='pickle')
+                                                                 pickle_home='pickle')
 
         # load the arima model region based on training data
         arima_model_training_path = self.arima_model_training_pickle_path()
@@ -495,11 +500,7 @@ class AutoARIMASolverPickler(log_util.LoggerMixin):
             generalization_errors = pickle.load(pickle_file)
 
         # recreate the solver
-        log_msg = 'Loaded solver: {}, {}, {}, {}'
-        self.logger.info(log_msg.format(self.metadata.region_metadata,
-                                        self.metadata.clustering_metadata,
-                                        self.metadata.model_params,
-                                        self.error_type))
+        self.logger.info('Loaded solver: {}'.format(self.metadata))
 
         return AutoARIMASolver(solver_metadata=self.metadata,
                                partition=partition,

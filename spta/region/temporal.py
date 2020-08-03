@@ -129,7 +129,7 @@ class SpatioTemporalRegion(DomainRegion):
         # delegate
         self.save_to(self.region_metadata.dataset_filename)
 
-    def pickle(self):
+    def pickle(self, pickle_home='pickle'):
         '''
         Pickles the object to the file designated by the metadata.
         Raises ValueError if metadata is not available.
@@ -138,10 +138,10 @@ class SpatioTemporalRegion(DomainRegion):
             raise ValueError('Need metadata to pickle this sptr!')
 
         # ensure dir
-        fs_util.mkdir(self.region_metadata.pickle_dir)
+        fs_util.mkdir(self.region_metadata.pickle_dir(pickle_home))
 
         # delegate
-        self.pickle_to(self.region_metadata.pickle_filename)
+        self.pickle_to(self.region_metadata.pickle_filename(pickle_home))
 
     def has_scaling(self):
         '''

@@ -22,31 +22,30 @@ class ClusteringMetadata():
         self.name = name
         self.k = k
 
-    def clustering_subdir(self, region_metadata, distance_measure):
+    def clustering_subdir(self, distance_measure):
         '''
-        Sub-directory used for saving results.
+        Sub-directory used for saving results, relative to the region dir.
         <region>/<distance>/<clustering>
         '''
-        region_subdir = '{!r}'.format(region_metadata)
         distance_subdir = '{!r}'.format(distance_measure)
         clustering_metadata_subdir = '{!r}'.format(self)
-        return os.path.join(region_subdir, distance_subdir, clustering_metadata_subdir)
+        return os.path.join(distance_subdir, clustering_metadata_subdir)
 
-    def output_dir(self, output_prefix, region_metadata, distance_measure):
+    def output_dir(self, output_home, region_metadata, distance_measure):
         '''
-        Directory to store CSV and plots.
-        <output_prefix>/<region>/<distance>/<clustering>
+        Directory to store CSV and plots, e.g.
+        <output_home>/<region>/<distance>/<clustering>
         '''
-        return os.path.join(output_prefix, self.clustering_subdir(region_metadata,
-                                                                  distance_measure))
+        region_output_dir = region_metadata.output_dir(output_home)
+        return os.path.join(region_output_dir, self.clustering_subdir(distance_measure))
 
-    def pickle_dir(self, region_metadata, distance_measure, pickle_prefix='pickle'):
+    def pickle_dir(self, region_metadata, distance_measure, pickle_home='pickle'):
         '''
-        Directory to store pickle objects.
+        Directory to store pickle objects, e.g.
         pickle/<region>/<distance>/<clustering>
         '''
-        return os.path.join(pickle_prefix, self.clustering_subdir(region_metadata,
-                                                                  distance_measure))
+        region_pickle_dir = region_metadata.pickle_dir(pickle_home)
+        return os.path.join(region_pickle_dir, self.clustering_subdir(distance_measure))
 
     def as_dict(self):
         '''
@@ -75,7 +74,7 @@ class ClusteringAlgorithm(log_util.LoggerMixin):
         # filename to store partitions
         self.partition_pickle_filename = 'partition_{!r}.pkl'.format(self.metadata)
 
-    def partition(self, spt_region, with_medoids=True, save_csv_at=None, pickle_prefix=None):
+    def partition(self, spt_region, with_medoids=True, save_csv_at=None, pickle_home=None):
         '''
         Create a partition on a spatio-temporal region. A partition can be used to create
         spatio-temporal clusters. Calls subclass implementation of partition_impl
@@ -87,16 +86,16 @@ class ClusteringAlgorithm(log_util.LoggerMixin):
             Optionally save a CSV report, at the specified prefix
             TODO this is ugly, improve?
 
-        pickle_prefix
+        pickle_home
             Optionally save the partition as a pickle object at the specified prefix
         '''
 
         # if we can load the partition, then use saved result
         # can only be done if region metadata is available
         loaded_from_pickle = False
-        if pickle_prefix is not None and spt_region.region_metadata is not None:
+        if pickle_home is not None and spt_region.region_metadata is not None:
             the_partition = self.try_load_previous_partition(spt_region.region_metadata,
-                                                             pickle_prefix)
+                                                             pickle_home)
 
             # flag to avoid saving a loaded partition
             if the_partition is not None:
@@ -111,10 +110,10 @@ class ClusteringAlgorithm(log_util.LoggerMixin):
             # creates a CSV report of this clustering, assumes region metadata is available
             self.save_to_csv(the_partition, spt_region.region_metadata, save_csv_at)
 
-        if pickle_prefix is not None and not loaded_from_pickle:
+        if pickle_home is not None and not loaded_from_pickle:
             # saves the partition as a pickle object for later retrieval, assumes region metadata
             # is available
-            self.save_partition(the_partition, spt_region.region_metadata, pickle_prefix)
+            self.save_partition(the_partition, spt_region.region_metadata, pickle_home)
 
         return the_partition
 
@@ -151,15 +150,15 @@ class ClusteringAlgorithm(log_util.LoggerMixin):
 
         return medoids
 
-    def output_dir(self, output_prefix, region_metadata):
+    def output_dir(self, output_home, region_metadata):
         '''
         Directory for CSV files and plots, delegates to clustering metadata
         '''
-        return self.metadata.output_dir(output_prefix=output_prefix,
+        return self.metadata.output_dir(output_home=output_home,
                                         region_metadata=region_metadata,
                                         distance_measure=self.distance_measure)
 
-    def save_to_csv(self, partition, region_metadata, output_prefix):
+    def save_to_csv(self, partition, region_metadata, output_home):
         '''
         Create a CSV report of the clustering partition.
         Requires the region metadata to store the CSV in a proper path.
@@ -168,7 +167,7 @@ class ClusteringAlgorithm(log_util.LoggerMixin):
         '''
 
         # path to store CSV
-        csv_output_dir = self.output_dir(output_prefix, region_metadata)
+        csv_output_dir = self.output_dir(output_home, region_metadata)
         fs_util.mkdir(csv_output_dir)
 
         csv_filename = 'clustering__{!r}.csv'.format(self)
@@ -198,7 +197,7 @@ class ClusteringAlgorithm(log_util.LoggerMixin):
 
         self.logger.info('Saved {} CSV at: {}'.format(self, csv_filepath))
 
-    def save_partition(self, partition, region_metadata, pickle_prefix='pickle'):
+    def save_partition(self, partition, region_metadata, pickle_home='pickle'):
         '''
         Saves a partition as a pickle objct, using its to_pickle(path) method. The path is
         calculated by the clustering metadata.
@@ -208,7 +207,7 @@ class ClusteringAlgorithm(log_util.LoggerMixin):
         # the partition can save itself
         partition.to_pickle(pickle_full_path)
 
-    def try_load_previous_partition(self, region_metadata, pickle_prefix='pickle'):
+    def try_load_previous_partition(self, region_metadata, pickle_home='pickle'):
         '''
         Tries to load a partition that has been previously calculated with this clustering
         algorithm for the specified region metadata, and returns the partition instance.
@@ -219,14 +218,14 @@ class ClusteringAlgorithm(log_util.LoggerMixin):
         # try and load the partition object, this call may fail
         partition = None
         try:
-            partition = self.load_previous_partition(region_metadata, pickle_prefix)
+            partition = self.load_previous_partition(region_metadata, pickle_home)
         except Exception:
             # attempt failed, return None without exception
             self.logger.debug('Attempt to load a partition with {!r} failed.'.format(self))
 
         return partition
 
-    def load_previous_partition(self, region_metadata, pickle_prefix='pickle'):
+    def load_previous_partition(self, region_metadata, pickle_home='pickle'):
         '''
         Load a partition that has been previously calculated with this clustering
         algorithm for the specified region metadata, and returns the partition instance.

@@ -19,7 +19,7 @@ from spta.distance.dtw import DistanceByDTW
 from spta.region import Region
 from spta.region.error import error_functions
 from spta.solver.auto_arima import AutoARIMATrainer, AutoARIMASolverPickler
-from spta.solver.metadata import SolverMetadata
+from spta.solver.metadata import SolverMetadataBuilder
 from spta.util import log as log_util
 
 from experiments.metadata.arima import predefined_auto_arima
@@ -167,13 +167,14 @@ def predict_request(args):
     # Revise this if we adapt for COORDS
     prediction_region = Region(int(args.lat1), int(args.lat2), int(args.long1), int(args.long2))
 
-    # load solver from persistence
-    solver_metadata = SolverMetadata(region_metadata=region_metadata,
-                                     clustering_metadata=clustering_metadata,
-                                     distance_measure=distance_measure,
-                                     model_params=auto_arima_params,
-                                     error_type=args.error)
+    # create metadata with clustering support
+    builder = SolverMetadataBuilder(region_metadata=region_metadata,
+                                    model_params=auto_arima_params,
+                                    error_type=args.error)
+    solver_metadata = builder.with_clustering(clustering_metadata=clustering_metadata,
+                                              distance_measure=distance_measure).build()
 
+    # load solver from persistence
     pickler = AutoARIMASolverPickler(solver_metadata=solver_metadata)
     solver = pickler.load_solver()
     print('')
@@ -189,15 +190,16 @@ def predict_request(args):
     # make a prediction, the forecast may be in-sample (future=False) or out-of-sample
     # (future=True)
     # The prediction result has all the necessary information and can be iterated by point
-    # TODO handle this inside the prediction result class!
     prediction_result = solver.predict(prediction_region, is_future=args.future)
 
     for relative_point in prediction_result:
 
+        # for each point, the result can print a text output
         print('*********************************')
         text = prediction_result.lines_for_point(relative_point)
         print('\n'.join(text))
 
+    # the result can save relevant information to CSV
     prediction_result.save_as_csv()
 
 

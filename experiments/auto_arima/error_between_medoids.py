@@ -96,7 +96,7 @@ def do_auto_arima_errors_for_clustering(spt_region, region_metadata, clustering_
     partition = trainer.clustering_algorithm.partition(spt_region,
                                                        with_medoids=True,
                                                        save_csv_at='outputs',
-                                                       pickle_prefix='pickle')
+                                                       pickle_home='pickle')
     medoids = partition.medoids
 
     # create training/test regions

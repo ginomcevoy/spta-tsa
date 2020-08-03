@@ -62,7 +62,9 @@ class TestSptrMetadata(unittest.TestCase):
     def test_pickle_filename_365_1ppd_norm(self):
         rmd_1y_1ppd = SpatioTemporalRegionMetadata('sp_small', Region(40, 50, 50, 60), 365, 1,
                                                    normalized=True)
-        self.assertEquals(rmd_1y_1ppd.pickle_filename, 'pickle/sp_small_1y_1ppd_norm.pickle')
+
+        expected = 'pickle/sp_small_1y_1ppd_norm/sp_small_1y_1ppd_norm.pickle'
+        self.assertEquals(rmd_1y_1ppd.pickle_filename(), expected)
 
     def test_index_to_absolute_point_index_0(self):
         # given
@@ -96,3 +98,15 @@ class TestSptrMetadata(unittest.TestCase):
 
         # then 85 -> (8, 5) in subregion
         self.assertEquals(point, Point(48, 55))
+
+    def test_output_dir(self):
+        # given
+        sp_small_md = SpatioTemporalRegionMetadata('sp_small', Region(40, 50, 50, 60), 365, 1,
+                                                   normalized=True)
+        output_home = 'outputs'
+
+        # when
+        output_dir = sp_small_md.output_dir(output_home)
+
+        # then
+        self.assertEqual(output_dir, 'outputs/sp_small_1y_1ppd_norm')

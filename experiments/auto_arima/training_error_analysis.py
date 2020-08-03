@@ -132,21 +132,21 @@ def do_auto_arima_error_analysis(args, logger):
 
 def do_auto_arima_error_analysis_for_clustering(spt_region, clustering_algorithm,
                                                 auto_arima_params, error_type, parallel_workers,
-                                                with_plots, logger, output_prefix='outputs'):
+                                                with_plots, logger, output_home='outputs'):
 
     # use the clustering algorithm to get the partition and medoids
     # also save the partition details (needs region metadata)
     # will try to leverage pickle and load previous attempts, otherwise calculate and save
     partition = clustering_algorithm.partition(spt_region,
                                                with_medoids=True,
-                                               save_csv_at=output_prefix,
-                                               pickle_prefix='pickle')
+                                               save_csv_at=output_home,
+                                               pickle_home='pickle')
 
     clusters = partition.create_all_spt_clusters(spt_region, medoids=partition.medoids)
 
     # create the output dir
     # outputs/<region>/<distance>/<clustering>/arima-<arima_suite_id>
-    clustering_output_dir = clustering_algorithm.output_dir(output_prefix,
+    clustering_output_dir = clustering_algorithm.output_dir(output_home,
                                                             spt_region.region_metadata)
 
     # ensure output dir
