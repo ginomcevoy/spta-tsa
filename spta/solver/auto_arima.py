@@ -4,7 +4,6 @@ Uses a clustering algorithm to define clusters and medoids, and uses auto ARIMA 
 '''
 import matplotlib.pyplot as plt
 
-import csv
 import numpy as np
 import pickle
 import os
@@ -14,19 +13,17 @@ from spta.arima import training
 
 from spta.clustering.factory import ClusteringFactory
 
-from spta.region import Point
-from spta.region.base import BaseRegion
 from spta.region.error import MeasureForecastingError, get_error_func
 from spta.region.scaling import SpatioTemporalScaled
 from spta.region.spatial import SpatialCluster
 from spta.region.train import SplitTrainingAndTestLast
 
-from spta.util import arrays as arrays_util
 from spta.util import fs as fs_util
 from spta.util import log as log_util
 from spta.util import plot as plot_util
 
 from .metadata import SolverMetadata
+from .result import PredictionQueryResult
 
 # default forecast length
 FORECAST_LENGTH = 8
@@ -38,11 +35,13 @@ class AutoARIMATrainer(log_util.LoggerMixin):
     of the resulting clusters
     '''
 
-    def __init__(self, region_metadata, clustering_metadata, distance_measure, auto_arima_params):
+    def __init__(self, region_metadata, clustering_metadata, distance_measure, auto_arima_params,
+                 error_type):
         self.region_metadata = region_metadata
         self.clustering_metadata = clustering_metadata
         self.distance_measure = distance_measure
         self.auto_arima_params = auto_arima_params
+        self.error_type = error_type
 
         # flag
         self.prepared = False
@@ -61,11 +60,11 @@ class AutoARIMATrainer(log_util.LoggerMixin):
         self.metadata = SolverMetadata(region_metadata=self.region_metadata,
                                        clustering_metadata=self.clustering_metadata,
                                        distance_measure=self.distance_measure,
-                                       model_params=self.auto_arima_params)
+                                       model_params=self.auto_arima_params,
+                                       error_type=self.error_type)
         self.prepared = True
 
-    def train(self, error_type, training_len=None, test_len=FORECAST_LENGTH,
-              output_prefix='outputs'):
+    def train(self, training_len=None, test_len=FORECAST_LENGTH, output_prefix='outputs'):
         '''
         Partition the region into clusters, then train the ARIMA models on the cluster medoids.
 
@@ -105,8 +104,7 @@ class AutoARIMATrainer(log_util.LoggerMixin):
         # TODO a lot of assumptions here, work them out later
         generalization_errors = self.calculate_errors(arima_model_region_training,
                                                       training_region, test_region,
-                                                      forecast_len=test_len,
-                                                      error_type=error_type)
+                                                      forecast_len=test_len)
         self.logger.info('Overall error: {:.4f}'.format(generalization_errors.overall_error))
 
         # If the user sets the future flag for prediction, we want to use the entire series
@@ -118,7 +116,6 @@ class AutoARIMATrainer(log_util.LoggerMixin):
 
         # create a solver with the data acquired, this solver can answer queries
         solver = AutoARIMASolver(solver_metadata=self.metadata,
-                                 error_type=error_type,
                                  partition=partition,
                                  arima_model_region_training=arima_model_region_training,
                                  arima_model_region_whole=arima_model_region_whole,
@@ -163,8 +160,7 @@ class AutoARIMATrainer(log_util.LoggerMixin):
         # the data with this instance
         return ArimaModelRegion(arima_region.as_numpy)
 
-    def calculate_errors(self, arima_model_region, training_region, test_region, forecast_len,
-                         error_type):
+    def calculate_errors(self, arima_model_region, training_region, test_region, forecast_len):
         '''
         Calculate the generalization error for these ARIMA models: it is the prediction error
         that is calculated using the test dataset.
@@ -176,7 +172,7 @@ class AutoARIMATrainer(log_util.LoggerMixin):
         forecast_region = arima_model_region.apply_to(test_region, forecast_len)
 
         # calculate the error using a generic error function, requires the error type
-        error_func = get_error_func(error_type)
+        error_func = get_error_func(self.error_type)
         measure_error = MeasureForecastingError(error_func, test_region, training_region)
 
         # will calculate the forecast error at each point of the region
@@ -218,7 +214,7 @@ class AutoARIMASolver(log_util.LoggerMixin):
     point in the subregion, the forecast at the medoid of the cluster for which each point is
     a member.
     '''
-    def __init__(self, solver_metadata, error_type, partition, arima_model_region_training,
+    def __init__(self, solver_metadata, partition, arima_model_region_training,
                  arima_model_region_whole, generalization_errors):
 
         # user input
@@ -227,8 +223,7 @@ class AutoARIMASolver(log_util.LoggerMixin):
         self.clustering_metadata = solver_metadata.clustering_metadata
         self.distance_measure = solver_metadata.distance_measure
         self.auto_arima_params = solver_metadata.model_params
-
-        self.error_type = error_type
+        self.error_type = solver_metadata.error_type
 
         # calculated during training
         self.partition = partition
@@ -309,7 +304,6 @@ class AutoARIMASolver(log_util.LoggerMixin):
                                      prediction_region=prediction_region,
                                      partition=self.partition,
                                      spt_region=self.spt_region,
-                                     error_type=self.error_type,
                                      output_prefix=output_prefix)
 
     def prepare_for_predictions(self, forecast_len):
@@ -390,8 +384,7 @@ class AutoARIMASolver(log_util.LoggerMixin):
         See AutoARIMASolverPickler for details.
         '''
         # delegate to the pickler
-        pickler = AutoARIMASolverPickler(solver_metadata=self.metadata,
-                                         error_type=self.error_type)
+        pickler = AutoARIMASolverPickler(solver_metadata=self.metadata)
         pickler.save_solver(self)
 
     def __str__(self):
@@ -405,226 +398,6 @@ class AutoARIMASolver(log_util.LoggerMixin):
             'Error function: {}'.format(self.error_type)
         ]
         return '\n'.join(lines)
-
-
-class PredictionQueryResult(BaseRegion):
-    '''
-    A region that represents the result of a prediction query over a prediction region.
-    For each point in the prediction region, it contains the following:
-
-    - The forecast series: from forecast_region
-    - The generalization error: from generalization_errors
-    - The cluster index associated to the cluster for which the point is identified: from partition
-    '''
-
-    def __init__(self, solver_metadata, distance_measure,
-                 forecast_len, is_future, forecast_subregion, test_subregion,
-                 error_subregion, prediction_region,
-                 partition, spt_region, error_type, output_prefix):
-        '''
-        Constructor, uses a subset of the numpy matrix that backs the forecast region, the subset
-        is taken using the prediction region coordinates.
-        '''
-        super(PredictionQueryResult, self).__init__(forecast_subregion.as_numpy)
-
-        # solver metadata
-        self.metadata = solver_metadata
-        self.region_metadata = solver_metadata.region_metadata
-        self.clustering_metadata = solver_metadata.clustering_metadata
-        self.model_params = solver_metadata.model_params
-
-        # query-specific
-        self.forecast_len = forecast_len
-        self.is_future = is_future
-        self.forecast_subregion = forecast_subregion
-        self.test_subregion = test_subregion
-        self.error_subregion = error_subregion
-
-        # the offset caused by changing coordinates to the prediction region
-        self.prediction_region = prediction_region
-        self.offset_x, self.offset_y = prediction_region.x1, prediction_region.y1
-
-        # valid for the entire domain region
-        self.partition = partition
-        self.spt_region = spt_region
-        self.error_type = error_type
-        self.output_prefix = output_prefix
-
-    def forecast_at(self, relative_point):
-        '''
-        Forecast at point, where (0, 0) is the corner of the prediction region.
-        '''
-        return self.forecast_subregion.series_at(relative_point)
-
-    def test_at(self, relative_point):
-        '''
-        Test series at point, where (0, 0) is the corner of the prediction region.
-        Should only be used when is_future is False
-        '''
-        if self.is_future:
-            raise ValueError('Cannot extract test data for out-of-sample')
-        return self.test_subregion.series_at(relative_point)
-
-    def error_at(self, relative_point):
-        '''
-        Generalization error at point, where (0, 0) is the corner of the prediction region.
-        '''
-        return self.error_subregion.value_at(relative_point)
-
-    def cluster_index_of(self, relative_point):
-        '''
-        Cluster that has point as member, where (0, 0) is the corner of the prediction region.
-        '''
-        # undo the prediction offset to get coordinates in the domain region
-        domain_point = Point(relative_point.x + self.offset_x, relative_point.y + self.offset_y)
-
-        # return the value of the mask at this point
-        return self.partition.membership_of_points([domain_point])[0]
-
-    def absolute_coordinates_of(self, relative_point):
-        '''
-        Computes the original coordinates of the raw dataset. This takes into consideration
-        that the domain region is a subset of the complete raw dataset! Uses the region metadata.
-        '''
-        # undo the prediction offset to get coordinates in the domain region
-        domain_point = Point(relative_point.x + self.offset_x, relative_point.y + self.offset_y)
-
-        # now get the absolute coordinates, because the domain region can be a subset too
-        return self.region_metadata.absolute_position_of_point(domain_point)
-
-    def get_csv_file_path(self, prefix):
-        '''
-        Returns a string representing a CSV file for this query.
-        The prefix can be used to differentiate between the CSV of the query and the CSV of the
-        query summary.
-        '''
-        solver_csv_dir = self.metadata.output_dir(self.output_prefix)
-        csv_t = '{}-{!r}__region-{}-{}-{}-{}__f{}__{}.csv'
-        csv_filename = csv_t.format(prefix,
-                                    self.clustering_metadata,
-                                    self.prediction_region.x1,
-                                    self.prediction_region.x2,
-                                    self.prediction_region.y1,
-                                    self.prediction_region.y2,
-                                    self.forecast_len,
-                                    self.error_type)
-
-        return os.path.join(solver_csv_dir, csv_filename)
-
-    def save_as_csv(self):
-        '''
-        Writes two CSV files:
-        1. The prediction results (query-result-[...]), one tuple for each point in the prediction
-           query, and with these columns:
-            1.a. the absolute coordinates of the point
-            1.b. the index of the cluster that contains the point
-            1.c. generalization error at the point (see error_at())
-            1.d. the forecasted series at the point (see forecast_at())
-            1.e. (is_future False only) the test series at the point (see test_at())
-
-           The name of the CSV indicates the forecast length and is_future flag.
-
-        2. The prediction summary (query-summary-[...]), a single tuple with the following info:
-            2.a. clustering columns, e.g. k, seed
-            2.b. number of clusters that intersect the prediction region
-            2.c. MSE of the generalization errors in the prediction result
-
-        The get_csv_file_path(prefix) method is used to calculate the file paths.
-        '''
-
-        # ensure output dir
-        fs_util.mkdir(self.metadata.output_dir(self.output_prefix))
-
-        np.set_printoptions(formatter={'float': '{: 0.3f}'.format})
-
-        # take of future flag here... ugly but necessary because summary is independant of flag
-        future_str = ''
-        if self.is_future:
-            future_str = '-future'
-        result_prefix = 'query-result{}'.format(future_str)
-
-        # write the prediction results
-        result_csv_file = self.get_csv_file_path(result_prefix)
-        with open(result_csv_file, 'w', newline='') as csv_file:
-            csv_writer = csv.writer(csv_file, delimiter=' ', quotechar='|',
-                                    quoting=csv.QUOTE_MINIMAL)
-
-            # the header
-            header_row = ['Point', 'cluster_index', 'error', 'forecast_series']
-
-            # when in-sample, add the test series
-            if not self.is_future:
-                header_row.append('test_series')
-
-            # write header
-            csv_writer.writerow(header_row)
-
-            # write a tuple for each point in prediction region
-            for relative_point in self:
-
-                # 1.a. the absolute coordinates of the point
-                coords = self.absolute_coordinates_of(relative_point)
-
-                # 1.b. the index of the cluster that contains the point
-                cluster_index = self.cluster_index_of(relative_point)
-
-                # 1.c. generalization error at the point
-                error = self.error_at(relative_point)
-                error_str = '{:.3f}'.format(error)
-
-                # 1.d. the forecasted series at the point
-                forecast = self.forecast_at(relative_point)
-
-                point_tuple = [coords, cluster_index, error_str, forecast]
-
-                # 1.e. (is_future False only) the test series at the point
-                if not self.is_future:
-                    point_tuple.append(self.test_at(relative_point))
-
-                csv_writer.writerow(point_tuple)
-
-        self.logger.info('Wrote CSV of prediction result at: {}'.format(result_csv_file))
-
-        # write the prediction summary
-        summary_csv_file = self.get_csv_file_path('query-summary')
-        with open(summary_csv_file, 'w', newline='') as csv_file:
-            csv_writer = csv.writer(csv_file, delimiter=' ', quotechar='|',
-                                    quoting=csv.QUOTE_MINIMAL)
-
-            # write header, the clustering algorithm may have many columns
-            clustering_dict = self.clustering_metadata.as_dict()
-            clustering_header = clustering_dict.keys()
-            csv_header = list(clustering_header)
-            csv_header.extend(['clusters', 'mse'])
-            csv_writer.writerow(csv_header)
-
-            # 2.a. clustering columns, e.g. k, seed
-            clustering_data = clustering_dict.values()
-
-            # 2.b. number of clusters that intersect the prediction region
-            clusters_each_point = [
-                self.cluster_index_of(relative_point)
-                for relative_point
-                in self
-            ]
-            unique_clusters = list(set(clusters_each_point))
-            cluster_count = len(unique_clusters)
-
-            # 2.c. MSE of the generalization errors in the prediction result
-            generalization_errors = [
-                self.error_at(relative_point)
-                for relative_point
-                in self
-            ]
-            mse_error = arrays_util.mean_squared(generalization_errors)
-            mse_error_str = '{:.3f}'.format(mse_error)
-
-            # write a single row with this data
-            csv_row = list(clustering_data)
-            csv_row.extend([str(cluster_count), mse_error_str])
-            csv_writer.writerow(csv_row)
-
-        self.logger.info('Wrote CSV of prediction summary at: {}'.format(summary_csv_file))
 
 
 class AutoARIMASolverPickler(log_util.LoggerMixin):
@@ -644,7 +417,7 @@ class AutoARIMASolverPickler(log_util.LoggerMixin):
                     |- auto_arima_<auto_arima_params>_errors_<error_type>.pkl
     '''
 
-    def __init__(self, solver_metadata, error_type):
+    def __init__(self, solver_metadata):
 
         # solver metadata
         self.metadata = solver_metadata
@@ -652,8 +425,7 @@ class AutoARIMASolverPickler(log_util.LoggerMixin):
         self.distance_measure = self.metadata.distance_measure
         self.clustering_metadata = self.metadata.clustering_metadata
         self.region_metadata = self.metadata.region_metadata
-
-        self.error_type = error_type
+        self.error_type = self.metadata.error_type
 
     def save_solver(self, auto_arima_solver):
         '''
@@ -730,7 +502,6 @@ class AutoARIMASolverPickler(log_util.LoggerMixin):
                                         self.error_type))
 
         return AutoARIMASolver(solver_metadata=self.metadata,
-                               error_type=self.error_type,
                                partition=partition,
                                arima_model_region_training=arima_model_region_training,
                                arima_model_region_whole=arima_model_region_whole,

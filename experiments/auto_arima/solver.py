@@ -145,8 +145,9 @@ def train_request(args):
     trainer = AutoARIMATrainer(region_metadata=region_metadata,
                                clustering_metadata=clustering_metadata,
                                distance_measure=DistanceByDTW(),
-                               auto_arima_params=auto_arima_params)
-    solver = trainer.train(args.error)
+                               auto_arima_params=auto_arima_params,
+                               error_type=args.error)
+    solver = trainer.train()
 
     # persist this solver for later use
     solver.save()
@@ -170,10 +171,10 @@ def predict_request(args):
     solver_metadata = SolverMetadata(region_metadata=region_metadata,
                                      clustering_metadata=clustering_metadata,
                                      distance_measure=distance_measure,
-                                     model_params=auto_arima_params)
-
-    pickler = AutoARIMASolverPickler(solver_metadata=solver_metadata,
+                                     model_params=auto_arima_params,
                                      error_type=args.error)
+
+    pickler = AutoARIMASolverPickler(solver_metadata=solver_metadata)
     solver = pickler.load_solver()
     print('')
     print('*********************************')
@@ -193,27 +194,9 @@ def predict_request(args):
 
     for relative_point in prediction_result:
 
-        coords = prediction_result.absolute_coordinates_of(relative_point)
-        cluster_index = prediction_result.cluster_index_of(relative_point)
-
-        # the forecast, description changes if "--future" was passed
-        forecast = prediction_result.forecast_at(relative_point)
-        forecast_str = 'Forecast:'
-        if args.future:
-            forecast_str = 'Forecast (future):'
-
-        error = prediction_result.error_at(relative_point)
         print('*********************************')
-        print('Point: {} (cluster {})'.format(coords, cluster_index))
-        print('{:<20} {}'.format(forecast_str, forecast))
-
-        if not args.future:
-            # also show test series
-            test_str = 'Test:'
-            test_series = prediction_result.test_at(relative_point)
-            print('{:<20} {}'.format(test_str, test_series))
-
-        print('Error ({}): {:.3f}'.format(args.error, error))
+        text = prediction_result.lines_for_point(relative_point)
+        print('\n'.join(text))
 
     prediction_result.save_as_csv()
 
