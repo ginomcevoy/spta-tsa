@@ -80,7 +80,7 @@ def configure_parent(parent_parser):
 
     # auto_arima_id, see metadata.arima
     auto_arima_options = predefined_auto_arima().keys()
-    parent_parser.add_argument('auto_arima', help='ID of auto arima clustering experiment',
+    parent_parser.add_argument('auto_arima', help='ID of auto arima experiment',
                                choices=auto_arima_options)
 
     # clustering algorithm

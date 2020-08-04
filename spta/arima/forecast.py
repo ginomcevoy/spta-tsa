@@ -12,6 +12,7 @@ from spta.region import Point
 from spta.region.forecast import ForecastModelRegion
 from spta.region.train import SplitTrainingAndTestLast
 from spta.region.error import ErrorAnalysis
+from spta.region.scaling import SpatioTemporalScaled
 
 from spta.util import log as log_util
 
@@ -126,6 +127,16 @@ class ArimaForecasting(log_util.LoggerMixin):
         forecast_region_each.name = 'forecast_region_each'
         time_forecast_end = time.time()
         time_forecast = time_forecast_end - time_forecast_start
+
+        # handle scaling of forecasted series:
+        # if the models trained with scaled data, then the forecast will also be scaled
+        # this does not undo the scaling, but it gives a chance to be descaled in error_analysis...
+        # TODO improve approach to: a) cleaner, b) have access to both scaled/descaled?
+        if self.spt_region.has_scaling():
+            self.logger.debug('Descaling forecast_region_each')
+            forecast_region_each = SpatioTemporalScaled(forecast_region_each,
+                                                        scale_min=self.spt_region.scale_min,
+                                                        scale_max=self.spt_region.scale_max)
 
         # save the forecast region with each model
         self.forecast_region_each = forecast_region_each

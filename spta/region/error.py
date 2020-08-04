@@ -142,6 +142,7 @@ class MeasureForecastingError(FunctionRegionScalar):
         '''
 
         # handle descaling here:
+        # TODO this may fail if forecast had no scaling information!
         forecast_region_ok = forecast_region
         if forecast_region.has_scaling():
             self.logger.debug('About to descale forecast region')
