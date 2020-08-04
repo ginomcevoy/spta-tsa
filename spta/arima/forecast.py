@@ -16,7 +16,6 @@ from spta.region.scaling import SpatioTemporalScaled
 
 from spta.util import log as log_util
 
-# from .training import ArimaTrainer, ExtractAicFromArima, ExtractPDQFromAutoArima
 from . import training
 
 
