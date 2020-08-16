@@ -65,13 +65,14 @@ class DistanceByDTW(DistanceBetweenSeries):
 
             # calculate the distances to all other series
             self.logger.debug('Calculating all distances at: {}...'.format(i))
-            distances_for_i = [
-                self.measure(series_i, other_series)
-                for other_series
-                in X
-            ]
-            self.logger.debug('Got: {}'.format(str(distances_for_i)))
-            distance_matrix[i, :] = distances_for_i
+            # distances_for_i = [
+            #     self.measure(series_i, other_series)
+            #     for other_series
+            #     in X
+            # ]
+            # self.logger.debug('Got: {}'.format(str(distances_for_i)))
+            # distance_matrix[i, :] = distances_for_i
+            distance_matrix[i, :] = self.compute_distances_to_a_series(series_i, X)
 
         return distance_matrix
 
@@ -87,20 +88,35 @@ class DistanceByDTW(DistanceBetweenSeries):
 
                 # for point (i, j), calculate the distances to all other points
                 point = Point(i, j)
-                self.logger.debug('DTW at: {}...'.format(str(point)))
+                self.logger.debug('DTW of all points against: {}...'.format(str(point)))
                 point_series = spatio_temporal_region.series_at(point)
-                distances_at_point = [
-                    self.measure(point_series, other_series)
-                    for other_series
-                    in sptr_2d
-                ]
+
+                # distances_at_point = [
+                #     self.measure(point_series, other_series)
+                #     for other_series
+                #     in sptr_2d
+                # ]
                 # self.logger.debug('Got: {}'.format(str(distances_at_point)))
-                distance_matrix[i * y_len + j, :] = distances_at_point
+                # distance_matrix[i * y_len + j, :] = distances_at_point
+                distance_matrix[i * y_len + j, :] = \
+                    self.compute_distances_to_a_series(point_series, sptr_2d)
 
         # self.logger.debug('Distance matrix:')
         self.logger.debug(str(distance_matrix))
 
         return distance_matrix
+
+    def compute_distances_to_a_series(self, a_series, iterable_of_other_series):
+        '''
+        Given a single series and some iterable collection of other series, (e.g a list),
+        compute the distance between the first series and all the other series.
+        The output is an array of distances.
+        '''
+        return [
+            self.measure(a_series, other_series)
+            for other_series
+            in iterable_of_other_series
+        ]
 
     def __repr__(self):
         '''
@@ -181,10 +197,18 @@ class DistanceBySpatialDTW(DistanceByDTW):
 
 
 if __name__ == '__main__':
+    from spta.util import log as log_util
+    log_util.setup_log('DEBUG')
 
-    # test loading distance matrix for SP_RJ
-    from spta.dataset import sp_rj
+    # test the calculation of a small matrix
+    from experiments.metadata.region import predefined_regions
 
-    distance_measure = DistanceByDTW()
-    distance_measure.load_distance_matrix_2d(sp_rj.SP_RJ_DISTANCES, sp_rj.SP_RJ_REGION)
-    print('read distance matrix SP_RJ: {}'.format(distance_measure.distance_matrix.shape))
+    spt_region_md = predefined_regions()['nordeste_small_1y_1ppd']
+    spt_region = spt_region_md.create_instance()
+
+    distanceDTW = DistanceByDTW()
+    distance_matrix = distanceDTW.compute_distance_matrix_sptr(spt_region)
+
+    distances_to_0_0 = distance_matrix[0]
+    combined = distanceDTW.combine(distances_to_0_0)
+    print('Combined distances to (0, 0): {:.2f}'.format(combined))

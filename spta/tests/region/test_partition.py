@@ -3,7 +3,7 @@ Unit tests for spta.region.partition module.
 '''
 import unittest
 
-from spta.region import Point
+from spta.region import Point, Region
 from spta.region.partition import PartitionRegionCrisp
 from spta.tests.stub import stub_partition, stub_region
 
@@ -146,3 +146,54 @@ class TestPartitionRegionCrisp(unittest.TestCase):
         self.assertEqual(merged.value_at(Point(3, 2)), 25)  # cluster1
         self.assertEqual(merged.value_at(Point(3, 3)), 25)  # cluster1
         self.assertEqual(merged.value_at(Point(3, 4)), 64)  # cluster2
+
+    def test_find_medoids_of_clusters_intersecting_with_1(self):
+
+        # given a cluster partition with a consistent list of medoids
+        partition = PartitionRegionCrisp(self.partition_np, self.k)
+        partition.medoids = [Point(0, 3), Point(1, 0), Point(1, 3)]
+
+        # given a 2x2 region that should intersect with clusters 0 and 1
+        region_2d = Region(0, 2, 0, 2)
+
+        # when
+        result = partition.find_medoids_of_clusters_intersecting_with(region_2d)
+
+        # then medoids for 0 and 1 are returned
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[0], Point(0, 3))
+        self.assertEqual(result[1], Point(1, 0))
+
+    def test_find_medoids_of_clusters_intersecting_with_2(self):
+
+        # given a cluster partition with a consistent list of medoids
+        partition = PartitionRegionCrisp(self.partition_np, self.k)
+        partition.medoids = [Point(0, 3), Point(1, 0), Point(1, 3)]
+
+        # given a 2x2 region that should intersect with all clusters
+        region_2d = Region(2, 4, 1, 3)
+
+        # when
+        result = partition.find_medoids_of_clusters_intersecting_with(region_2d)
+
+        # then all medoids are returned
+        self.assertEqual(len(result), 3)
+        self.assertEqual(result[0], Point(0, 3))
+        self.assertEqual(result[1], Point(1, 0))
+        self.assertEqual(result[2], Point(1, 3))
+
+    def test_find_medoids_of_clusters_intersecting_with_3(self):
+
+        # given a cluster partition with a consistent list of medoids
+        partition = PartitionRegionCrisp(self.partition_np, self.k)
+        partition.medoids = [Point(0, 3), Point(1, 0), Point(1, 3)]
+
+        # given a 2x2 region that should intersect with only cluster1
+        region_2d = Region(2, 4, 2, 4)
+
+        # when
+        result = partition.find_medoids_of_clusters_intersecting_with(region_2d)
+
+        # then only medoid from cluster1 is returned
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0], Point(1, 0))

@@ -209,7 +209,7 @@ class PartitionRegion(BaseRegion):
     def try_from_pickle(cls, pickle_full_path):
         '''
         Tries to load a partition via pickle given a file path, and returns the instance.
-        Raises an exception if the pickle fails, e.g. if the file does not exist.
+        Raises an excepti-on if the pickle fails, e.g. if the file does not exist.
         '''
         logger = log_util.LoggerMixin().logger
         logger.debug('Attempting to load cluster partition at {}'.format(pickle_full_path))
@@ -342,6 +342,40 @@ class PartitionRegionCrisp(PartitionRegion):
         # now call merge, should work as expected: the values in each cluster are the same value
         # as their own representative
         return self.merge_clusters_2d(repeated_clusters)
+
+    def find_indices_of_clusters_intersecting_with(self, region_2d):
+        '''
+        Given a 2d region, find the clusters that share common points (i.e. intersect) with it.
+        Returns a list of integers representing the cluster indices.
+
+        Assumes that the coordinates of this partition match with the region (same origin).
+        '''
+        # find the membership of each point in the region using its index
+        # the index needs to be calculated for each point
+        point_indices = []
+        for x in range(region_2d.x1, region_2d.x2):
+            for y in range(region_2d.y1, region_2d.y2):
+                point_index_x_y = x * self.y_len + y
+                point_indices.append(point_index_x_y)
+        point_memberships = self.membership_of_point_indices(point_indices)
+
+        # this retrieves indices without repetition
+        return list(set(point_memberships))
+
+    def find_medoids_of_clusters_intersecting_with(self, region_2d):
+        '''
+        Given a 2d region, find the medoids (as points) of the clusters that share common points
+        (i.e. intersect) with it.
+        Uses find_indices_of_clusters_intersecting_with(region_2d) to find the indices.
+        '''
+        # need the medoids...
+        if not hasattr(self, 'medoids'):
+            raise ValueError('Partition does not have the required medoids!')
+
+        # first find the intersected clusters, then retrieve their medoids using the index
+        # assuming that the medoids are ordered by the cluster index!
+        point_memberships = self.find_indices_of_clusters_intersecting_with(region_2d)
+        return [self.medoids[cluster_index] for cluster_index in point_memberships]
 
     @classmethod
     def from_membership_array(cls, membership, x_len, y_len):

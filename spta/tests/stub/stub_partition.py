@@ -5,8 +5,13 @@ def crisp_membership_stub():
     '''
     A 2-d array indicating membership to a cluster, from a crisp clustering algorithm with k=3.
     Assumes a 4x5 region.
+
+    0   1   1   0   0
+    1   1   2   2   2
+    0   2   1   1   2
+    0   0   1   1   2
     '''
-    partition_np = np.empty((4, 5))
+    partition_np = np.empty((4, 5), dtype=np.int8)
 
     partition_np[0, 0] = 0
     partition_np[0, 1] = 1

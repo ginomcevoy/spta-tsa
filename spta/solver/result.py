@@ -4,6 +4,7 @@ import os
 
 from spta.region import Point
 from spta.region.base import BaseRegion
+from spta.region.train import SplitTrainingAndTestLast
 
 from spta.util import fs as fs_util
 from spta.util import arrays as arrays_util
@@ -120,7 +121,7 @@ class PredictionQueryResult(BaseRegion):
         A tuple that summarizes this result, e.g. when exported via CSV.
         Without clustering, only the MSE appears in the summary.
         '''
-        # 2.c. MSE of the generalization errors in the prediction result
+        # 2.d. MSE of the generalization errors in the prediction result
         mse_error = self.summary_generalization_mse()
         mse_error_str = '{:.3f}'.format(mse_error)
 
@@ -166,7 +167,9 @@ class PredictionQueryResult(BaseRegion):
         2. The prediction summary (query-summary-[...]), a single tuple with the following info:
             2.a. clustering columns, e.g. k, seed
             2.b. number of clusters that intersect the prediction region
-            2.c. MSE of the generalization errors in the prediction result
+            2.c. dtw_r_m: a measure of the distances between the *test* series of the relevant
+                 medoids and the test series of the prediction region
+            2.d. MSE of the generalization errors in the prediction result
 
         The get_csv_file_path(prefix) method is used to calculate the file paths.
         '''
@@ -434,6 +437,9 @@ class ResultWithPartition(PredictionQueryResult):
         # add a column to show count of unique clusters
         summary_header_with_clustering.append('clusters')
 
+        # add a column for the combined distances to the medoids
+        summary_header_with_clustering.append('dtw_r_m')
+
         # add the rest of the columns
         summary_header_decorated = self.decorated.summary_header()
         summary_header_with_clustering.extend(summary_header_decorated)
@@ -451,8 +457,14 @@ class ResultWithPartition(PredictionQueryResult):
         unique_clusters = self.summary_unique_clusters()
         cluster_count = len(unique_clusters)
 
+        # 2.c. dtw_r_m: a measure of the distances between the *test* series of the relevant
+        #      medoids and the test series of the prediction region
+        dtw_r_m = self.summary_distances_between_region_and_medoids()
+        dtw_r_m_string = '{:.2f}'.format(dtw_r_m)
+
         summary_with_clustering = list(clustering_data)
         summary_with_clustering.append(cluster_count)
+        summary_with_clustering.append(dtw_r_m_string)
 
         # add the rest of the summary
         summary_tuple_decorated = self.decorated.summary_tuple()
@@ -466,19 +478,96 @@ class ResultWithPartition(PredictionQueryResult):
 
         # to find the cluster indices for points in the prediction region,
         # convert points to domain coordinates
-        domain_points = [
-            self.to_domain_coordinates(relative_point)
-            for relative_point
-            in self
-        ]
-        clusters_each_point = [
-            self.cluster_index_of(domain_point)
-            for domain_point
-            in domain_points
+        # domain_points = [
+        #     self.to_domain_coordinates(relative_point)
+        #     for relative_point
+        #     in self
+        # ]
+        # clusters_each_point = [
+        #     self.cluster_index_of(domain_point)
+        #     for domain_point
+        #     in domain_points
+        # ]
+
+        # # find the unique indices
+        # return list(set(clusters_each_point))
+
+        # delegate to the partition
+        return self.partition.find_indices_of_clusters_intersecting_with(self.prediction_region)
+
+    def summary_distances_between_region_and_medoids(self):
+        '''
+        Returns a measure for the distance (e.g. DTW) between the points in the prediction region
+        and the relevant medoids. This is calculated as follows:
+
+        1. Given the prediction region, find the medoids of the clusters that share common points
+           (i.e. intersect) with it.
+        2. Go to the dataset, and split the points in the prediction region in training/test,
+           according to the tp value used in the solver.
+        3. For each point in the prediction region, calcualte the distance (e.g. DTW) between the
+           its *test* series and the test series of each medoid. This will create a matrix for
+           each medoid.
+        4. Combine the distances in each matrix (e.g. sum for DTW) to get a value for each medoid.
+        5. Use root mean square to obtain a single value that represents the distance between
+           the prediction region and the medoids.
+
+        TODO: assuming test_len = forecast_len, time to break this assumption!
+        '''
+
+        # For 1.
+        # this retrieves the medoids of the relevant clusters, as points
+        relevant_medoids = \
+            self.partition.find_medoids_of_clusters_intersecting_with(self.prediction_region)
+        self.logger.debug('Relevant medoids: {}'.format(relevant_medoids))
+
+        # For 2.
+        # it is more convenient to split the entire region into training and test
+        # (as opposed to only the prediction region) because we also need to split the series
+        # at the medoids
+
+        # TODO: assuming test_len = forecast_len, time to break this assumption!
+        splitter = SplitTrainingAndTestLast(self.forecast_len)
+        (training_subset, test_subset) = splitter.split(self.spt_region)
+
+        prediction_test_subset = test_subset.region_subset(self.prediction_region)
+
+        # this is a list of the test series in the prediction region
+        test_series_list = [
+            point_series_tuple[1]
+            for point_series_tuple
+            in prediction_test_subset
         ]
 
-        # find the unique indices
-        return list(set(clusters_each_point))
+        # For 3.
+        # calculate the distances to each medoid
+        distance_measure = self.metadata.distance_measure
+        combined_distances_to_medoids = []
+        for medoid in relevant_medoids:
+
+            medoid_test_series = test_subset.series_at(medoid)
+            self.logger.debug('Test series at medoid {}: {}'.format(medoid, medoid_test_series))
+
+            # this is a list
+            ds = distance_measure.compute_distances_to_a_series(medoid_test_series,
+                                                                test_series_list)
+
+            ds_str = ['{0:0.2f}'.format(d) for d in ds]
+            self.logger.debug('DTWs to medoid {}: {}'.format(medoid, ds_str))
+
+            # For 4.
+            # combined all distances to a medoid into a single value
+            combined = distance_measure.combine(ds)
+            self.logger.debug('Combined DTW to medoid {}: {:.2f}'.format(medoid, combined))
+
+            combined_distances_to_medoids.append(combined)
+
+        # For 5.
+        # use RMS
+        distances_between_region_and_medoids = \
+            arrays_util.root_mean_squared(combined_distances_to_medoids)
+        self.logger.debug('dtw_r_m: {:.2f}'.format(distances_between_region_and_medoids))
+
+        return distances_between_region_and_medoids
 
     def result_prefix(self):
         '''
