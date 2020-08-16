@@ -34,7 +34,7 @@ region. Then, for each point, use its own ARIMA model to make an in-sample predi
 series, and calculate the forecast errors for each point. Finally, print the results and save as
 CSV.'''
     usage = '%(prog)s <region_id> <auto_arima_id> <lat1 lat2 long1 long2> [--error error_type ' \
-        '[--flen forecast_len] [--log log_level]'
+        '[--tf forecast_len] [--log log_level]'
     parser = argparse.ArgumentParser(prog='auto-arima-solver-each', description=desc, usage=usage)
 
     # region_id required, see metadata.region
@@ -57,9 +57,9 @@ CSV.'''
     error_help_msg = 'error type (default: %(default)s)'
     parser.add_argument('--error', help=error_help_msg, default='sMAPE', choices=error_options)
 
-    # flen (forecast length) is optional and defaults to 8
+    # tf (forecast length) is optional and defaults to 8
     forecast_help_msg = 'number of samples for forecast/testing (default: %(default)s)'
-    parser.add_argument('--flen', help=forecast_help_msg, default=8, type=int)
+    parser.add_argument('--tf', help=forecast_help_msg, default=8, type=int)
 
     # other optional arguments
     log_options = ('WARN', 'INFO', 'DEBUG')
@@ -76,7 +76,7 @@ def process_request(args):
 
     # parse to get metadata
     region_metadata, auto_arima_params, error_type = metadata_from_args(args)
-    forecast_len = args.flen
+    forecast_len = args.tf
 
     # get region
     # NOTE: x = lat, y = long!
@@ -84,8 +84,11 @@ def process_request(args):
     prediction_region = Region(int(args.lat1), int(args.lat2), int(args.long1), int(args.long2))
 
     # create metadata without clustering support
+    # the number of test samples used to train the models is equal to the forecast length,
+    # to keep everything 'in-sample'
     metadata_builder = SolverMetadataBuilder(region_metadata=region_metadata,
                                              model_params=auto_arima_params,
+                                             test_len=forecast_len,
                                              error_type=error_type)
     solver_metadata = metadata_builder.build()
 
@@ -128,7 +131,7 @@ def process_request(args):
                                                   prediction_region=prediction_region,
                                                   spt_region=spt_region,
                                                   output_home='outputs',
-                                                  is_future=False)
+                                                  is_out_of_sample=False)
     prediction_result = result_builder.build()
 
     # for printing forecast and error values

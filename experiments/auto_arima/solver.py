@@ -26,6 +26,10 @@ from experiments.metadata.arima import predefined_auto_arima
 from experiments.metadata.region import predefined_regions
 
 
+# default number of samples used for testing
+TEST_SAMPLES = 8
+
+
 def processRequest():
 
     # the parent for both train train and predict actions
@@ -94,6 +98,14 @@ def configure_parent(parent_parser):
     parent_parser.add_argument('--seed', help='Random seed for k-medoids (default: %(default)s)',
                                default=1, type=int)
 
+    # tp stands for "time past"
+    # The number of samples used as test series (out-of-sample test) to decide how to train a model
+    # (training subset) and calculate the forecast error (test_subset)
+    # this value is required for both train and predict
+    # the value used in predict needs to match a previously trained solver
+    help_msg = 'Number of past samples for testing (default: %(default)s)'
+    parent_parser.add_argument('--tp', help=help_msg, default=TEST_SAMPLES, type=int)
+
     # error type is optional and defaults to sMAPE
     error_options = error_functions().keys()
     error_help_msg = 'error type (default: %(default)s)'
@@ -124,9 +136,10 @@ def configure_predict_parser(predict_parser):
     predict_parser.add_argument('long1', help='First longitude index relative to region (west)')
     predict_parser.add_argument('long2', help='Second longitude index relative to region (east)')
 
-    # optionally request out-of-sample predictions, instead of in-sample
-    predict_parser.add_argument('--future', help='predict a future series (out-of-sample) instead',
-                                default=False, action='store_true')
+    # by default, prediction is made over the test series (in-sample)
+    # optionally request out-of-sample predictions instead
+    tf_msg = 'predict a future series (out-of-sample) of this length'
+    predict_parser.add_argument('--tf', help=tf_msg, default=0, type=int)
 
     # function called after action is parsed
     predict_parser.set_defaults(func=predict_request)
@@ -140,13 +153,17 @@ def train_request(args):
     # parse to get metadata
     region_metadata, clustering_metadata, auto_arima_params = metadata_from_args(args)
 
-    # get a trainer, and train to get a solver
-    # default values for test/training...
+    # get a trainer using metadata
+    # the training requires a number of samples used as test data (data retained from the model
+    # in order to calculate forecast error), this is test_len (--tp)
     trainer = AutoARIMATrainer(region_metadata=region_metadata,
                                clustering_metadata=clustering_metadata,
                                distance_measure=DistanceByDTW(),
                                auto_arima_params=auto_arima_params,
+                               test_len=args.tp,
                                error_type=args.error)
+
+    # train to get a solver
     solver = trainer.train()
 
     # persist this solver for later use
@@ -170,6 +187,7 @@ def predict_request(args):
     # create metadata with clustering support
     builder = SolverMetadataBuilder(region_metadata=region_metadata,
                                     model_params=auto_arima_params,
+                                    test_len=args.tp,
                                     error_type=args.error)
     solver_metadata = builder.with_clustering(clustering_metadata=clustering_metadata,
                                               distance_measure=distance_measure).build()
@@ -187,10 +205,9 @@ def predict_request(args):
     # for printing forecast and error values
     np.set_printoptions(formatter={'float': '{: 0.3f}'.format})
 
-    # make a prediction, the forecast may be in-sample (future=False) or out-of-sample
-    # (future=True)
+    # make a prediction, the forecast may be in-sample (tf=0) or out-of-sample (tf=<samples>)
     # The prediction result has all the necessary information and can be iterated by point
-    prediction_result = solver.predict(prediction_region, is_future=args.future)
+    prediction_result = solver.predict(prediction_region, forecast_len=args.tf)
 
     for relative_point in prediction_result:
 

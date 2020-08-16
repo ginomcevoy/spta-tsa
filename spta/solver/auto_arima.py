@@ -25,9 +25,6 @@ from spta.util import plot as plot_util
 from .metadata import SolverMetadataBuilder
 from .result import PredictionQueryResultBuilder
 
-# default forecast length
-FORECAST_LENGTH = 8
-
 
 class AutoARIMATrainer(log_util.LoggerMixin):
     '''
@@ -36,11 +33,12 @@ class AutoARIMATrainer(log_util.LoggerMixin):
     '''
 
     def __init__(self, region_metadata, clustering_metadata, distance_measure, auto_arima_params,
-                 error_type):
+                 test_len, error_type):
         self.region_metadata = region_metadata
         self.clustering_metadata = clustering_metadata
         self.distance_measure = distance_measure
         self.auto_arima_params = auto_arima_params
+        self.test_len = test_len
         self.error_type = error_type
 
         # flag
@@ -60,18 +58,31 @@ class AutoARIMATrainer(log_util.LoggerMixin):
         # create metadata with clustering support
         builder = SolverMetadataBuilder(region_metadata=self.region_metadata,
                                         model_params=self.auto_arima_params,
+                                        test_len=self.test_len,
                                         error_type=self.error_type)
         self.metadata = builder.with_clustering(clustering_metadata=self.clustering_metadata,
                                                 distance_measure=self.distance_measure).build()
 
         self.prepared = True
 
-    def train(self, training_len=None, test_len=FORECAST_LENGTH, output_home='outputs'):
+    def train(self, output_home='outputs'):
         '''
         Partition the region into clusters, then train the ARIMA models on the cluster medoids.
 
-        This code assumes that each temporal series is split into training and test subseries.
-        Needs to change when we use a fixed number of points in the past to train the model.
+        The models are trained using the training samples, and the test samples (out-of-time for
+        the trained models) are used to calculated the forecast error. After this is done, the
+        models are re-trained using the full dataset, in order to improve out-of-sample forecast,
+        called the 'future' scenario.
+
+        NOTE 1: Currently, the auto-ARIMA is used again when using the full dataset for training
+        in the 'future' scenario (out-of-sample forecasting),
+        this may create new hyper-parameters when compared to the trained model. This should be
+        improved, the original hyper-parameters should be kept in the full-dataset model for a
+        model re-fitting, instead of training a completely new model.
+
+        NOTE 2: This code assumes that each temporal series is split into training and test
+        subseries, where training_len = series_len - test_len. This assumption will be reconsidered
+        if a new requirement to specify number of training samples appears.
         '''
         if not self.prepared:
             self.prepare_for_training()
@@ -80,7 +91,7 @@ class AutoARIMATrainer(log_util.LoggerMixin):
         spt_region = self.region_metadata.create_instance()
 
         # create training/test regions
-        splitter = SplitTrainingAndTestLast(test_len)
+        splitter = SplitTrainingAndTestLast(self.test_len)
         (training_region, test_region) = splitter.split(spt_region)
 
         # get the cluster partition and corresponding medoids, save the CSV and pickle
@@ -105,8 +116,7 @@ class AutoARIMATrainer(log_util.LoggerMixin):
         # that is calculated using the test dataset.
         # TODO a lot of assumptions here, work them out later
         generalization_errors = self.calculate_errors(arima_model_region_training,
-                                                      training_region, test_region,
-                                                      forecast_len=test_len)
+                                                      training_region, test_region)
         self.logger.info('Overall error: {:.4f}'.format(generalization_errors.overall_error))
 
         # If the user sets the future flag for prediction, we want to use the entire series
@@ -161,13 +171,19 @@ class AutoARIMATrainer(log_util.LoggerMixin):
         # the data with this instance
         return ArimaModelRegion(arima_region.as_numpy)
 
-    def calculate_errors(self, arima_model_region, training_region, test_region, forecast_len):
+    def calculate_errors(self, arima_model_region, training_region, test_region):
         '''
         Calculate the generalization error for these ARIMA models: it is the prediction error
-        that is calculated using the test dataset.
+        that is calculated using the test dataset. For these ARIMA models, the test data is
+        out-of-sample, because they were not trained with it.
 
+        The number of forecast samples is fixed to be equal to the length of the test series,
+        determined by the user request.
         TODO a lot of assumptions here, work them out later
         '''
+        # forecast the same number of samples for which we have test data
+        forecast_len = test_region.series_len
+
         # create a forecast: ARIMA requires an empty region (no data is required, only shape)
         # use the test region for convenience
         forecast_region = arima_model_region.apply_to(test_region, forecast_len)
@@ -224,6 +240,7 @@ class AutoARIMASolver(log_util.LoggerMixin):
         self.clustering_metadata = solver_metadata.clustering_metadata
         self.distance_measure = solver_metadata.distance_measure
         self.auto_arima_params = solver_metadata.model_params
+        self.test_len = solver_metadata.test_len
         self.error_type = solver_metadata.error_type
 
         # calculated during training
@@ -235,13 +252,12 @@ class AutoARIMASolver(log_util.LoggerMixin):
         # flag
         self.prepared = False
 
-    def predict(self, prediction_region, is_future, forecast_len=FORECAST_LENGTH,
-                output_home='outputs', plot=True):
+    def predict(self, prediction_region, forecast_len, output_home='outputs', plot=True):
 
         self.logger.debug('Predicting for region: {}'.format(prediction_region))
 
         if not self.prepared:
-            self.prepare_for_predictions(forecast_len)
+            self.prepare_for_predictions()
 
         # plot the whole region and the prediction region
         self.plot_regions(prediction_region, output_home)
@@ -252,8 +268,14 @@ class AutoARIMASolver(log_util.LoggerMixin):
         # the generalization errors are precalculated, just subset them
         error_subregion = self.generalization_errors.region_subset(prediction_region)
 
-        # in-sample (is_future False) or out-of-sample (is_future True)?
-        if is_future:
+        # in-sample (forecast_len=0) or out-of-sample (forecast_len > 0)?
+        if forecast_len > 0:
+            # this is meant to be an out-of-sample forecast
+            is_out_of_sample = True
+
+            # forecast the specified number of samples
+            actual_forecast_len = forecast_len
+
             # this ARIMA model was trained with the whole dataset, so it will produce out-of-sample
             # predictions
             arima_model_region = self.arima_model_region_whole
@@ -262,6 +284,12 @@ class AutoARIMASolver(log_util.LoggerMixin):
             test_subregion = None
 
         else:
+            # this is meant to be an in-sample forecast
+            is_out_of_sample = False
+
+            # the in-sample forecast is always the same length as the test samples
+            actual_forecast_len = self.test_len
+
             # this ARIMA model was trained with the training dataset, so it will produce in-sample
             # predictions (comparable to the test)
             arima_model_region = self.arima_model_region_training
@@ -277,7 +305,7 @@ class AutoARIMASolver(log_util.LoggerMixin):
 
         # here we just need an empty region with the correct shape
         # and the error_subregion is right there... so use it
-        forecast_subregion = arima_model_subset.apply_to(error_subregion, forecast_len)
+        forecast_subregion = arima_model_subset.apply_to(error_subregion, actual_forecast_len)
 
         # handle descaling here: we want to present descaled data to users
         if self.region_metadata.normalized:
@@ -295,28 +323,26 @@ class AutoARIMASolver(log_util.LoggerMixin):
             forecast_subregion = scaled_forecast_subregion.descale()
 
         # create the result object using the builder:
-        # is_future True -> out-of-sample forecast
-        # is_future False -> in-sample forecast
+        # is_out_of_sample True -> out-of-sample forecast
+        # is_out_of_sample False -> in-sample forecast
         builder = PredictionQueryResultBuilder(solver_metadata=self.metadata,
-                                               forecast_len=forecast_len,
+                                               forecast_len=actual_forecast_len,
                                                forecast_subregion=forecast_subregion,
                                                test_subregion=test_subregion,
                                                error_subregion=error_subregion,
                                                prediction_region=prediction_region,
                                                spt_region=self.spt_region,
                                                output_home=output_home,
-                                               is_future=is_future)
+                                               is_out_of_sample=is_out_of_sample)
 
         # add clustering information to results via the partition
         result = builder.with_partition(self.partition).build()
         return result
 
-    def prepare_for_predictions(self, forecast_len):
+    def prepare_for_predictions(self):
         '''
         Prepare to attend prediction requests. For now, this is called on-demand.
-        In a distant future, it can be used to lazily instantiate a solver.
-
-        forecast_len: the length of the forecasted series, here used to get the test series
+        In the future, it can be used to lazily instantiate a solver.
         '''
 
         # load the region again
@@ -326,8 +352,8 @@ class AutoARIMASolver(log_util.LoggerMixin):
         self.logger.debug('Loaded spt_region for predictions: {} {!r}'.format(self.spt_region,
                                                                               self.spt_region))
 
-        # get test region, apply scaling if needed
-        splitter = SplitTrainingAndTestLast(forecast_len)
+        # get test region using the specified number of past samples, apply scaling if needed
+        splitter = SplitTrainingAndTestLast(self.test_len)
         (_, self.test_region) = splitter.split(self.spt_region)
         if self.test_region.has_scaling():
             self.test_region = self.test_region.descale()
@@ -400,6 +426,7 @@ class AutoARIMASolver(log_util.LoggerMixin):
             'Region: {}'.format(self.region_metadata),
             'Auto ARIMA: {}'.format(self.auto_arima_params),
             '{}'.format(self.clustering_metadata),
+            'Test samples: {}'.format(self.test_len),
             'Error function: {}'.format(self.error_type)
         ]
         return '\n'.join(lines)
@@ -430,6 +457,7 @@ class AutoARIMASolverPickler(log_util.LoggerMixin):
         self.region_metadata = self.metadata.region_metadata
         self.clustering_metadata = self.metadata.clustering_metadata
         self.distance_measure = self.metadata.distance_measure
+        self.test_len = self.metadata.test_len
         self.error_type = self.metadata.error_type
 
     def save_solver(self, auto_arima_solver):
@@ -519,10 +547,12 @@ class AutoARIMASolverPickler(log_util.LoggerMixin):
     def arima_model_training_pickle_path(self):
         '''
         Full path of the pickle object of the arima model region based on training dataset; given
-        by the region, clustering, distance and auto arima metadata.
+        by the region, clustering, distance, auto arima metadata and number of test samples used.
         '''
         solver_pickle_dir = self.metadata.pickle_dir()
-        arima_model_filename = 'model-region-training__{!r}.pkl'.format(self.metadata.model_params)
+        # arima_model_filename = 'model-region-training__{!r}.pkl'.format(
+        # self.metadata.model_params)
+        arima_model_filename = self.metadata.trained_model_region_filename('models-at-medoids')
         return os.path.join(solver_pickle_dir, arima_model_filename)
 
     def arima_model_whole_pickle_path(self):
@@ -532,15 +562,19 @@ class AutoARIMASolverPickler(log_util.LoggerMixin):
         auto arima metadata.
         '''
         solver_pickle_dir = self.metadata.pickle_dir()
-        arima_model_filename = 'model-region-whole__{!r}.pkl'.format(self.metadata.model_params)
+        # arima_model_filename = 'model-region-whole__{!r}.pkl'.format(self.metadata.model_params)
+        arima_model_filename = self.metadata.trained_model_region_filename('models-at-medoids',
+                                                                           with_test_samples=False)
         return os.path.join(solver_pickle_dir, arima_model_filename)
 
     def generalization_errors_pickle_path(self):
         '''
         Full path of the pickle object of the arima model region, given by the region, clustering,
-        distance and auto arima metadata, also the error type.
+        distance, auto arima metadata, test_len, also the error type.
         '''
         solver_pickle_dir = self.metadata.pickle_dir()
-        generalization_errors_filename = 'errors__{!r}__{}.pkl'.format(self.metadata.model_params,
-                                                                       self.error_type)
+
+        template = 'errors__{!r}__tp{}__{}.pkl'
+        generalization_errors_filename = template.format(self.metadata.model_params,
+                                                         self.test_len, self.error_type)
         return os.path.join(solver_pickle_dir, generalization_errors_filename)

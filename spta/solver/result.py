@@ -18,8 +18,8 @@ class PredictionQueryResult(BaseRegion):
     - The forecast series: from forecast_subregion
     - The generalization error: from generalization_errors
 
-    This a base class, subclasses depend on whether out-of-sample (is_future True) or in-sample
-    (is_future false) results are requested. For in-sample, the test series is added.
+    This a base class, subclasses depend on whether out-of-sample or in-sample results are
+    requested. For in-sample, the test series is added.
 
     When using clustering, this information is added for each point:
     - The cluster index associated to the cluster for which the point is identified
@@ -37,6 +37,7 @@ class PredictionQueryResult(BaseRegion):
         self.metadata = solver_metadata
         self.region_metadata = solver_metadata.region_metadata
         self.model_params = solver_metadata.model_params
+        self.test_len = solver_metadata.test_len
         self.error_type = solver_metadata.error_type
 
         # query-specific
@@ -160,9 +161,9 @@ class PredictionQueryResult(BaseRegion):
             1.b. the index of the cluster that contains the point
             1.c. generalization error at the point
             1.d. the forecasted series at the point
-            1.e. (is_future False only) the test series at the point
+            1.e. (in-sample forecast only) the test series at the point
 
-           The name of the CSV indicates the forecast length and is_future flag.
+           The name of the CSV indicates the forecast length and is_out_of_sample flag.
 
         2. The prediction summary (query-summary-[...]), a single tuple with the following info:
             2.a. clustering columns, e.g. k, seed
@@ -582,9 +583,9 @@ class PredictionQueryResultBuilder(object):
     '''
 
     def __init__(self, solver_metadata, forecast_len, forecast_subregion, test_subregion,
-                 error_subregion, prediction_region, spt_region, output_home, is_future):
+                 error_subregion, prediction_region, spt_region, output_home, is_out_of_sample):
 
-        if is_future:
+        if is_out_of_sample:
             # out-of-sample
             self.result = OutOfSampleResult(solver_metadata=solver_metadata,
                                             forecast_len=forecast_len,
