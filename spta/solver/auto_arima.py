@@ -325,6 +325,7 @@ class AutoARIMASolver(log_util.LoggerMixin):
         # create the result object using the builder:
         # is_out_of_sample True -> out-of-sample forecast
         # is_out_of_sample False -> in-sample forecast
+        # the forecast_len will not be used by the builder for in-sample results
         builder = PredictionQueryResultBuilder(solver_metadata=self.metadata,
                                                forecast_len=actual_forecast_len,
                                                forecast_subregion=forecast_subregion,

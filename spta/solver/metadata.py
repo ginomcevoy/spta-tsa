@@ -113,11 +113,21 @@ class MetadataWithClustering(SolverMetadataBasic):
         Returns a string representing a CSV file for this query.
         The prefix can be used to differentiate between the CSV of the query and the CSV of the
         query summary.
+
+        If forecast_len is 0, it is assumed that the query is for in-sample forecast using the same
+        number of samples as test_len, the name reflects this (tfis)
         '''
+        if forecast_len > 0:
+            # out-of-sample forecast
+            forecast_len_str = '{}'.format(forecast_len)
+        else:
+            # in-sample forecast
+            forecast_len_str = '_is'
+
         prediction_region_str = self.prediction_region_as_str(prediction_region)
         return '{}-{!r}__{}__tp{}__tf{}__{}.csv'.format(name_prefix, self.clustering_metadata,
                                                         prediction_region_str, self.test_len,
-                                                        forecast_len, self.error_type)
+                                                        forecast_len_str, self.error_type)
 
     def pickle_dir(self):
         return self.clustering_metadata.pickle_dir(self.region_metadata, self.distance_measure)

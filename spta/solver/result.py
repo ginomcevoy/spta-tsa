@@ -113,20 +113,23 @@ class PredictionQueryResult(BaseRegion):
     def summary_header(self):
         '''
         The header for the summary, e.g. when exported via CSV
-        Without clustering, only the MSE appears in the summary.
+        Without clustering, only tp (test_len) and MSE appear in the summary.
         '''
-        return ('mse',)
+        return ('tp', 'mse')
 
     def summary_tuple(self):
         '''
         A tuple that summarizes this result, e.g. when exported via CSV.
-        Without clustering, only the MSE appears in the summary.
+        Without clustering, only tp (test_len) and MSE appear in the summary.
         '''
-        # 2.d. MSE of the generalization errors in the prediction result
+        # 2.d number of samples used for testing
+        tp_str = str(self.test_len)
+
+        # 2.e. MSE of the generalization errors in the prediction result
         mse_error = self.summary_generalization_mse()
         mse_error_str = '{:.3f}'.format(mse_error)
 
-        return (mse_error_str,)
+        return (tp_str, mse_error_str)
 
     def summary_generalization_mse(self):
         '''
@@ -170,7 +173,8 @@ class PredictionQueryResult(BaseRegion):
             2.b. number of clusters that intersect the prediction region
             2.c. dtw_r_m: a measure of the distances between the *test* series of the relevant
                  medoids and the test series of the prediction region
-            2.d. MSE of the generalization errors in the prediction result
+            2.d  Value for tp (size of in-sample test) used to train the models
+            2.e. MSE of the generalization errors in the prediction result
 
         The get_csv_file_path(prefix) method is used to calculate the file paths.
         '''
@@ -233,11 +237,14 @@ class InSampleResult(PredictionQueryResult):
     Creates in-sample forecasts (to be compared with the test series for each point).
     '''
 
-    def __init__(self, solver_metadata, forecast_len, forecast_subregion, test_subregion,
+    def __init__(self, solver_metadata, forecast_subregion, test_subregion,
                  error_subregion, prediction_region, spt_region, output_home):
 
+        # for in-sample queries, there is no forecast_len, only test_len
+        # forecast_len is set to 0 to reflect the in-sample nature...
+        # TODO handle in-sample CSV filename in this class
         super(InSampleResult, self).__init__(solver_metadata=solver_metadata,
-                                             forecast_len=forecast_len,
+                                             forecast_len=0,
                                              forecast_subregion=forecast_subregion,
                                              error_subregion=error_subregion,
                                              prediction_region=prediction_region,
@@ -512,7 +519,8 @@ class ResultWithPartition(PredictionQueryResult):
         5. Use root mean square to obtain a single value that represents the distance between
            the prediction region and the medoids.
 
-        TODO: assuming test_len = forecast_len, time to break this assumption!
+        This result is independent of the value of tf used, also independent of whether the query
+        is in-sample or out-of-sample. The distance is used considering the in-sample test series.
         '''
 
         # For 1.
@@ -525,9 +533,7 @@ class ResultWithPartition(PredictionQueryResult):
         # it is more convenient to split the entire region into training and test
         # (as opposed to only the prediction region) because we also need to split the series
         # at the medoids
-
-        # TODO: assuming test_len = forecast_len, time to break this assumption!
-        splitter = SplitTrainingAndTestLast(self.forecast_len)
+        splitter = SplitTrainingAndTestLast(self.test_len)
         (training_subset, test_subset) = splitter.split(self.spt_region)
 
         prediction_test_subset = test_subset.region_subset(self.prediction_region)
@@ -586,7 +592,7 @@ class PredictionQueryResultBuilder(object):
                  error_subregion, prediction_region, spt_region, output_home, is_out_of_sample):
 
         if is_out_of_sample:
-            # out-of-sample
+            # out-of-sample: has forecast_len, but no test_subregion
             self.result = OutOfSampleResult(solver_metadata=solver_metadata,
                                             forecast_len=forecast_len,
                                             forecast_subregion=forecast_subregion,
@@ -596,9 +602,8 @@ class PredictionQueryResultBuilder(object):
                                             output_home=output_home)
 
         else:
-            # in-sample
+            # in-sample: has test_subregion, but no forecast_len
             self.result = InSampleResult(solver_metadata=solver_metadata,
-                                         forecast_len=forecast_len,
                                          forecast_subregion=forecast_subregion,
                                          test_subregion=test_subregion,
                                          error_subregion=error_subregion,
