@@ -11,7 +11,9 @@ from statsmodels.tsa.arima.model import ARIMA
 # from pmdarima.arima import ARIMA
 from pmdarima.arima import auto_arima
 
-from spta.region.function import FunctionRegionScalarSame, FunctionRegionSeriesSame
+from spta.region import Point
+from spta.region.function import FunctionRegionScalar, FunctionRegionScalarSame, \
+    FunctionRegionSeriesSame
 from spta.util import log as log_util
 
 from . import ArimaPDQ, forecast
@@ -32,8 +34,13 @@ def train_arima_pdq(arima_pdq, training_series):
     Returns a trained ARIMA model than can be used for forecasting (model fit).
     If the evaluation fails, return None instead of the model fit.
     '''
+    # sanity check: no parameters means no model, no data means no model
+    # useful for sparse datasets or when refitting
+    if arima_pdq is None or training_series is None:
+        return None
+
     logger = log_util.logger_for_me(train_arima_pdq)
-    logger.debug('Training ARIMA with: %s' % str(arima_pdq))
+    logger.debug('Training ARIMA {} with training size {}'.format(arima_pdq, len(training_series)))
 
     try:
         # for statsmodels.tsa.arima.model.ARIMA:
@@ -67,6 +74,11 @@ def train_auto_arima(auto_arima_params, training_series):
     logger = log_util.logger_for_me(train_auto_arima)
     logger.debug('Running auto_arima with training size {}'.format(len(training_series)))
 
+    # sanity check: no parameters means no model, no data means no model
+    # useful for sparse datasets or when refitting
+    if auto_arima_params is None or training_series is None:
+        return None
+
     try:
         # find p, d, q with auto_arima, get a model
         sarimax_model = auto_arima(training_series,
@@ -97,36 +109,31 @@ def train_auto_arima(auto_arima_params, training_series):
     return fitted_model
 
 
-class ArimaTrainer(FunctionRegionScalarSame):
+class ArimaTrainerGeneric(FunctionRegionScalar):
     '''
     A FunctionRegion that uses the train_arima function to train an ARIMA model over a training
     region. Applying this FunctionRegion to the training spatio-temporal region will produce an
     instance of ArimaModelRegion (which is also a SpatialRegion). The shape of ArimaTrainer
     will be [x_len, y_len], where the training region has shape [train_len, x_len, y_len].
 
-    The ArimaModelRegion is also a FunctionRegion, and it will contain a trained ARIMA model
-    in each point P(i, j), trained with the training data at P(i, j) of the training region. The
-    ArimaModelRegion can later be applied to another region to obtain the ForecastRegion
-    (spatio-temporal region).
+    The resulting ArimaModelRegion (from applying this function region to a tranining region), is
+    also a FunctionRegion, and it will contain a trained ARIMA model in each point P(i, j),
+    trained with the training data at P(i, j) of the training region.
 
-    To create an instance of this class by using a training region, use either:
+    The ArimaModelRegion can later be applied to another region to obtain an instance of
+    ForecastRegion (spatio-temporal region).
 
-        - with_hyperparameters():
-            Create ARIMA models with the same supplied hyper-parameters in all region points.
-
-        - with_auto_arima():
-            Uses AutoARIMA to determine the hyper-parameters for each region point.
-
-    class method. This will produce a different ARIMA model in each point.
+    To create an instance of this class, see the create_from_hyper_params_matrix() class method.
     '''
+    def __init__(self, matrix_of_partial_training_functions, **kwargs):
+        '''
+        Creates an instance of this class.
 
-    def __init__(self, arima_training_function, x_len, y_len):
+        matrix_of_partial_training_functions
+            see create_from_hyper_params_matrix() class method
         '''
-        Initializes an instance of this function region, which is made of partial calls to
-        train_arima(). Since the output of those calls is an object (an ARIMA model), the dtype
-        needs to be set to object.
-        '''
-        super(ArimaTrainer, self).__init__(arima_training_function, x_len, y_len, dtype=object)
+        super(ArimaTrainerGeneric, self).__init__(matrix_of_partial_training_functions,
+                                                  dtype=object)
 
     def apply_to(self, training_region):
         '''
@@ -137,7 +144,8 @@ class ArimaTrainer(FunctionRegionScalarSame):
         each point of the training region, so this method is decorated to produce ArimaModelRegion.
         '''
         # get result from parent behavior
-        spatial_region = super(ArimaTrainer, self).apply_to(training_region)
+        # this will already call the training function and return trained ARIMA models.
+        spatial_region = super(ArimaTrainerGeneric, self).apply_to(training_region)
 
         # count and log missing models, iterate to find them
         self.missing_count = 0
@@ -158,39 +166,139 @@ class ArimaTrainer(FunctionRegionScalarSame):
         return forecast.ArimaModelRegion(spatial_region.as_numpy)
 
     @classmethod
-    def with_hyperparameters(cls, arima_params, x_len, y_len):
+    def create_from_hyper_params_matrix(cls, hyper_params_matrix, training_function):
         '''
-        Creates an instance of this class, a function region. When applied to a training region,
-        this function region will produce a different ARIMA model in each point of the training
-        region, but all models will have the same hyper-parameters.
+        Initializes an instance of ArimaTrainerGeneric based on a matrix of hyper-parameters
+        (a tuple of hyper-parameters for each point) and one of the available training functions,
+        either train_arima_pdq or train_auto_arima.
+
+        hyper_params_matrix
+            numpy array with shape (x_len, y_len), each point should have a tuple with
+            the hyper-parameters.
+
+        training_function
+            Either train_arima_pdq (if hyper-parameters are type ArimaPDQ) or train_auto_arima
+            (if hyper-parameters are type AutoArimaParams)
+        '''
+        x_len, y_len = hyper_params_matrix.shape
+
+        # For each point P, we need a function that can be applied to the corresponding series.
+        # This function is constructed using the hyper-parameters at P and the training function.
+        matrix_of_partial_training_functions = np.empty((x_len, y_len), dtype=object)
+        for x in range(x_len):
+            for y in range(y_len):
+                matrix_of_partial_training_functions[x][y] = \
+                    functools.partial(training_function, hyper_params_matrix[x][y])
+
+        return ArimaTrainerGeneric(matrix_of_partial_training_functions)
+
+
+class ArimaTrainer(ArimaTrainerGeneric):
+    '''
+    Prepares the training of ARIMA models in a (x_len, y_len) region, with the specified
+    ARIMA hyper-parameters (instance of ArimaPDQ).
+
+    When applied to a training region, this function region will produce a different ARIMA model
+    in each point of the training region, but all models will have the same hyper-parameters.
+
+    See ArimaTrainerGeneric for details.
+    '''
+
+    def __init__(self, arima_params, x_len, y_len):
+        '''
+        Creates an instance of this function region.
 
         arima_params
-            ArimaPDQ (p, d, q) hyper-parameters
+            instance of ArimaPDQ
 
+        x_len
+            size of region in x axis
+
+        y_len
+            size of region in y axis
         '''
-        # the function signature to be handled by regions can only receive a series
-        # so we need to use partial here
-        arima_with_params = functools.partial(train_arima_pdq, arima_params)
-        return ArimaTrainer(arima_with_params, x_len, y_len)
 
-    @classmethod
-    def with_auto_arima(cls, auto_arima_params, x_len, y_len):
+        # Need to create the matrix_of_partial_training_functions argument for parent,
+        # similar to create_from_hyper_params_matrix() implementation but more direct since
+        # the hyper-parameters are constant.
+        array_of_partial_training_functions = [
+            functools.partial(train_arima_pdq, arima_params)
+            for i in range(x_len * y_len)
+        ]
+        matrix_of_partial_training_functions = \
+            np.array(array_of_partial_training_functions).reshape(x_len, y_len)
+
+        # call parent
+        super(ArimaTrainer, self).__init__(matrix_of_partial_training_functions)
+
+
+class AutoArimaTrainer(ArimaTrainerGeneric):
+    '''
+    Prepares the training of autoARIMA models in a (x_len, y_len) region, with the specified
+    autoARIMA hyper-parameters (instance of AutoArimaParams).
+
+    When applied to a training region, this function region will run pyramid.arima.auto_arima to
+    discover "optimal" p, d, q hyperparameters for each point of the training region, and fit the
+    resulting model.
+
+    See ArimaTrainerGeneric for details.
+    '''
+    def __init__(self, auto_arima_params, x_len, y_len):
         '''
-        Creates an instance of this class based on AutoARIMA. When applied to a training region,
-        this function region will run pyramid.arima.auto_arima to discover "optimal" p, d, q
-        hyperparameters for each point of the training region, and fit the resulting model.
-
-        Note that we can reuse ArimaTrainer for both train_arima_pdq and train_auto_arima, *ONLY*
-        because they create models with the same signature!
+        Creates an instance of this function region.
 
         auto_arima_params
-            AutoArimaParams (start_p, start_q, max_p, max_q, d, stepwise)
+            instance of AutoArimaParams
+
+        x_len
+            size of region in x axis
+
+        y_len
+            size of region in y axis
         '''
 
-        # the function signature to be handled by regions can only receive a series
-        # so we need to use partial here
-        auto_arima_with_params = functools.partial(train_auto_arima, auto_arima_params)
-        return ArimaTrainer(auto_arima_with_params, x_len, y_len)
+        # Need to create the matrix_of_partial_training_functions argument for parent,
+        # similar to create_from_hyper_params_matrix() implementation but more direct since
+        # the hyper-parameters are constant.
+        array_of_partial_training_functions = [
+            functools.partial(train_auto_arima, auto_arima_params)
+            for i in range(x_len * y_len)
+        ]
+        matrix_of_partial_training_functions = \
+            np.array(array_of_partial_training_functions).reshape(x_len, y_len)
+
+        # call parent
+        super(AutoArimaTrainer, self).__init__(matrix_of_partial_training_functions)
+
+
+def refit_arima(arima_model_region, new_training_region):
+    '''
+    Re-fit an existing ARIMA model with new data, using the same hyper-parameters already present.
+    The whole new data is used as training data, the original training data is discarded.
+
+    Implemented by extracting the p, d, q values from a trained ARIMA model at each point
+    (if present) and implementing a specific instance of ArimaTrainerGeneric that holds different
+    p, d, q values at each point.
+    '''
+    # initialize an array with None values (no model) by default
+    x_len, y_len = arima_model_region.shape
+    hyper_params_matrix = np.full((x_len, y_len), None, dtype=object)
+
+    # done per point because condition needs to be checked
+    for x in range(0, x_len):
+        for y in range(0, y_len):
+
+            # this function takes care of corner cases
+            (p, d, q) = extract_pdq(arima_model_region.value_at(Point(x, y)))
+
+            if (p, d, q) != ORDER_WHEN_NO_MODEL:
+                # valid hyper-parameters, save at position
+                hyper_params_matrix[x, y] = ArimaPDQ(p, d, q)
+
+    # this is similar to ArimaTrainer but from a matrix of hyper-parameters
+    new_arima_trainer = ArimaTrainerGeneric.create_from_hyper_params_matrix(hyper_params_matrix,
+                                                                            train_arima_pdq)
+    return new_arima_trainer.apply_to(new_training_region)
 
 
 def extract_aic(fitted_arima_at_point):

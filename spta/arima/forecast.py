@@ -304,8 +304,7 @@ class ArimaForecastingPDQ(ArimaForecasting):
 
         # a function region with produces trained models when applied to a training region
         # using p, d, q
-        arima_trainers = training.ArimaTrainer.with_hyperparameters(arima_hyperparams,
-                                                                    x_len, y_len)
+        arima_trainers = training.ArimaTrainer(arima_hyperparams, x_len, y_len)
 
         # train the models: this returns an instance of ArimaModelRegion, that has an instance of
         # statsmodels.tsa.arima.model.ARIMAResults at each point
@@ -339,7 +338,7 @@ class ArimaForecastingAutoArima(ArimaForecasting):
 
         # a function region with produces trained models when applied to a training region
         # using auto_arima
-        arima_trainers = training.ArimaTrainer.with_auto_arima(auto_arima_params, x_len, y_len)
+        arima_trainers = training.AutoArimaTrainer(auto_arima_params, x_len, y_len)
 
         # train the models: this returns an instance of ArimaModelRegion, that has an instance of
         # statsmodels.tsa.arima.model.ARIMAResults at each point

@@ -71,16 +71,13 @@ class AutoARIMATrainer(log_util.LoggerMixin):
 
         The models are trained using the training samples, and the test samples (out-of-time for
         the trained models) are used to calculated the forecast error. After this is done, the
-        models are re-trained using the full dataset, in order to improve out-of-sample forecast,
+        models are re-fitted using the full dataset, in order to improve out-of-sample forecast,
         called the 'future' scenario.
 
-        NOTE 1: Currently, the auto-ARIMA is used again when using the full dataset for training
-        in the 'future' scenario (out-of-sample forecasting),
-        this may create new hyper-parameters when compared to the trained model. This should be
-        improved, the original hyper-parameters should be kept in the full-dataset model for a
-        model re-fitting, instead of training a completely new model.
+        For the refit, the original hyper-parameters are kept, instead of calculating a completely
+        new model with auto ARIMA.
 
-        NOTE 2: This code assumes that each temporal series is split into training and test
+        NOTE: This code assumes that each temporal series is split into training and test
         subseries, where training_len = series_len - test_len. This assumption will be reconsidered
         if a new requirement to specify number of training samples appears.
         '''
@@ -104,18 +101,29 @@ class AutoARIMATrainer(log_util.LoggerMixin):
 
         self.logger.info('Training solver: {}'.format(self.metadata))
 
-        # use the partition to train ARIMA models at the cluster medoids and use them as
-        # representatives for their own clusters. These models will be used to evalute and save
-        # the generalization error. They can also be used for prediction, unless the future flag
-        # is set (see below).
-        # The output is a single spatial region with k different models!
-        arima_model_region_training = self.train_auto_arima_at_medoids(training_region, partition,
-                                                                       medoids)
+        # The ARIMA model region that will be used for forecasting has only k models;
+        # the model from each medoid will be replicated throughout its cluster.
+        #
+        # This is achieved in several steps:
+        #  1. Train auto ARIMA models at each medoid, and save the results in an ARIMA model region
+        #     backed by sparse numpy dataset that has no models (None) outside the medoids.
+        #     This step is achieved by train_auto_arima_at_medoids().
+        #
+        #  2. Use the partition to create k clusters, each containing the trained model at its
+        #     medoid, then merging the clusters with the values at the representatives.
+        #     This step is achieved by replicate_representative_models().
+        #
+
+        # do 1. here
+        arima_medoid_models_train = self.train_auto_arima_at_medoids(training_region, medoids)
+
+        # do 2. here
+        arima_replicated_models_train = \
+            self.replicate_representative_models(arima_medoid_models_train, partition, medoids)
 
         # calculate the generalization error for these ARIMA models: it is the prediction error
         # that is calculated using the test dataset.
-        # TODO a lot of assumptions here, work them out later
-        generalization_errors = self.calculate_errors(arima_model_region_training,
+        generalization_errors = self.calculate_errors(arima_replicated_models_train,
                                                       training_region, test_region)
         self.logger.info('Overall error: {:.4f}'.format(generalization_errors.overall_error))
 
@@ -123,53 +131,63 @@ class AutoARIMATrainer(log_util.LoggerMixin):
         # to make out-of-sample predictions (out of sample)
         # For that, we need to re-train the models at the medoids again, these time using the
         # full dataset (not the training subset, which uses a series subset)
-        arima_model_region_whole = self.train_auto_arima_at_medoids(spt_region, partition,
-                                                                    medoids)
+        # Note that we must use arima_medoid_models_train instead of arima_replicated_models_train,
+        # otherwise we would be re-training x_len * y_len models instead of just k!
+        arima_medoid_models_whole = training.refit_arima(arima_medoid_models_train,
+                                                         spt_region)
+
+        # replicate these refitted models, similar to step 2. above
+        arima_replicated_models_whole = \
+            self.replicate_representative_models(arima_medoid_models_whole, partition, medoids)
 
         # create a solver with the data acquired, this solver can answer queries
         solver = AutoARIMASolver(solver_metadata=self.metadata,
                                  partition=partition,
-                                 arima_model_region_training=arima_model_region_training,
-                                 arima_model_region_whole=arima_model_region_whole,
+                                 arima_model_region_training=arima_replicated_models_train,
+                                 arima_model_region_whole=arima_replicated_models_whole,
                                  generalization_errors=generalization_errors)
         return solver
 
-    def train_auto_arima_at_medoids(self, training_region, partition, medoids):
+    def train_auto_arima_at_medoids(self, training_region, medoids):
         '''
         The ARIMA model region that will be used for forecasting has only k models; the model from
         each medoid will be replicated throughout its cluster.
-        This is achieved by creating k clusters, each containing the trained model at its
-        medoid, then merging the clusters with the values at the representatives.
 
-        See PartitionRegionCrisp.merge_with_representatives_2d for details.
+        Here, wet rain auto ARIMA models at each medoid, and save the results in an ARIMA model
+        region backed by sparse numpy dataset that has no models (None) outside the medoids.
         '''
         _, x_len, y_len = training_region.shape
 
-        # use partition to create clusters for the training dataset
-        # the idea is to use train ARIMA models at the cluster medoids
-        training_clusters = partition.create_all_spt_clusters(training_region,
-                                                              medoids=medoids)
+        # The sparse numpy array that will store the ARIMA models and has the region shape.
+        # The model at points other than the medoids will be None.
+        arima_medoids_numpy = np.full((x_len, y_len), None, dtype=object)
 
-        # the 'sparse' numpy array that will store the ARIMA models and has the region shape
-        # note that all clusters share the same underlying dataset (should be no problem...)
-        arima_medoids_numpy = np.empty((x_len, y_len), dtype=object)
+        for medoid in medoids:
 
-        # iterate the training clusters to produce an ARIMA cluster for each one
-        arima_clusters = []
-        for training_cluster in training_clusters:
+            # train an ARIMA model and store it at the medoid coordinates
+            training_series_at_medoid = training_region.series_at(medoid)
+            arima_at_medoid = training.train_auto_arima(self.auto_arima_params,
+                                                        training_series_at_medoid)
+            arima_medoids_numpy[medoid.x, medoid.y] = arima_at_medoid
 
-            arima_cluster = self.train_auto_arima_at_medoid(partition, training_cluster,
-                                                            arima_medoids_numpy)
-            arima_clusters.append(arima_cluster)
+        # wrap the dataset into a model region, which is also a spatial cluster
+        return ArimaModelRegion(arima_medoids_numpy)
 
-        # merge the clusters into a single region, this will be backed by a new numpy matrix,
-        # that should look exactly like arima_medoids_numpy
-        arima_region = partition.merge_with_representatives_2d(arima_clusters, medoids)
-        # self.logger.debug('Merged ARIMA region: {}'.format(arima_region.as_numpy))
+    def replicate_representative_models(self, arima_models_at_medoids, partition, medoids):
+        '''
+        Given a sparse ARIMA model region, replicate the models at each medoid over all the points
+        of their respective clusters.
+        '''
+        # the clusters determine how to replicate the k ARIMA models
+        arima_clusters = partition.create_all_spatial_clusters(arima_models_at_medoids)
 
-        # we want an ArimaModelRegion that can be applied to produce forecasts, so we wrap
+        # Merge the clusters into a single region by replicating the models at the medoids.
+        # Note that this is just a spatial region
+        arima_spatial_region = partition.merge_with_representatives_2d(arima_clusters, medoids)
+
+        # We want an ArimaModelRegion that can be applied to produce forecasts, so we wrap
         # the data with this instance
-        return ArimaModelRegion(arima_region.as_numpy)
+        return ArimaModelRegion(arima_spatial_region.as_numpy)
 
     def calculate_errors(self, arima_model_region, training_region, test_region):
         '''
@@ -179,7 +197,6 @@ class AutoARIMATrainer(log_util.LoggerMixin):
 
         The number of forecast samples is fixed to be equal to the length of the test series,
         determined by the user request.
-        TODO a lot of assumptions here, work them out later
         '''
         # forecast the same number of samples for which we have test data
         forecast_len = test_region.series_len
@@ -194,34 +211,6 @@ class AutoARIMATrainer(log_util.LoggerMixin):
 
         # will calculate the forecast error at each point of the region
         return measure_error.apply_to(forecast_region)
-
-    def train_auto_arima_at_medoid(self, partition, training_cluster, arima_medoids_numpy):
-        '''
-        Given a spatio-temporal cluster with training data and its medoid, train a single ARIMA
-        model at the medoid, and replicate it over the cluster. This effectively turns the medoid
-        in the representative point for creating forecasts in the cluster.
-
-        Returns a SpatialCluster that is wrapped around an ArimaModelRegion. This later can be
-        used to merge all clusters into a single region built with k representative models.
-
-        The arima_medoids_numpy is passed so that all the clusters are backed by the same
-        underlying matrix that holds the k representitave models.
-        '''
-        # the series to train auto ARIMA at the medoid
-        medoid = training_cluster.centroid
-        training_series_at_medoid = training_cluster.series_at(medoid)
-
-        # train an ARIMA model and store it at the medoid coordinates
-        arima_at_medoid = training.train_auto_arima(self.auto_arima_params,
-                                                    training_series_at_medoid)
-        arima_medoids_numpy[medoid.x, medoid.y] = arima_at_medoid
-        self.logger.debug('Trained ARIMA at medoid {}: {}'.format(medoid, arima_at_medoid))
-
-        # create an ARIMA model region for this cluster
-        # but we need a spatial cluster to use merge later! so wrap this region as a cluster
-        arima_model_cluster = SpatialCluster(ArimaModelRegion(arima_medoids_numpy), partition,
-                                             cluster_index=training_cluster.cluster_index)
-        return arima_model_cluster
 
 
 class AutoARIMASolver(log_util.LoggerMixin):
