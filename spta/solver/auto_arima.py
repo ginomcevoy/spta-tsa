@@ -15,7 +15,6 @@ from spta.clustering.factory import ClusteringFactory
 
 from spta.region.error import MeasureForecastingError, get_error_func
 from spta.region.scaling import SpatioTemporalScaled
-from spta.region.spatial import SpatialCluster
 from spta.region.train import SplitTrainingAndTestLast
 
 from spta.util import fs as fs_util
@@ -170,7 +169,7 @@ class AutoARIMATrainer(log_util.LoggerMixin):
                                                         training_series_at_medoid)
             arima_medoids_numpy[medoid.x, medoid.y] = arima_at_medoid
 
-        # wrap the dataset into a model region, which is also a spatial cluster
+        # wrap the dataset into a model region, which is also a spatial region
         return ArimaModelRegion(arima_medoids_numpy)
 
     def replicate_representative_models(self, arima_models_at_medoids, partition, medoids):

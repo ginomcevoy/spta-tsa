@@ -95,7 +95,9 @@ def do_auto_arima_distance_errors(args, logger):
         trainer = AutoARIMATrainer(region_metadata=region_metadata,
                                    clustering_metadata=clustering_metadata,
                                    distance_measure=DistanceByDTW(),
-                                   auto_arima_params=auto_arima_params)
+                                   auto_arima_params=auto_arima_params,
+                                   test_len=forecast_len,
+                                   error_type=error_type)
 
         # use the trainer to get the cluster partition and corresponding medoids
         # will try to leverage pickle and load previous attempts, otherwise calculate and save
@@ -134,14 +136,10 @@ def distance_vs_errors_for_cluster(cluster, trainer, partition, forecast_len, er
                                                               cluster.all_point_indices)
 
     # compute the forecast error (generalization error) when using the model at the medoid
-    # the trainer has the appropriate implementation, but needs a numpy to store the model
-    # the output is a SpatialCluster of an ArimaModelRegion, which has a single ARIMA model in it.
-    arima_medoids_numpy = np.empty((x_len, y_len), dtype=object)
-    arima_model_cluster = trainer.train_auto_arima_at_medoid(partition, training_cluster,
-                                                             arima_medoids_numpy)
-
-    # recover the ArimaModelRegion inside the cluster, this can do forecasting
-    arima_model_region = arima_model_cluster.decorated_region
+    # the trainer almost has the appropriate implementation, just need to pass a list of medoids
+    # instead of just one.
+    arima_model_region = trainer.train_auto_arima_at_medoids(training_region=training_cluster,
+                                                             medoids=(cluster.centroid,))
 
     # this will evaluate the forecast errors
     error_analysis = ErrorAnalysis(observation_cluster, training_region=training_cluster,

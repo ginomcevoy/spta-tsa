@@ -88,7 +88,9 @@ def do_auto_arima_errors_for_clustering(spt_region, region_metadata, clustering_
     trainer = AutoARIMATrainer(region_metadata=region_metadata,
                                clustering_metadata=clustering_metadata,
                                distance_measure=DistanceByDTW(),
-                               auto_arima_params=auto_arima_params)
+                               auto_arima_params=auto_arima_params,
+                               test_len=forecast_len,
+                               error_type=error_type)
 
     # use the trainer to get the cluster partition and corresponding medoids
     # will try to leverage pickle and load previous attempts, otherwise calculate and save
@@ -108,8 +110,7 @@ def do_auto_arima_errors_for_clustering(spt_region, region_metadata, clustering_
                                    parallel_workers=None)
 
     # use the trainer again to run auto ARIMA at medoids
-    arima_model_region = trainer.train_auto_arima_at_medoids(training_region, partition,
-                                                             medoids)
+    arima_model_region = trainer.train_auto_arima_at_medoids(training_region, medoids)
 
     # prepare the CSV output for this clustering partition
     csv_dir = trainer.metadata.output_dir('outputs')
