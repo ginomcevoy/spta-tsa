@@ -82,7 +82,8 @@ if __name__ == '__main__':
     # load dataset from metadata
 
     nordeste_small_md = SpatioTemporalRegionMetadata('nordeste_small', Region(43, 50, 85, 95),
-                                                     series_len=365, ppd=1, last=True)
+                                                     year_start=2015, year_end=2015, spd=1,
+                                                     scaled=True)
     nordeste_small_region = nordeste_small_md.create_instance()
 
     logger.info('Calculating distances using DTW...')

@@ -11,51 +11,48 @@ def predefined_regions():
     '''
     region_metadata = {
 
-        'brian_1y_1ppd': SpatioTemporalRegionMetadata(
-            'brian', Region(40, 80, 45, 85), series_len=365, ppd=1, last=True, normalized=False),
+        'brian_2015_2015_1spd': SpatioTemporalRegionMetadata(
+            'brian', Region(40, 80, 45, 85), year_start=2015, year_end=2015, spd=1, scaled=False),
 
-        'midregion_1y_1ppd': SpatioTemporalRegionMetadata(
-            'midregion', Region(20, 60, 25, 65), series_len=365, ppd=1, last=True,
-            normalized=False),
+        'midregion_2015_2015_1spd': SpatioTemporalRegionMetadata(
+            'midregion', Region(20, 60, 25, 65), year_start=2015, year_end=2015, spd=1,
+            scaled=False),
 
-        'nordeste_small_1y_1ppd': SpatioTemporalRegionMetadata(
-            'nordeste_small', Region(43, 50, 85, 95), series_len=365, ppd=1, last=True,
-            normalized=False),
+        'nordeste_small_2015_2015_1spd': SpatioTemporalRegionMetadata(
+            'nordeste_small', Region(43, 50, 85, 95), year_start=2015, year_end=2015, spd=1,
+            scaled=False),
 
-        'nordeste_small_1y_1ppd_norm': SpatioTemporalRegionMetadata(
-            'nordeste_small', Region(43, 50, 85, 95), series_len=365, ppd=1, last=True,
-            normalized=True),
+        'nordeste_small_2015_2015_1spd_scaled': SpatioTemporalRegionMetadata(
+            'nordeste_small', Region(43, 50, 85, 95), year_start=2015, year_end=2015, spd=1,
+            scaled=True),
 
-        'sp_small': SpatioTemporalRegionMetadata(
-            'sp_small', Region(40, 50, 50, 60), series_len=1460, ppd=4, last=True,
-            normalized=False),
+        'nordeste_small_2014_2014_1spd': SpatioTemporalRegionMetadata(
+            'nordeste_small', Region(43, 50, 85, 95), year_start=2014, year_end=2014, spd=1,
+            scaled=False),
 
-        'sp_rj_1y_1ppd_first': SpatioTemporalRegionMetadata(
-            'sp_rj', Region(40, 75, 50, 85), series_len=365, ppd=1, last=False, normalized=False),
+        'whole_brazil_2015_2015_1spd': SpatioTemporalRegionMetadata(
+            'whole_brazil', Region(20, 100, 15, 95), year_start=2015, year_end=2015, spd=1,
+            scaled=False),
 
-        'whole_brazil_1y_1ppd': SpatioTemporalRegionMetadata(
-            'whole_brazil', Region(20, 100, 15, 95), series_len=365, ppd=1, last=True,
-            normalized=False),
+        'whole_brazil_2015_2015_1spd_scaled': SpatioTemporalRegionMetadata(
+            'whole_brazil', Region(20, 100, 15, 95), year_start=2015, year_end=2015, spd=1,
+            scaled=True),
 
-        'whole_brazil_1y_1ppd_norm': SpatioTemporalRegionMetadata(
-            'whole_brazil', Region(20, 100, 15, 95), series_len=365, ppd=1, last=True,
-            normalized=True),
+        'whole_real_brazil_2015_2015_1spd': SpatioTemporalRegionMetadata(
+            'whole_real_brazil', Region(5, 95, 15, 110), year_start=2015, year_end=2015, spd=1,
+            scaled=False),
 
-        'whole_real_brazil_1y_1ppd': SpatioTemporalRegionMetadata(
-            'whole_real_brazil', Region(5, 95, 15, 110), series_len=365, ppd=1, last=True,
-            normalized=False),
+        'whole_real_brazil_2015_2015_1spd_scaled': SpatioTemporalRegionMetadata(
+            'whole_real_brazil', Region(5, 95, 15, 110), year_start=2015, year_end=2015, spd=1,
+            scaled=True),
 
-        'whole_real_brazil_1y_1ppd_norm': SpatioTemporalRegionMetadata(
-            'whole_real_brazil', Region(5, 95, 15, 110), series_len=365, ppd=1, last=True,
-            normalized=True),
+        'whole_real_brazil_2011_2015_1spd': SpatioTemporalRegionMetadata(
+            'whole_real_brazil', Region(5, 95, 15, 110), year_start=2011, year_end=2015, spd=1,
+            scaled=False),
 
-        'whole_real_brazil_5y_1ppd': SpatioTemporalRegionMetadata(
-            'whole_real_brazil', Region(5, 95, 15, 110), series_len=365, ppd=1, last=True,
-            normalized=False),
-
-        'whole_real_brazil_5y_1ppd_norm': SpatioTemporalRegionMetadata(
-            'whole_real_brazil', Region(5, 95, 15, 110), series_len=365, ppd=1, last=True,
-            normalized=True)
+        'whole_real_brazil_2011_2015_1spd_scaled': SpatioTemporalRegionMetadata(
+            'whole_real_brazil', Region(5, 95, 15, 110), year_start=2011, year_end=2015, spd=1,
+            scaled=True)
     }
 
     return region_metadata

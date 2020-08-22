@@ -1,3 +1,4 @@
+from datetime import datetime
 import numpy as np
 from math import sqrt
 
@@ -71,3 +72,57 @@ def random_integers_with_blacklist(n, min_value, max_value, blacklist=[]):
     allowed = set(all_values).difference(set(blacklist))
     allowed = list(allowed)
     return np.random.choice(allowed, size=n, replace=False)
+
+
+def years_to_series_interval(year_start, year_end, first_year_in_sample, samples_per_day):
+    '''
+    Given a time series with samples_per_day (e.g. 1460 samples per non-leap year,
+    given 4 samples per day), and a start and end year, calculate the corresponding interval.
+
+    This takes leap years into account!
+
+    Returns a tuple (series_start, series_end).
+
+    year_start
+        The first sample in the series interval must correspond at the beginning of this year.
+
+    year_end
+        The last sample in the series interval must correspond to the end of this year.
+        This means that year_start = 2014, year_end = 2014 will contain 1 year of data.
+
+    First example:
+        year_start = 1979
+        year_end = 1979
+        first_year_in_sample = 1979
+        samples_per_day = 4
+
+        Then we have (0, 1460) where 1460 = (365 * 4)
+
+    Second example:
+        year_start = 1980
+        year_end = 1980
+        first_year_in_sample = 1979
+        samples_per_day = 4
+
+        Then we have (1460, 2924) where 2924 = (1460 + 366*4, leap year)
+
+    Third example:
+        year_start = 2014
+        year_end = 2015
+        first_year_in_sample = 1979
+        samples_per_day = 4
+
+        Then we have (51136, 54056), 2920 samples, there are 9 leap years in between 1979 and 2014.
+
+    '''
+    # use Python calendar to take leap years into account
+    date_first_year_in_sample = datetime(first_year_in_sample, 1, 1)
+    date_year_start = datetime(year_start, 1, 1)
+    date_year_end = datetime(year_end + 1, 1, 1)   # exact end of the end year
+
+    # calculate the number of days between the years
+    day_offset_for_year_start = (date_year_start - date_first_year_in_sample).days
+    day_offset_for_year_end = (date_year_end - date_first_year_in_sample).days
+
+    # apply number of samples
+    return (day_offset_for_year_start * samples_per_day, day_offset_for_year_end * samples_per_day)

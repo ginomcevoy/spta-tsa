@@ -263,7 +263,7 @@ class ErrorAnalysis(log_util.LoggerMixin):
     For with_forecast_region and overall_with_each_forecast, the entire forecast region is needed,
     which can be created by a model trained at each point of a training region.
 
-    TODO normalized forecast should be denormalized before calculating prediction errors!?
+    TODO scaled forecast should be descaled before calculating prediction errors!?
     '''
 
     def __init__(self, observation_region, training_region=None, parallel_workers=None):

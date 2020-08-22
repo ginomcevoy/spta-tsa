@@ -480,8 +480,8 @@ if __name__ == '__main__':
 
     # print('centroid %s' % str(small.centroid))
     from .metadata import SpatioTemporalRegionMetadata
-    sp_small_md = SpatioTemporalRegionMetadata('sp_small', Region(40, 50, 50, 60), 1460, 4,
-                                               last=False, normalized=True)
+    sp_small_md = SpatioTemporalRegionMetadata('sp_small', Region(40, 50, 50, 60), 2015, 2015, 4,
+                                               scaled=True)
     sp_small = sp_small_md.create_instance()
     print('sp_small: ', sp_small.shape)
 

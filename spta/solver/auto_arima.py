@@ -296,7 +296,7 @@ class AutoARIMASolver(log_util.LoggerMixin):
         forecast_subregion = arima_model_subset.apply_to(error_subregion, actual_forecast_len)
 
         # handle descaling here: we want to present descaled data to users
-        if self.region_metadata.normalized:
+        if self.region_metadata.scaled:
 
             # The forecast_subregion is not aware of the scaling, because it was not created
             # as such. As a workaround, use the original spatio-temporal region (which HAS the
@@ -335,7 +335,7 @@ class AutoARIMASolver(log_util.LoggerMixin):
         '''
 
         # load the region again
-        # normally only to get shape, but for normalized regions it also has info useful for
+        # normally only to get shape, but for scaled regions it also has info useful for
         # descaling the data
         self.spt_region = self.region_metadata.create_instance()
         self.logger.debug('Loaded spt_region for predictions: {} {!r}'.format(self.spt_region,

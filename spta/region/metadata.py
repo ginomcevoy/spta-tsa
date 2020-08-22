@@ -1,4 +1,3 @@
-import numpy as np
 import os
 
 from . import Point, Region
@@ -11,78 +10,81 @@ from spta.util import log as log_util
 
 class SpatioTemporalRegionMetadata(log_util.LoggerMixin):
     '''
-    Metadata for a spatio temporal region of a spatio temporal dataset.
+    Metadata for a spatio-temporal region, obtained from a spatio temporal dataset.
     Includes:
         name
-            string (e.g sp_small)
+            string that identifies the region instance (e.g sp_small)
         region
-            a 2D region
-        series_len
-            the length of the temporal series
-        ppd
-            the points per day
-        last
-            if True, use the last years, else use the first years
+            an instance of Region with 4 coordinates
+        year_start
+            the starting year (always work with whole years)
+        year_end
+            the ending year, if it is the same as year_start then that year is used.
+        spd
+            the samples per day. By default we assume that the dataset has 4 samples per day
+            (current dataset being used).
+            TODO improve this representation when other datasets are used
+        scaled
+            boolean that indicates whether each time series should be scaled to fit in the range
+            [0, 1] for each point.
         dataset_dir
             path where to load/store numpy files
 
+    Examples of representation:
+    sp_small_2014_2014_1spd_scaled
+        - Region called "sp_small".
+        - Uses the dataset for the year 2014 (365 days).
+        - Use 1 sample per day. Since the dataset uses 4 samples per day, these 4 samples will be
+          averaged into a single value per day, for a total of 365 samples per point.
+        - Scale the dataset, see ScaleFunction for detail.s
+
+    whole_brazil_2014_2015_4spd
+        - Region called "whole_brazil".
+        - Uses the dataset for the years 2014 and 2015 (365 * 2 days).
+        - Uses 4 samples per day. Since the dataset already uses 4 samples per day, no averaging
+          is done.
+        - No scaling is applied.
+
+    TODO break the assumption that the dataset has 4 points per day
+    TODO break the assumption that the dataset goes up to the end of 2015
     TODO support other distance measures
     '''
 
-    def __init__(self, name, region, series_len, ppd, last=True, centroid=None,
-                 normalized=True, dataset_dir='raw'):
+    def __init__(self, name, region, year_start, year_end, spd, centroid=None,
+                 scaled=True, dataset_dir='raw'):
         self.name = name
         self.region = region
-        self.series_len = series_len
-        self.ppd = ppd
-        self.last = last
-        self.normalized = normalized
+        self.year_start = year_start
+        self.year_end = year_end
+        self.spd = spd
+        self.scaled = scaled
         self.dataset_dir = dataset_dir
-
-    @property
-    def years(self):
-        '''
-        Integer representing number of years of series length
-        '''
-        days = self.series_len / self.ppd
-        return int(days / 365)
-
-    @property
-    def time_str(self):
-        '''
-        A string representing the series length in days.
-        For now assume that we are always using entire years.
-        Ex: series_len = 365 and ppd = 1 -> time_str = 1y
-        Ex: series_len = 730 and ppd = 1 -> time_str = 2y
-        Ex: series_len = 1460 and ppd = 4 -> time_str = 1y
-        '''
-        return '{}y'.format(self.years)
 
     @property
     def dataset_filename(self):
         '''
-        Ex 'raw/sp_small_1y_4ppd_norm.npy'
+        Ex 'raw/sp_small_2015_2015_4spd_scaled.npy'
         '''
         return '{}/{}.npy'.format(self.dataset_dir, self)
 
     @property
     def distances_filename(self):
         '''
-        Ex raw/distances_sp_small_1y_4ppd_norm.npy'
+        Ex raw/distances_sp_small_2015_2015_4spd_scaled.npy'
         '''
         return '{}/distances_{}.npy'.format(self.dataset_dir, self)
 
     @property
-    def norm_min_filename(self):
+    def scaled_min_filename(self):
         '''
-        Ex 'raw/sp_small_1y_4ppd_min.npy'
+        Ex 'raw/sp_small_2015_2015_4spd_min.npy'
         '''
         return '{}/{}_min.npy'.format(self.dataset_dir, self)
 
     @property
-    def norm_max_filename(self):
+    def scaled_max_filename(self):
         '''
-        Ex 'raw/sp_small_1y_4ppd_max.npy'
+        Ex 'raw/sp_small_2015_2015_4spd_max.npy'
         '''
         return '{}/{}_max.npy'.format(self.dataset_dir, self)
 
@@ -133,39 +135,32 @@ class SpatioTemporalRegionMetadata(log_util.LoggerMixin):
     def create_instance(self):
         '''
         Creates an instance of SpatioTemporalRegion using the current metadata.
-        Currently supports only 1y and 4y, 1ppd and 4ppd.
+        Currently supports only 1y and 4y, 1spd and 4spd.
 
         Assumes temp_brazil dataset!
+        Assumes spd = 1 or spd = 4!
         '''
-
         # big assumption
-        assert self.ppd == 1 or self.ppd == 4
+        assert self.spd == 1 or self.spd == 4
 
-        # read the dataset according to the number of years and start/finish of dataset
-        # default is 4ppd...
-        if self.last:
-            numpy_dataset = temp_brazil.load_brazil_temps_last(self.years)
-        else:
-            numpy_dataset = temp_brazil.load_brazil_temps(self.years)
-
-        # convert to 1ppd?
-        if self.ppd == 1:
-            numpy_dataset = average_4ppd_to_1ppd(numpy_dataset, self.logger)
-
+        # read the dataset according to the year interval and spd
+        numpy_dataset = temp_brazil.retrieve_dataset_interval(year_start=self.year_start,
+                                                              year_end=self.year_end,
+                                                              spd=self.spd)
         # subset the data to work only with region
         spt_region = SpatioTemporalRegion(numpy_dataset).region_subset(self.region)
 
         # save the metadata in the instance, can be useful later
         spt_region.region_metadata = self
 
-        if self.normalized:
+        if self.scaled:
             # replace region with scaled version
-            # TODO change the variable name
             series_len, x_len, y_len = spt_region.shape
             scale_function = ScaleFunction(x_len, y_len)
             spt_region = scale_function.apply_to(spt_region, series_len)
+            self.logger.debug('Scaling data: {}'.format(spt_region.shape))
 
-        self.logger.info('Loaded dataset {}: {}'.format(self, self.region))
+        self.logger.info('Loaded spatio-temporal region {}: {}'.format(self, self.region))
         return spt_region
 
     def output_dir(self, output_home):
@@ -182,51 +177,21 @@ class SpatioTemporalRegionMetadata(log_util.LoggerMixin):
 
     def pickle_filename(self, pickle_home='pickle'):
         '''
-        Ex 'pickle/sp_small_1y_4ppd_norm//sp_small_1y_4ppd_norm.pickle'
+        Ex 'pickle/sp_small_2015_2015_4spd_scaled/sp_small_2015_2015_4spd_scaled.pickle'
         '''
         pickle_dir = self.pickle_dir(pickle_home)
         return '{}/{!r}.pickle'.format(pickle_dir, self)
 
     def __repr__(self):
         '''
-        Ex sp_small_1y_4ppd_norm'
+        Ex sp_small_2014_2015_1spd_scaled'
         '''
-        norm_str = ''
-        if self.normalized:
-            norm_str = '_norm'
+        scaled_str = ''
+        if self.scaled:
+            scaled_str = '_scaled'
 
-        last_str = ''
-        if not self.last:
-            last_str = '_first'
-
-        return '{}_{}_{}ppd{}{}'.format(self.name, self.time_str, self.ppd, last_str, norm_str)
+        return '{}_{}_{}_{}spd{}'.format(self.name, self.year_start, self.year_end, self.spd,
+                                         scaled_str)
 
     def __str__(self):
         return repr(self)
-
-
-def average_4ppd_to_1ppd(sptr_numpy, logger=None):
-    '''
-    Given a spatio temporal region with the defaults of 4 points per day (ppd=4), average the
-    points in each day to get 1 point per day(ppd = 1)
-    '''
-    (series_len, x_len, y_len) = sptr_numpy.shape
-
-    # we have 4 points per day
-    # average these four points to get a smoother curve
-    new_series_len = int(series_len / 4)
-    single_point_per_day = np.empty((new_series_len, x_len, y_len))
-
-    for x in range(0, x_len):
-        for y in range(0, y_len):
-            point_series = sptr_numpy[:, x, y]
-            series_reshape = (new_series_len, 4)
-            smooth = np.mean(np.reshape(point_series, series_reshape), axis=1)
-            # sptr.log.debug('smooth: %s' % smooth)
-            single_point_per_day[:, x, y] = np.array(smooth)
-
-    if logger:
-        log_msg = 'reshaped 4ppd {} to 1ppd {}'
-        logger.info(log_msg.format(sptr_numpy.shape, single_point_per_day.shape))
-
-    return single_point_per_day

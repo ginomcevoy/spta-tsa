@@ -115,7 +115,7 @@ def process_request(args):
     test_subregion = arima_forecasting.test_region
 
     # handle descaling here: we want to present descaled data to users
-    if region_metadata.normalized:
+    if region_metadata.scaled:
 
         forecast_region_each = descale_subregion(forecast_region_each, prediction_spt_region,
                                                  logger)

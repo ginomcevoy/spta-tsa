@@ -166,3 +166,54 @@ class TestRandomIntegersWithBlacklist(unittest.TestCase):
 
         # 4. None of the numbers are in blacklist
         self.assertEqual(result_set.intersection(blacklist_set), set())
+
+
+class TestYearsToSeriesInterval(unittest.TestCase):
+    '''
+    Unit tests for maths.years_to_series_interval() function.
+    '''
+
+    def test_years_to_series_interval_first_year(self):
+        # given
+        year_start = 1979
+        year_end = 1979
+        first_year_in_sample = 1979
+        samples_per_day = 4
+
+        # when
+        result = maths_util.years_to_series_interval(year_start, year_end, first_year_in_sample,
+                                                     samples_per_day)
+
+        # then series starts at zero and has the samples_per_day length
+        expected = (0, 1460)
+        self.assertEqual(result, expected)
+
+    def test_years_to_series_interval_leap_year(self):
+        # given a leap year
+        year_start = 1980
+        year_end = 1980
+        first_year_in_sample = 1979
+        samples_per_day = 4
+
+        # when
+        result = maths_util.years_to_series_interval(year_start, year_end, first_year_in_sample,
+                                                     samples_per_day)
+
+        # then we have 366 * 4 samples because of leap year
+        expected = (1460, 2924)
+        self.assertEqual(result, expected)
+
+    def test_years_to_series_interval_last_two_years(self):
+        # given
+        year_start = 2014
+        year_end = 2015
+        first_year_in_sample = 1979
+        samples_per_day = 4
+
+        # when
+        result = maths_util.years_to_series_interval(year_start, year_end, first_year_in_sample,
+                                                     samples_per_day)
+
+        # then we have +36 days resulting from 9 leap years!
+        expected = (51136, 54056)
+        self.assertEqual(result, expected)
