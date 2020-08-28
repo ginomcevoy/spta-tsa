@@ -488,15 +488,7 @@ class AutoARIMASolverPickler(log_util.LoggerMixin):
         Restores a solver from pickled objects. The inverse operation of save_solver.
         Notice that this operation requires the metadata.
         '''
-
-        # load the cluster partition
-        # the clustering algorithm can manage partition persistence,
-        # but need to create an instance of this algorithm to delegate task
-        # TODO get a better handle for the functionality?
-        clustering_factory = ClusteringFactory(self.distance_measure)
-        clustering_algorithm = clustering_factory.instance(self.clustering_metadata)
-        partition = clustering_algorithm.load_previous_partition(self.region_metadata,
-                                                                 pickle_home='pickle')
+        partition = self.load_partition()
 
         # load the arima model region based on training data
         arima_model_training_path = self.arima_model_training_pickle_path()
@@ -524,6 +516,35 @@ class AutoARIMASolverPickler(log_util.LoggerMixin):
                                arima_model_region_training=arima_model_region_training,
                                arima_model_region_whole=arima_model_region_whole,
                                generalization_errors=generalization_errors)
+
+    def load_partition(self):
+        '''
+        Load a previously saved partititon, if available.
+        Since the clustering algorithm handles its own persistence, this method will only try
+        to load a partition without failing. If loading is not possible we calculate the partition
+        again from the corresponding spatio-temporal region.
+
+        This solves a corner case that can arise if a partition is deleted but we still want
+        the models that have been calculated.
+        '''
+        # the clustering algorithm can manage partition persistence,
+        # but need to create an instance of this algorithm to delegate task
+        # TODO get a better handle for the functionality?
+        clustering_factory = ClusteringFactory(self.distance_measure)
+        clustering_algorithm = clustering_factory.instance(self.clustering_metadata)
+
+        # if it is saved, use it
+        partition = clustering_algorithm.try_load_previous_partition(self.region_metadata,
+                                                                     pickle_home='pickle')
+
+        if partition is None:
+            # the partition was deleted T_T
+            # calculate it again, for that we need the region
+            spt_region = self.region_metadata.create_instance()
+            partition = clustering_algorithm.partition(spt_region,
+                                                       with_medoids=True,
+                                                       pickle_home='pickle')
+        return partition
 
     def partition_pickle_path(self):
         '''
