@@ -179,7 +179,8 @@ def regular_partitioning(x_len, y_len, k):
         residue_col = y_len - lines_per_col * div_y
 
     # prepare output, same shape as input region
-    matrix = np.zeros((x_len, y_len))
+    # type is integer for the labels!
+    matrix = np.zeros((x_len, y_len), dtype=np.uint32)
 
     # iterate each cluster to set labels i in [0, k-1]
     # do this by iterating rows and cols of partition
@@ -187,7 +188,7 @@ def regular_partitioning(x_len, y_len, k):
         for col in range(0, div_y):
 
             # the label for the current cluster
-            i = row * div_y + col
+            i = int(row * div_y + col)
 
             # the boundaries for the cluster
             # exact for now

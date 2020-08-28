@@ -20,7 +20,7 @@ class ClusteringMetadata():
 
     def __init__(self, name, k, **kwargs):
         self.name = name
-        self.k = k
+        self.k = int(k)
 
     def clustering_subdir(self, distance_measure):
         '''
