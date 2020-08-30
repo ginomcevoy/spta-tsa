@@ -77,3 +77,17 @@ class TestKmedoidsClusteringMetadata(unittest.TestCase):
 
         # then
         self.assertEqual('Kmedoids: k=5 seed=2 mode=lite', s)
+
+    def test_from_repr_k3_seed0(self):
+        # given
+        repr_str = 'kmedoids_k3_seed0_lite'
+
+        # when
+        instance = KmedoidsClusteringMetadata.from_repr(repr_str)
+
+        # then
+        self.assertEqual(instance.__class__.__name__, 'KmedoidsClusteringMetadata')
+        self.assertEqual(instance.k, 3)
+        self.assertEqual(instance.random_seed, 0)
+        self.assertEqual(instance.mode, 'lite')
+

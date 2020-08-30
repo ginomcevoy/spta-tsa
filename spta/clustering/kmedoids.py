@@ -51,6 +51,27 @@ class KmedoidsClusteringMetadata(ClusteringMetadata):
         return '{}: k={} seed={} mode={}'.format(self.name.capitalize(), self.k, self.random_seed,
                                                  self.mode)
 
+    @classmethod
+    def from_repr(cls, repr_string):
+        '''
+        Given the representation, recover the instance.
+        NOTE: This implementation assumes that initial_medoids has not been set!
+        '''
+        parts = repr_string.split('_')
+        assert(parts[0], 'kmedoids')
+
+        # 1. k
+        k_string = parts[1]
+        k = int(k_string[1:])  # e.g. k2
+
+        # 2. seed
+        seed_string = parts[2]
+        random_seed = int(seed_string[4:])   # e.g. seed5
+
+        # 3. mode
+        mode = parts[3]   # e.g. lite
+        return KmedoidsClusteringMetadata(k, random_seed=random_seed, mode=mode)
+
 
 def kmedoids_metadata_generator(k_values, seed_values, mode='lite', initial_medoids=None,
                                 max_iter=1000, tol=0.001, verbose=True):

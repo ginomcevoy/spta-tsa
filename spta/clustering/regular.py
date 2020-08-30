@@ -17,6 +17,20 @@ class RegularClusteringMetadata(ClusteringMetadata):
             'k': self.k,
         }
 
+    @classmethod
+    def from_repr(cls, repr_string):
+        '''
+        Given the string representation, recreate the instance.
+        '''
+        parts = repr_string.split('_')
+        assert(parts[0], 'regular')
+
+        # only k, e.g. k2
+        k_string = parts[1]
+        k = int(k_string[1:])
+
+        return RegularClusteringMetadata(k)
+
 
 def regular_metadata_generator(k_values):
     '''
