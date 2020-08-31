@@ -75,7 +75,8 @@ class DistanceBetweenSeries(log_util.LoggerMixin):
         return self.load_distance_matrix_2d(sptr_metadata.distances_filename,
                                             sptr_metadata.region)
 
-    def distances_to_point(self, spt_region, point, all_point_indices, use_distance_matrix=True):
+    def distances_to_point(self, spt_region, point, all_point_indices, use_distance_matrix=True,
+                           only_if_precalculated=True):
         '''
         Given a spatio-temporal region and a point in the region, compute the distances between
         each point in the region and the specified point.
@@ -93,6 +94,9 @@ class DistanceBetweenSeries(log_util.LoggerMixin):
         If matrix is not available, it will compute it using subclass-specific behavior.
         Using use_distance_matrix requires region metadata.
 
+        only_if_precalculated
+            If loading a pre-calculated matrix fails, this method fails without calculating it.
+
         TODO: support use_distance_matrix = False!
         NOTE: Don't reimplement this in subclasses!
         '''
@@ -107,6 +111,12 @@ class DistanceBetweenSeries(log_util.LoggerMixin):
                 self.load_distance_matrix_md(spt_region.region_metadata)
 
             except Exception as err:
+
+                if only_if_precalculated:
+                    # don't accept that the matrix was not found
+                    raise ValueError('Expected a pre-calculated distance matrix!')
+
+                # accept that the matrix was not found
                 log_msg = 'Calculating distances because saved distances not available: {}'
                 self.logger.warn(log_msg.format(err))
 
