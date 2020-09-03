@@ -60,6 +60,8 @@ def do_medoid_distances(args, logger):
     distance_measure.load_distance_matrix_2d(region_metadata.distances_filename,
                                              region_metadata.region)
 
+    output_home = 'outputs'
+
     # iterate possible clusterings
     for clustering_metadata in clustering_suite:
         logger.info('Clustering algorithm: {}'.format(clustering_metadata))
@@ -80,24 +82,24 @@ def do_medoid_distances(args, logger):
         ]
 
         # prepare the CSV output
-        # output CSV regular: csv/<region>/regular_k<k>/dtw/medoid_distances.csv
-        # output CSV k-medoids:  csv/<region>/kmedoids_k<k>_seed<seed>/dtw/medoid_distances.csv
-        output_dir = clustering_metadata.csv_dir(region_metadata, distance_measure)
+        # CSV regular: outputs/<region>/regular_k<k>/dtw/medoid_distances.csv
+        # CSV k-medoids:  outputs/<region>/kmedoids_k<k>_seed<seed>_lite/dtw/medoid_distances.csv
+        output_dir = clustering_metadata.output_dir(output_home, region_metadata, distance_measure)
         fs_util.mkdir(output_dir)
         csv_filename = os.path.join(output_dir, 'medoid_distances.csv')
 
-        compute_and_save_medoid_distances(spt_region, distance_measure, medoid_points,
-                                          medoid_indices, csv_filename, logger)
+        compute_and_save_medoid_distances(spt_region, distance_measure, clustering_algorithm,
+                                          medoid_points, medoid_indices, csv_filename, logger)
 
 
-def compute_and_save_medoid_distances(spt_region, distance_measure, medoid_points,
-                                      medoid_indices, csv_filename, logger):
+def compute_and_save_medoid_distances(spt_region, distance_measure, clustering_algorithm,
+                                      medoid_points, medoid_indices, csv_filename, logger):
     '''
     Given a set of medoids, calculate the distances between them using the distance matrix, and
     save to the given CVS. Works for both k-medoids and regular partitioning.
     '''
     _, _, y_len = spt_region.shape
-    k = len(medoid_indices)
+    k = clustering_algorithm.k
 
     # use the distance matrix to get the distances between the medoids
     medoid_distances = np.empty((k, k))
@@ -135,7 +137,7 @@ def compute_and_save_medoid_distances(spt_region, distance_measure, medoid_point
             row = [str(i)] + distances_str
             csv_writer.writerow(row)
 
-    logger.info('Medoid distances for regular partitioning k={} -> {}'.format(k, csv_filename))
+    logger.info('Medoid distances for {} -> {}'.format(clustering_algorithm, csv_filename))
 
 
 def metadata_from_args(args):
