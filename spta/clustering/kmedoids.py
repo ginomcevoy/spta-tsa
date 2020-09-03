@@ -1,3 +1,5 @@
+from collections import OrderedDict
+
 from spta.region import Point
 from spta.region.partition import PartitionRegionCrisp
 from spta.kmedoids.kmedoids import run_kmedoids
@@ -24,12 +26,12 @@ class KmedoidsClusteringMetadata(ClusteringMetadata):
         self.verbose = verbose
 
     def as_dict(self):
-        return {
-            'type': 'kmedoids',
-            'k': self.k,
-            'seed': self.random_seed,
-            'mode': self.mode
-        }
+        return OrderedDict([
+            ('type', 'kmedoids'),
+            ('k', self.k),
+            ('seed', self.random_seed),
+            ('mode', self.mode)
+        ])
 
     def __repr__(self):
         r = '{}_k{}_seed{}_{}'.format(self.name, self.k, self.random_seed, self.mode)

@@ -99,13 +99,21 @@ class ClusteringSuite(log_util.LoggerMixin):
         '''
         return 'clustering__{!r}.csv'.format(self)
 
+    def csv_dir(self, output_home, region_metadata, distance_measure):
+        '''
+        Directory of the output CSV when analyzing this suite.
+        Example: outputs/nordeste_small_2015_2015_1spd/dtw
+        '''
+        region_output_dir = region_metadata.output_dir(output_home)
+        return '{}/{!r}'.format(region_output_dir, distance_measure)
+
     def csv_filepath(self, output_home, region_metadata, distance_measure):
         '''
         Full path of the output CSV when analyzing this suite.
         Example: outputs/nordeste_small_2015_2015_1spd/dtw/clustering__kmedoids-quick.csv
         '''
-        region_output_dir = region_metadata.output_dir(output_home)
-        return '{}/{!r}/{}'.format(region_output_dir, distance_measure, self.csv_filename())
+        csv_dir = self.csv_dir(output_home, region_metadata, distance_measure)
+        return '{}/{}'.format(csv_dir, self.csv_filename())
 
     def __iter__(self):
         '''

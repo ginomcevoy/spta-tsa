@@ -5,13 +5,20 @@ now is to choose the most appropriate clustering given a predictive query.
 
 Here, we explore the space of clustering metadata (e.g. k-medoids) to find the medoids which have
 the minimum distance (e.g. DTW) with a given point in the region.
+
+TODO Move some of this logic to a "SuiteResult" class in spta.clustering.suite
+TODO Cannot do it now because the logic that creates the CSV is in experiments instead of spta.
 '''
 import csv
 import numpy as np
 import os
 
 from spta.region import Point
+
 from spta.util import log as log_util
+from spta.util import maths as maths_util
+
+from .factory import ClusteringMetadataFactory
 
 
 class FindClusterWithMinimumDistance(log_util.LoggerMixin):
@@ -39,6 +46,9 @@ class FindClusterWithMinimumDistance(log_util.LoggerMixin):
         self.region_metadata = region_metadata
         self.distance_measure = distance_measure
         self.clustering_suite = clustering_suite
+
+        # need the actual region data for this (should have been only its metadata)
+        self.spt_region = self.region_metadata.create_instance()
 
     def retrieve_suite_result_csv(self, output_home):
         '''
@@ -123,9 +133,6 @@ class FindClusterWithMinimumDistance(log_util.LoggerMixin):
         global_min_medoid = None
         global_min_distance = np.Inf
 
-        # need the actual region data for this (should have been only its metadata)
-        spt_region = self.region_metadata.create_instance()
-
         # PROBLEM: the medoids are in absolute coordinates, but the indices of the
         # distance matrix are in coordinates relative to the region.
         # Use the region metadata to convert the absolute coordinates by removing the offset.
@@ -142,13 +149,13 @@ class FindClusterWithMinimumDistance(log_util.LoggerMixin):
             # here the conversion is done
             # Mind the offset!
             medoid_indices = [
-                (medoid.x - x_offset) * spt_region.y_len + (medoid.y - y_offset)
+                (medoid.x - x_offset) * self.spt_region.y_len + (medoid.y - y_offset)
                 for medoid
                 in medoids
             ]
 
             # use the distance matrix
-            distances = self.distance_measure.distances_to_point(spt_region=spt_region,
+            distances = self.distance_measure.distances_to_point(spt_region=self.spt_region,
                                                                  point=point,
                                                                  all_point_indices=medoid_indices,
                                                                  only_if_precalculated=with_matrix)
@@ -170,4 +177,152 @@ class FindClusterWithMinimumDistance(log_util.LoggerMixin):
                 global_min_medoid = current_min_medoid
                 global_min_distance = current_min_distance
 
+        msg_str = 'Found global minimum for {}: {} at index [{}] -> {:.2f}'
+        msg = msg_str.format(global_min_clustering_repr, global_min_medoid,
+                             global_min_cluster_index, global_min_distance)
+        self.logger.debug(msg)
+
         return (global_min_clustering_repr, global_min_cluster_index, global_min_medoid)
+
+    def evaluate_medoid_distance_of_random_points(self, count, random_seed, suite_result,
+                                                  output_home):
+        '''
+        This is part of an attempt at building a LSTM model. The idea is to create a dataset with
+        the following tuple structure to train the model:
+
+        <region> <distance> <clustering> <cluster_index> -> <point_series>
+
+        The left part represents a unique medoid M of a cluster, given a clustering algorithm
+        calculated under specific conditions of region and distance. The right part is a temporal
+        series of a point P the region, where P and M satisfy the relationship of the method
+        find_medoid_with_minimum_distance_to_point() above.
+
+        So here we find <count> 'random' points in the region, and for each of these points we
+        create the tuple as described. These points are not completely random, we want to avoid
+        actual medoids in our search, because the distance will be zero (if P is some M, then
+        find_medoid_with_minimum_distance_to_point(P) will return M).
+
+        The workflow is as follows:
+
+        1. Find all medoids indices (extract_all_medoid_indices_from_suite_result)
+        2. Get a random sample of all indices in the region, but removing the medoids
+        3. For each point P that represents the index, find its medoid_P using
+           find_medoid_with_minimum_distance_to_point
+        4. Use the clustering_repr to obtain an instance of ClusteringMetadata
+        5. Retrieve the instance representation using as_dict
+        6. Store the name of the region metadata, the values in as_dict, the cluster index and
+           finally the *series* of P, as a row of a CSV.
+        '''
+        _, x_len, y_len = self.spt_region.shape
+        factory = ClusteringMetadataFactory()
+
+        # we are saving a series as CSV, here we will use 3 decimal places for each value
+        np.set_printoptions(formatter={'float': '{: 0.3f}'.format})
+
+        medoid_indices = extract_all_medoid_indices_from_suite_result(suite_result,
+                                                                      self.spt_region)
+
+        # we want some consistency in random process below so we set the seed here
+        np.random.seed(seed=random_seed)
+
+        # this creates the random sample as required
+        random_indices = maths_util.random_integers_with_blacklist(count, 0, x_len * y_len - 1,
+                                                                   blacklist=medoid_indices)
+        self.logger.debug('Random indices found with seed {}: {}'.format(random_seed,
+                                                                         random_indices))
+
+        # get actual Point instances
+        random_points = [
+            Point(int(random_index / y_len), random_index % y_len)
+            for random_index in random_indices
+        ]
+
+        # prepare the output CSV, at the place where the clustering suite stores its CSV
+        csv_dir = self.clustering_suite.csv_dir(output_home, self.region_metadata,
+                                                self.distance_measure)
+
+        csv_filename_str = 'random_point_dist_medoid__{!r}_count{}_seed{}.csv'
+        csv_filename = csv_filename_str.format(self.clustering_suite, count, random_seed)
+        csv_filepath = os.path.join(csv_dir, csv_filename)
+
+        # create the CSV
+        with open(csv_filepath, 'w', newline='') as csv_file:
+            csv_writer = csv.writer(csv_file, delimiter=' ', quotechar='|',
+                                    quoting=csv.QUOTE_MINIMAL)
+
+            # the header depends on clustering type
+            header = calculate_csv_header_given_suite_result(suite_result)
+            csv_writer.writerow(header)
+
+            # calculate each tuple
+            for random_point in random_points:
+
+                # find the medoid M for the point P
+                result = self.find_medoid_with_minimum_distance_to_point(random_point,
+                                                                         suite_result,
+                                                                         with_matrix=True)
+                (global_min_clustering_repr, global_min_cluster_index, global_min_medoid) = result
+
+                # the row elements need to match the header
+                region_id = repr(self.region_metadata)
+                row = [region_id]
+
+                clustering_metadata = factory.from_repr(global_min_clustering_repr)
+                row.extend(list(clustering_metadata.as_dict().values()))
+                row.append(global_min_cluster_index)
+
+                random_point_series = self.spt_region.series_at(random_point)
+                row.append(random_point_series)
+
+                csv_writer.writerow(row)
+
+        msg = 'Saved evaluate_medoid_distance_of_random_points at {}'
+        self.logger.info(msg.format(csv_filepath))
+
+
+def extract_all_medoid_indices_from_suite_result(suite_result, spt_region):
+    '''
+    Given the suite_result dictionary built from its CSV, obtain a set of all the medoid indices.
+    This is because we want to filter these indices at some point (evaluate_random_points).
+    '''
+    # get all medoid as points, we don't want repeated so we use a set
+    unique_medoid_points = set()
+    for clustering_repr, medoids in suite_result.items():
+        unique_medoid_points.update(medoids)
+
+    # to get the indices, we need the region
+    y_len = spt_region.y_len
+    unique_medoid_indices = [
+        unique_medoid_point.x * y_len + unique_medoid_point.y
+        for unique_medoid_point in unique_medoid_points
+    ]
+
+    return unique_medoid_indices
+
+
+def calculate_csv_header_given_suite_result(suite_result):
+    '''
+    We want something like this:
+
+    region_id   type        k   seed    mode    cluster_index series
+    <region>    kmedoids    2   1       lite    1             (..., ..., )
+
+    But for that, we need to know how the clustering metadata looks like. So we grab the
+    first element of the suite_result and build (type, k, seed, mode) if the first element
+    is kmedoids, or (type, k) for regular.
+
+    This assumes that a suite only has one type!
+    '''
+    header = ['region_id']
+
+    # here we get the clustering elements for the header
+    factory = ClusteringMetadataFactory()
+    first_repr = list(suite_result.keys())[0]
+    first_clustering_metadata = factory.from_repr(first_repr)
+    clustering_header_elems = list(first_clustering_metadata.as_dict().keys())
+
+    # complete the header
+    header.extend(clustering_header_elems)
+    header.extend(['cluster_index', 'series'])
+
+    return header

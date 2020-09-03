@@ -1,3 +1,5 @@
+from collections import OrderedDict
+
 from spta.region.partition import PartitionRegionCrisp
 
 from . import ClusteringMetadata, ClusteringAlgorithm
@@ -12,10 +14,10 @@ class RegularClusteringMetadata(ClusteringMetadata):
         super(RegularClusteringMetadata, self).__init__('regular', k)
 
     def as_dict(self):
-        return {
-            'type': 'regular',
-            'k': self.k,
-        }
+        return OrderedDict([
+            ('type', 'regular'),
+            ('k', self.k),
+        ])
 
     @classmethod
     def from_repr(cls, repr_string):
