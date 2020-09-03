@@ -36,8 +36,12 @@ def regular_metadata_generator(k_values):
     '''
     Generate metadata given a list of k_values
     '''
-    for k in k_values:
-        yield RegularClusteringMetadata(k)
+    # FIXME no identifier here yet, so the caller MUST set it manually afterwards.
+    # TODO refactor this method so that the identifier is passed.
+    # Right now we don't want to change experiments.metadata...
+    # NOTE: importing here to break import cycle (factory -> kmedoids -> suite -> factory)
+    from . import suite
+    return suite.ClusteringSuite('change_me', 'regular', k=k_values)
 
 
 class RegularClusteringAlgorithm(ClusteringAlgorithm):

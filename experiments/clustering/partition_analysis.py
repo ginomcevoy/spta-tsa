@@ -75,7 +75,7 @@ def processRequest():
 
 def analyze_suite(args, logger):
 
-    region_metadata, clustering_suite, suite_desc = metadata_from_args(args)
+    region_metadata, clustering_suite = metadata_from_args(args)
 
     # default...
     output_home = 'outputs'
@@ -88,13 +88,13 @@ def analyze_suite(args, logger):
     distance_measure.load_distance_matrix_2d(region_metadata.distances_filename,
                                              region_metadata.region)
 
-    # prepare the CSV output now (header)
-    # <output>/<region>/<distance>/clustering__<clustering_type>-<clustering_suite>.csv
-    csv_dir = '{}/{!r}/{!r}'.format(output_home, region_metadata, distance_measure)
-    fs_util.mkdir(csv_dir)
+    # this factory creates the instance of each clustering algorithm
+    clustering_factory = ClusteringFactory(distance_measure)
 
-    csv_filename = 'clustering__{}.csv'.format(suite_desc)
-    csv_filepath = os.path.join(csv_dir, csv_filename)
+    # the suite knows where to store its CSV, prepare output
+    csv_filepath = clustering_suite.csv_filepath(output_home, region_metadata, distance_measure)
+    csv_dir, csv_filename = os.path.split(csv_filepath)
+    fs_util.mkdir(csv_dir)
 
     with open(csv_filepath, 'w', newline='') as csv_file:
         csv_writer = csv.writer(csv_file, delimiter=' ', quotechar='|',
@@ -107,7 +107,6 @@ def analyze_suite(args, logger):
         logger.info('Clustering algorithm: {}'.format(clustering_metadata))
 
         # clustering algorithm to use
-        clustering_factory = ClusteringFactory(distance_measure)
         clustering_algorithm = clustering_factory.instance(clustering_metadata)
 
         # work on this clustering
@@ -121,7 +120,7 @@ def analyze_suite(args, logger):
             logger.info('Writing partial result: {}'.format(partial_result))
             csv_writer.writerow(partial_result)
 
-    logger.info('CSV output at: {}'.format(csv_filepath))
+    logger.info('CSV of clustering suite {!r} at: {}'.format(clustering_suite, csv_filepath))
 
 
 def analyze_partition(region_metadata, clustering_algorithm, output_home, logger, args):
@@ -206,12 +205,15 @@ def metadata_from_args(args):
     region_metadata = predefined_regions()[args.region]
 
     # get the clustering metadata
+    # FIXME need to change metadata.clustering so that the identifier is passed to the suite
+    # here we pass it manually
     clustering_suite = get_suite(args.clustering_type, args.clustering_suite)
+    clustering_suite.identifier = args.clustering_suite
 
-    # a meaningful description to use in the CSV name
-    suite_desc = '{}-{}'.format(args.clustering_type, args.clustering_suite)
+    # # a meaningful description to use in the CSV name
+    # suite_desc = '{}-{}'.format(args.clustering_type, args.clustering_suite)
 
-    return region_metadata, clustering_suite, suite_desc
+    return region_metadata, clustering_suite  # , suite_desc
 
 
 if __name__ == '__main__':

@@ -79,10 +79,14 @@ def kmedoids_metadata_generator(k_values, seed_values, mode='lite', initial_medo
     Generate k-medoids metadata given a list of k_values and seeds, also default values for
     the other parameters. Performs a cartesian product of k_values and seeds.
     '''
-    for k in k_values:
-        for random_seed in seed_values:
-            yield KmedoidsClusteringMetadata(k, random_seed, mode, initial_medoids, max_iter, tol,
-                                             verbose)
+    # FIXME no identifier here yet, so the caller MUST set it manually afterwards.
+    # TODO refactor this method so that the identifier is passed.
+    # Right now we don't want to change experiments.metadata...
+    # NOTE: importing here to break import cycle (factory -> kmedoids -> suite -> factory)
+    from . import suite
+    return suite.ClusteringSuite('change_me', 'kmedoids', k=k_values, random_seed=seed_values,
+                                 mode=mode, initial_medoids=initial_medoids, max_iter=max_iter,
+                                 tol=tol, verbose=verbose)
 
 
 class KmedoidsClusteringAlgorithm(ClusteringAlgorithm):

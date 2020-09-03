@@ -36,7 +36,7 @@ class ClusteringSuite(log_util.LoggerMixin):
         metadata_name: kmedoids
         parameter_combinations: {
             k: {2, 3},
-            seed: {0, 1},
+            random_seed: {0, 1},
             mode: 'lite'
         }
 
@@ -46,12 +46,15 @@ class ClusteringSuite(log_util.LoggerMixin):
         kmedoids_k3_seed0_lite
         kmedoids_k3_seed1_lite
         '''
+        self.logger.debug('Creating clustering suite: {} - {}'.format(identifier, metadata_name))
         self.identifier = identifier
         self.metadata_name = metadata_name
 
         # used to build instances
         self.factory = ClusteringMetadataFactory()
 
+        # create the ClusteringMetadata instances
+        # TODO all suites are created inside experiments.metadata, maybe lazy instantiation here?
         self.metadatas = self.__create_metadata_instances(**parameter_combinations)
 
     def __create_metadata_instances(self, **parameter_combinations):
@@ -94,7 +97,7 @@ class ClusteringSuite(log_util.LoggerMixin):
         Name of output CSV when analyzing this suite.
         Example: clustering__kmedoids-quick.csv
         '''
-        return 'clustering__{}-{}.csv'.format(self.metadata_name, self.identifier)
+        return 'clustering__{!r}.csv'.format(self)
 
     def csv_filepath(self, output_home, region_metadata, distance_measure):
         '''
@@ -109,3 +112,6 @@ class ClusteringSuite(log_util.LoggerMixin):
         Used for iterating over metadata instances.
         '''
         return iter(self.metadatas)
+
+    def __repr__(self):
+        return '{}-{}'.format(self.metadata_name, self.identifier)
