@@ -38,20 +38,36 @@ def predefined_regions():
             'whole_brazil', Region(20, 100, 15, 95), year_start=2015, year_end=2015, spd=1,
             scaled=True),
 
+        'whole_real_brazil_2013_2013_1spd': SpatioTemporalRegionMetadata(
+            'whole_real_brazil', Region(5, 95, 15, 105), year_start=2013, year_end=2013, spd=1,
+            scaled=False),
+
+        'whole_real_brazil_2013_2013_1spd_scaled': SpatioTemporalRegionMetadata(
+            'whole_real_brazil', Region(5, 95, 15, 105), year_start=2013, year_end=2013, spd=1,
+            scaled=True),
+
+        'whole_real_brazil_2014_2014_1spd': SpatioTemporalRegionMetadata(
+            'whole_real_brazil', Region(5, 95, 15, 105), year_start=2014, year_end=2014, spd=1,
+            scaled=False),
+
+        'whole_real_brazil_2014_2014_1spd_scaled': SpatioTemporalRegionMetadata(
+            'whole_real_brazil', Region(5, 95, 15, 105), year_start=2014, year_end=2014, spd=1,
+            scaled=True),
+
         'whole_real_brazil_2015_2015_1spd': SpatioTemporalRegionMetadata(
-            'whole_real_brazil', Region(5, 95, 15, 110), year_start=2015, year_end=2015, spd=1,
+            'whole_real_brazil', Region(5, 95, 15, 105), year_start=2015, year_end=2015, spd=1,
             scaled=False),
 
         'whole_real_brazil_2015_2015_1spd_scaled': SpatioTemporalRegionMetadata(
-            'whole_real_brazil', Region(5, 95, 15, 110), year_start=2015, year_end=2015, spd=1,
+            'whole_real_brazil', Region(5, 95, 15, 105), year_start=2015, year_end=2015, spd=1,
             scaled=True),
 
         'whole_real_brazil_2011_2015_1spd': SpatioTemporalRegionMetadata(
-            'whole_real_brazil', Region(5, 95, 15, 110), year_start=2011, year_end=2015, spd=1,
+            'whole_real_brazil', Region(5, 95, 15, 105), year_start=2011, year_end=2015, spd=1,
             scaled=False),
 
         'whole_real_brazil_2011_2015_1spd_scaled': SpatioTemporalRegionMetadata(
-            'whole_real_brazil', Region(5, 95, 15, 110), year_start=2011, year_end=2015, spd=1,
+            'whole_real_brazil', Region(5, 95, 15, 105), year_start=2011, year_end=2015, spd=1,
             scaled=True)
     }
 

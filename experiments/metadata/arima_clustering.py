@@ -55,8 +55,9 @@ def auto_arima_clustering_experiments():
     auto_arima_clustering_id = {
         'simple_kmedoids_quick': AutoArimaCluster('simple', 'kmedoids', 'quick', 'dtw'),
         'simple_regular_quick': AutoArimaCluster('simple', 'regular', 'quick', 'dtw'),
-        'simple_kmedoids_even': AutoArimaCluster('simple', 'kmedoids', 'even', 'dtw'),
-        'simple_regular_even': AutoArimaCluster('simple', 'regular', 'even', 'dtw'),
+        'simple_kmedoids_all': AutoArimaCluster('simple', 'kmedoids', 'all', 'dtw'),
+        'simple_regular_part1': AutoArimaCluster('simple', 'regular', 'part1', 'dtw'),
+	'simple_regular_part2': AutoArimaCluster('simple', 'regular', 'part2', 'dtw'),
     }
 
     return auto_arima_clustering_id
