@@ -213,7 +213,7 @@ class FindClusterWithMinimumDistance(log_util.LoggerMixin):
         6. Store the name of the region metadata, the values in as_dict, the cluster index and
            finally the *series* of P, as a row of a CSV.
         '''
-        _, x_len, y_len = self.spt_region.shape
+        series_len, x_len, y_len = self.spt_region.shape
         factory = ClusteringMetadataFactory()
 
         # we are saving a series as CSV, here we will use 3 decimal places for each value
@@ -251,7 +251,7 @@ class FindClusterWithMinimumDistance(log_util.LoggerMixin):
                                     quoting=csv.QUOTE_MINIMAL)
 
             # the header depends on clustering type
-            header = calculate_csv_header_given_suite_result(suite_result)
+            header = calculate_csv_header_given_suite_result(suite_result, series_len)
             csv_writer.writerow(header)
 
             # calculate each tuple
@@ -263,7 +263,8 @@ class FindClusterWithMinimumDistance(log_util.LoggerMixin):
                                                                          with_matrix=True)
                 (global_min_clustering_repr, global_min_cluster_index, global_min_medoid) = result
 
-                # the row elements need to match the header
+                # the row elements need to match the header:
+                # region_id, <clustering_metadata>, series[0], series[1].... series[x_len]
                 region_id = repr(self.region_metadata)
                 row = [region_id]
 
@@ -272,7 +273,11 @@ class FindClusterWithMinimumDistance(log_util.LoggerMixin):
                 row.append(global_min_cluster_index)
 
                 random_point_series = self.spt_region.series_at(random_point)
-                row.append(random_point_series)
+                random_point_series_str = [
+                    '{:0.3f}'.format(elem)
+                    for elem in random_point_series
+                ]
+                row.extend(random_point_series_str)
 
                 csv_writer.writerow(row)
 
@@ -300,11 +305,11 @@ def extract_all_medoid_indices_from_suite_result(suite_result, spt_region):
     return unique_medoid_indices
 
 
-def calculate_csv_header_given_suite_result(suite_result):
+def calculate_csv_header_given_suite_result(suite_result, series_len):
     '''
     We want something like this:
 
-    region_id   type        k   seed    mode    cluster_index series
+    region_id   type        k   seed    mode    cluster_index s0 s1 ... s(series_len )
     <region>    kmedoids    2   1       lite    1             (..., ..., )
 
     But for that, we need to know how the clustering metadata looks like. So we grab the
@@ -320,9 +325,15 @@ def calculate_csv_header_given_suite_result(suite_result):
     first_repr = list(suite_result.keys())[0]
     first_clustering_metadata = factory.from_repr(first_repr)
     clustering_header_elems = list(first_clustering_metadata.as_dict().keys())
-
-    # complete the header
     header.extend(clustering_header_elems)
-    header.extend(['cluster_index', 'series'])
 
+    header.append('cluster_index')
+
+    # we want to store each series element in its own column
+    series_header_elems = [
+        's' + str(i)
+        for i in range(0, series_len)
+    ]
+
+    header.extend(series_header_elems)
     return header
