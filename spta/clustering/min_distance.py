@@ -63,15 +63,16 @@ class FindClusterWithMinimumDistance(log_util.LoggerMixin):
         result = {}
 
         # the suite knows where its result should be stored
-        csv_filepath = self.clustering_suite.csv_filepath(output_home=output_home,
-                                                          region_metadata=self.region_metadata,
-                                                          distance_measure=self.distance_measure)
+        analysis_csv_filepath = \
+            self.clustering_suite.analysis_csv_filepath(output_home=output_home,
+                                                        region_metadata=self.region_metadata,
+                                                        distance_measure=self.distance_measure)
 
-        if not os.path.isfile(csv_filepath):
-            raise ValueError('Could not find CSV: {}'.format(csv_filepath))
+        if not os.path.isfile(analysis_csv_filepath):
+            raise ValueError('Could not find CSV: {}'.format(analysis_csv_filepath))
 
         # open the CSV, ignore header
-        with open(csv_filepath, newline='') as csvfile:
+        with open(analysis_csv_filepath, newline='') as csvfile:
             csv_reader = csv.reader(csvfile, delimiter=' ', quotechar='|',
                                     quoting=csv.QUOTE_MINIMAL)
             # ignore header
@@ -237,13 +238,13 @@ class FindClusterWithMinimumDistance(log_util.LoggerMixin):
             for random_index in random_indices
         ]
 
-        # prepare the output CSV, at the place where the clustering suite stores its CSV
-        csv_dir = self.clustering_suite.csv_dir(output_home, self.region_metadata,
-                                                self.distance_measure)
-
-        csv_filename_str = 'random_point_dist_medoid__{!r}_count{}_seed{}.csv'
-        csv_filename = csv_filename_str.format(self.clustering_suite, count, random_seed)
-        csv_filepath = os.path.join(csv_dir, csv_filename)
+        # prepare the output CSV for min_distance
+        csv_filepath = \
+            self.clustering_suite.min_distance_csv_filepath(output_home=output_home,
+                                                            region_metadata=self.region_metadata,
+                                                            distance_measure=self.distance_measure,
+                                                            count=count,
+                                                            random_seed=random_seed)
 
         # create the CSV
         with open(csv_filepath, 'w', newline='') as csv_file:

@@ -127,7 +127,7 @@ class ClusteringSuiteTest(unittest.TestCase):
         self.assertEqual(metadata_3_1.k, 3)
         self.assertEqual(metadata_3_1.random_seed, 1)
 
-    def test_csv_filename(self):
+    def test_analysis_csv_filename(self):
 
         # given a range of k and random_seed for kmedoids metadata
         identifier = 'quick'
@@ -137,13 +137,13 @@ class ClusteringSuiteTest(unittest.TestCase):
         kmedoids_suite = ClusteringSuite(identifier, metadata_name, k=ks, random_seed=random_seeds)
 
         # when
-        result = kmedoids_suite.csv_filename()
+        result = kmedoids_suite.analysis_csv_filename()
 
         # then
         expected = 'clustering__kmedoids-quick.csv'
         self.assertEqual(result, expected)
 
-    def test_csv_filepath(self):
+    def test_analysis_csv_filepath(self):
 
         # given a range of k and random_seed for kmedoids metadata
         identifier = 'quick'
@@ -159,8 +159,57 @@ class ClusteringSuiteTest(unittest.TestCase):
         output_home = 'outputs'
 
         # when
-        result = kmedoids_suite.csv_filepath(output_home, region_metadata, distance_measure)
+        result = kmedoids_suite.analysis_csv_filepath(output_home, region_metadata,
+                                                      distance_measure)
 
         # then
         expected = 'outputs/nordeste_small_2015_2015_1spd/dtw/clustering__kmedoids-quick.csv'
+        self.assertEqual(result, expected)
+
+    def test_min_distance_csv_filename(self):
+
+        # given kmedoids metadata
+        identifier = 'quick'
+        metadata_name = 'kmedoids'
+        ks = range(2, 4)  # k=2, k=3
+        random_seeds = range(0, 2)  # 0, 1
+        kmedoids_suite = ClusteringSuite(identifier, metadata_name, k=ks, random_seed=random_seeds)
+
+        # given input for <count> random points
+        count = 10
+        random_seed = 0
+
+        # when
+        result = kmedoids_suite.min_distance_csv_filename(count, random_seed)
+
+        # then
+        expected = 'random_point_dist_medoid__kmedoids-quick_count10_seed0.csv'
+        self.assertEqual(result, expected)
+
+    def test_min_distance_csv_filepath(self):
+
+        # given kmedoids metadata
+        identifier = 'quick'
+        metadata_name = 'kmedoids'
+        ks = range(2, 4)  # k=2, k=3
+        random_seeds = range(0, 2)  # 0, 1
+        kmedoids_suite = ClusteringSuite(identifier, metadata_name, k=ks, random_seed=random_seeds)
+
+        # given a region metadata and a distance measure
+        region_metadata = SpatioTemporalRegionMetadata('nordeste_small', Region(40, 50, 50, 60),
+                                                       2015, 2015, 1, scaled=False)
+        distance_measure = DistanceByDTW()
+        output_home = 'outputs'
+
+        # given input for <count> random points
+        count = 10
+        random_seed = 0
+
+        # when
+        result = kmedoids_suite.min_distance_csv_filepath(output_home, region_metadata,
+                                                          distance_measure, count, random_seed)
+
+        # then
+        expected = 'outputs/nordeste_small_2015_2015_1spd/dtw/' \
+            'random_point_dist_medoid__kmedoids-quick_count10_seed0.csv'
         self.assertEqual(result, expected)

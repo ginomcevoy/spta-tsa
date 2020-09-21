@@ -100,21 +100,38 @@ class ClusteringSuite(log_util.LoggerMixin):
         region_output_dir = region_metadata.output_dir(output_home)
         return '{}/{!r}'.format(region_output_dir, distance_measure)
 
-    def csv_filename(self):
+    def analysis_csv_filename(self):
         '''
         Name of output CSV when analyzing this suite.
         Example: clustering__kmedoids-quick.csv
         '''
         return 'clustering__{!r}.csv'.format(self)
 
-
-    def csv_filepath(self, output_home, region_metadata, distance_measure):
+    def analysis_csv_filepath(self, output_home, region_metadata, distance_measure):
         '''
         Full path of the output CSV when analyzing this suite.
         Example: outputs/nordeste_small_2015_2015_1spd/dtw/clustering__kmedoids-quick.csv
         '''
         csv_dir = self.csv_dir(output_home, region_metadata, distance_measure)
-        return '{}/{}'.format(csv_dir, self.csv_filename())
+        return '{}/{}'.format(csv_dir, self.analysis_csv_filename())
+
+    def min_distance_csv_filename(self, count, random_seed):
+        '''
+        Given N, find N random points in the region that are *not* medoids found in
+        this clustering suite. For these N points, find the medoid for which the DTW distance
+        between the two time series (random point, medoid), is minimized.
+
+        Returns the CSV filename for this result (result is calculated at clustering.min_distance)
+        '''
+        return 'random_point_dist_medoid__{!r}_count{}_seed{}.csv'.format(self, count, random_seed)
+
+    def min_distance_csv_filepath(self, output_home, region_metadata, distance_measure,
+                                  count, random_seed):
+        '''
+        See random_min_csv_filename, returns the full path of the CSV.
+        '''
+        csv_dir = self.csv_dir(output_home, region_metadata, distance_measure)
+        return '{}/{}'.format(csv_dir, self.min_distance_csv_filename(count, random_seed))
 
     def __iter__(self):
         '''

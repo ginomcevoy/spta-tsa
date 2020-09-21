@@ -92,11 +92,12 @@ def analyze_suite(args, logger):
     clustering_factory = ClusteringFactory(distance_measure)
 
     # the suite knows where to store its CSV, prepare output
-    csv_filepath = clustering_suite.csv_filepath(output_home, region_metadata, distance_measure)
-    csv_dir, csv_filename = os.path.split(csv_filepath)
+    analysis_csv_filepath = \
+        clustering_suite.analysis_csv_filepath(output_home, region_metadata, distance_measure)
+    csv_dir, _ = os.path.split(analysis_csv_filepath)
     fs_util.mkdir(csv_dir)
 
-    with open(csv_filepath, 'w', newline='') as csv_file:
+    with open(analysis_csv_filepath, 'w', newline='') as csv_file:
         csv_writer = csv.writer(csv_file, delimiter=' ', quotechar='|',
                                 quoting=csv.QUOTE_MINIMAL)
         # header
@@ -114,13 +115,14 @@ def analyze_suite(args, logger):
                                            logger, args)
 
         # write partial result
-        with open(csv_filepath, 'a', newline='') as csv_file:
+        with open(analysis_csv_filepath, 'a', newline='') as csv_file:
             csv_writer = csv.writer(csv_file, delimiter=' ', quotechar='|',
                                     quoting=csv.QUOTE_MINIMAL)
             logger.info('Writing partial result: {}'.format(partial_result))
             csv_writer.writerow(partial_result)
 
-    logger.info('CSV of clustering suite {!r} at: {}'.format(clustering_suite, csv_filepath))
+    logger.info('CSV of clustering suite {!r} at: {}'.format(clustering_suite,
+                                                             analysis_csv_filepath))
 
 
 def analyze_partition(region_metadata, clustering_algorithm, output_home, logger, args):
