@@ -18,43 +18,43 @@ class TestSptrMetadata(unittest.TestCase):
 
     def test_dataset_filename_2015_2015_1spd(self):
         metadata = SpatioTemporalRegionMetadata(*self.name_region, 2015, 2015, 1)
-        self.assertEquals(metadata.dataset_filename, 'raw/sp_small_2015_2015_1spd_scaled.npy')
+        self.assertEqual(metadata.dataset_filename, 'raw/sp_small_2015_2015_1spd_scaled.npy')
 
     def test_dataset_filename_2015_2015_4spd(self):
         metadata = SpatioTemporalRegionMetadata(*self.name_region, 2015, 2015, 4)
-        self.assertEquals(metadata.dataset_filename, 'raw/sp_small_2015_2015_4spd_scaled.npy')
+        self.assertEqual(metadata.dataset_filename, 'raw/sp_small_2015_2015_4spd_scaled.npy')
 
     def test_dataset_filename_2015_2015_1spd_not_scaled(self):
         metadata = SpatioTemporalRegionMetadata(*self.name_region, 2015, 2015, 1, scaled=False)
-        self.assertEquals(metadata.dataset_filename, 'raw/sp_small_2015_2015_1spd.npy')
+        self.assertEqual(metadata.dataset_filename, 'raw/sp_small_2015_2015_1spd.npy')
 
     def test_dataset_filename_2014_2015_1spd(self):
         metadata = SpatioTemporalRegionMetadata(*self.name_region, 2014, 2015, 1)
-        self.assertEquals(metadata.dataset_filename, 'raw/sp_small_2014_2015_1spd_scaled.npy')
+        self.assertEqual(metadata.dataset_filename, 'raw/sp_small_2014_2015_1spd_scaled.npy')
 
     def test_distances_filename_2015_2015_1spd(self):
         metadata = SpatioTemporalRegionMetadata(*self.name_region, 2015, 2015, 1)
 
         expected = 'raw/distances_sp_small_2015_2015_1spd_scaled.npy'
-        self.assertEquals(metadata.distances_filename, expected)
+        self.assertEqual(metadata.distances_filename, expected)
 
     def test_scaled_min_filename_2015_2015_1spd_scaled(self):
         metadata = SpatioTemporalRegionMetadata(*self.name_region, 2015, 2015, 1, scaled=True)
 
         expected = 'raw/sp_small_2015_2015_1spd_scaled_min.npy'
-        self.assertEquals(metadata.scaled_min_filename, expected)
+        self.assertEqual(metadata.scaled_min_filename, expected)
 
     def test_scaled_max_filename_2015_2015_1spd_scaled(self):
         metadata = SpatioTemporalRegionMetadata(*self.name_region, 2015, 2015, 1, scaled=True)
 
         expected = 'raw/sp_small_2015_2015_1spd_scaled_max.npy'
-        self.assertEquals(metadata.scaled_max_filename, expected)
+        self.assertEqual(metadata.scaled_max_filename, expected)
 
     def test_pickle_filename_2015_2015_1spd_scaled(self):
         metadata = SpatioTemporalRegionMetadata(*self.name_region, 2015, 2015, 1, scaled=True)
 
         expected = 'pickle/sp_small_2015_2015_1spd_scaled/sp_small_2015_2015_1spd_scaled.pickle'
-        self.assertEquals(metadata.pickle_filename(), expected)
+        self.assertEqual(metadata.pickle_filename(), expected)
 
     def test_index_to_absolute_point_index_0(self):
         # given
@@ -64,7 +64,7 @@ class TestSptrMetadata(unittest.TestCase):
         point = sp_small_md.index_to_absolute_point(0)
 
         # then
-        self.assertEquals(point, Point(40, 50))
+        self.assertEqual(point, Point(40, 50))
 
     def test_index_to_absolute_point_index_1(self):
         # given
@@ -74,7 +74,7 @@ class TestSptrMetadata(unittest.TestCase):
         point = sp_small_md.index_to_absolute_point(1)
 
         # then
-        self.assertEquals(point, Point(40, 51))
+        self.assertEqual(point, Point(40, 51))
 
     def test_index_to_absolute_point_index_85(self):
         # given
@@ -84,7 +84,7 @@ class TestSptrMetadata(unittest.TestCase):
         point = sp_small_md.index_to_absolute_point(85)
 
         # then 85 -> (8, 5) in subregion
-        self.assertEquals(point, Point(48, 55))
+        self.assertEqual(point, Point(48, 55))
 
     def test_output_dir(self):
         # given

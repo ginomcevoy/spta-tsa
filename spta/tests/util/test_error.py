@@ -20,7 +20,7 @@ class TestMASE(unittest.TestCase):
         result = error_util.mase(forecast_series, observation_series, training_series)
 
         # then MASE returns 0
-        self.assertEquals(result, 0)
+        self.assertEqual(result, 0)
 
     def test_exact_forecast(self):
 
@@ -33,7 +33,7 @@ class TestMASE(unittest.TestCase):
         result = error_util.mase(forecast_series, observation_series, training_series)
 
         # then MASE returns 0
-        self.assertEquals(result, 0)
+        self.assertEqual(result, 0)
 
     def test_forecast_constant_error(self):
 

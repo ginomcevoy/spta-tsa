@@ -92,13 +92,6 @@ class ClusteringSuite(log_util.LoggerMixin):
 
         return instances
 
-    def csv_filename(self):
-        '''
-        Name of output CSV when analyzing this suite.
-        Example: clustering__kmedoids-quick.csv
-        '''
-        return 'clustering__{!r}.csv'.format(self)
-
     def csv_dir(self, output_home, region_metadata, distance_measure):
         '''
         Directory of the output CSV when analyzing this suite.
@@ -106,6 +99,14 @@ class ClusteringSuite(log_util.LoggerMixin):
         '''
         region_output_dir = region_metadata.output_dir(output_home)
         return '{}/{!r}'.format(region_output_dir, distance_measure)
+
+    def csv_filename(self):
+        '''
+        Name of output CSV when analyzing this suite.
+        Example: clustering__kmedoids-quick.csv
+        '''
+        return 'clustering__{!r}.csv'.format(self)
+
 
     def csv_filepath(self, output_home, region_metadata, distance_measure):
         '''

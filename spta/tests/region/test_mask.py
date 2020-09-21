@@ -138,7 +138,7 @@ class TestMaskRegionFuzzy(unittest.TestCase):
         members = [point for point in mask]
 
         # then only members with the highest membership value are iterated
-        self.assertEquals(len(members), 9)
+        self.assertEqual(len(members), 9)
 
     def test_iterator_with_threshold(self):
         # given a fuzzy cluster
@@ -151,7 +151,7 @@ class TestMaskRegionFuzzy(unittest.TestCase):
 
         # then more members are iterated because of the threshold
         # for two clusters, the membership index should be at least 0.45 (0.55 - 0.45 = 0.10)
-        self.assertEquals(len(members), 15)
+        self.assertEqual(len(members), 15)
 
     def test_from_uij_and_region(self):
         # given the uij 2-d matrix with shape (20, 2) for 20 points and 2 clusters
@@ -174,11 +174,11 @@ class TestMaskRegionFuzzy(unittest.TestCase):
 
         # test iterator
         members = [point for point in mask]
-        self.assertEquals(len(members), 15)
+        self.assertEqual(len(members), 15)
 
         # test it again to ensure it can be iterated many times
         members = [point for point in mask]
-        self.assertEquals(len(members), 15)
+        self.assertEqual(len(members), 15)
 
     def test_varying_threshold(self):
 
@@ -197,9 +197,9 @@ class TestMaskRegionFuzzy(unittest.TestCase):
         members_3 = [point for point in mask]
 
         # then all iterations work as expected
-        self.assertEquals(len(members_1), 9)
-        self.assertEquals(len(members_2), 15)
-        self.assertEquals(len(members_3), 9)
+        self.assertEqual(len(members_1), 9)
+        self.assertEqual(len(members_2), 15)
+        self.assertEqual(len(members_3), 9)
 
 
 

@@ -25,7 +25,7 @@ class RegularClusteringMetadata(ClusteringMetadata):
         Given the string representation, recreate the instance.
         '''
         parts = repr_string.split('_')
-        assert(parts[0], 'regular')
+        assert(parts[0] == 'regular')
 
         # only k, e.g. k2
         k_string = parts[1]

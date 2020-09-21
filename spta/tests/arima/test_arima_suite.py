@@ -17,6 +17,6 @@ class TestArimaSuiteParams(unittest.TestCase):
             experiments.append(arima_params)
 
         # then all instances are created
-        self.assertEquals(len(experiments), 63)
-        self.assertEquals(experiments[0], ArimaPDQ(0, 0, 0))
-        self.assertEquals(experiments[62], ArimaPDQ(10, 2, 2))
+        self.assertEqual(len(experiments), 63)
+        self.assertEqual(experiments[0], ArimaPDQ(0, 0, 0))
+        self.assertEqual(experiments[62], ArimaPDQ(10, 2, 2))

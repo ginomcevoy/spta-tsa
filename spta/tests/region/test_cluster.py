@@ -39,7 +39,7 @@ class TestSpatioTemporalCluster(unittest.TestCase):
         self.assertIsNotNone(cluster)
         self.assertTrue(cluster.as_numpy is self.numpy_dataset)
         self.assertTrue(cluster.partition is partition)
-        self.assertEquals(cluster.cluster_index, cluster_index)
+        self.assertEqual(cluster.cluster_index, cluster_index)
         self.assertTrue(cluster.logger is not None)
 
     def test_series_at_point_in_mask(self):
@@ -101,12 +101,12 @@ class TestSpatioTemporalCluster(unittest.TestCase):
             iterated_series.append(series)
 
         # then only three points should have been iterated
-        self.assertEquals(len(iterated_points), 3)
-        self.assertEquals(len(iterated_series), 3)
+        self.assertEqual(len(iterated_points), 3)
+        self.assertEqual(len(iterated_series), 3)
 
-        self.assertEquals(iterated_points[0], Point(0, 0))
-        self.assertEquals(iterated_points[1], Point(1, 0))
-        self.assertEquals(iterated_points[2], Point(1, 2))
+        self.assertEqual(iterated_points[0], Point(0, 0))
+        self.assertEqual(iterated_points[1], Point(1, 0))
+        self.assertEqual(iterated_points[2], Point(1, 2))
 
         self.assertIsNone(np.testing.assert_array_equal(iterated_series[0], self.series_0_0))
         self.assertIsNone(np.testing.assert_array_equal(iterated_series[1], self.series_1_0))

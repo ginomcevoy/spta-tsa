@@ -41,9 +41,9 @@ class TestFunctionRegionScalar(unittest.TestCase):
         output_region = square_function_region.apply_to(sp_region)
 
         # test some values
-        self.assertEquals(output_region.value_at(Point(0, 0)), 0)
-        self.assertEquals(output_region.value_at(Point(0, 2)), 4)
-        self.assertEquals(output_region.value_at(Point(2, 4)), 14 * 14)
+        self.assertEqual(output_region.value_at(Point(0, 0)), 0)
+        self.assertEqual(output_region.value_at(Point(0, 2)), 4)
+        self.assertEqual(output_region.value_at(Point(2, 4)), 14 * 14)
 
     def test_mean_function(self):
 
@@ -75,12 +75,12 @@ class TestFunctionRegionScalar(unittest.TestCase):
         output_region = mean_function_region.apply_to(spt_region)
 
         # test values
-        self.assertEquals(output_region.value_at(Point(0, 0)), 3)
-        self.assertEquals(output_region.value_at(Point(0, 1)), 4)
-        self.assertEquals(output_region.value_at(Point(0, 2)), 1)
-        self.assertEquals(output_region.value_at(Point(1, 0)), 7)
-        self.assertEquals(output_region.value_at(Point(1, 1)), 8)
-        self.assertEquals(output_region.value_at(Point(1, 2)), 0)
+        self.assertEqual(output_region.value_at(Point(0, 0)), 3)
+        self.assertEqual(output_region.value_at(Point(0, 1)), 4)
+        self.assertEqual(output_region.value_at(Point(0, 2)), 1)
+        self.assertEqual(output_region.value_at(Point(1, 0)), 7)
+        self.assertEqual(output_region.value_at(Point(1, 1)), 8)
+        self.assertEqual(output_region.value_at(Point(1, 2)), 0)
 
 
 class TestFunctionRegionScalarSame(unittest.TestCase):
@@ -105,9 +105,9 @@ class TestFunctionRegionScalarSame(unittest.TestCase):
         output_region = square_function_region.apply_to(sp_region)
 
         # test some values
-        self.assertEquals(output_region.value_at(Point(0, 0)), 0)
-        self.assertEquals(output_region.value_at(Point(0, 2)), 4)
-        self.assertEquals(output_region.value_at(Point(2, 4)), 14 * 14)
+        self.assertEqual(output_region.value_at(Point(0, 0)), 0)
+        self.assertEqual(output_region.value_at(Point(0, 2)), 4)
+        self.assertEqual(output_region.value_at(Point(2, 4)), 14 * 14)
 
 
 class TestFunctionRegionSeries(unittest.TestCase):
@@ -150,17 +150,17 @@ class TestFunctionRegionSeries(unittest.TestCase):
 
         # test values
         result_0_0 = output_region.series_at(Point(0, 0))
-        self.assertEquals(result_0_0.tolist(), [15, 3])
+        self.assertEqual(result_0_0.tolist(), [15, 3])
         result_0_1 = output_region.series_at(Point(0, 1))
-        self.assertEquals(result_0_1.tolist(), [20, 4])
+        self.assertEqual(result_0_1.tolist(), [20, 4])
         result_0_2 = output_region.series_at(Point(0, 2))
-        self.assertEquals(result_0_2.tolist(), [5, 1])
+        self.assertEqual(result_0_2.tolist(), [5, 1])
         result_1_0 = output_region.series_at(Point(1, 0))
-        self.assertEquals(result_1_0.tolist(), [35, 7])
+        self.assertEqual(result_1_0.tolist(), [35, 7])
         result_1_1 = output_region.series_at(Point(1, 1))
-        self.assertEquals(result_1_1.tolist(), [40, 8])
+        self.assertEqual(result_1_1.tolist(), [40, 8])
         result_1_2 = output_region.series_at(Point(1, 2))
-        self.assertEquals(result_1_2.tolist(), [0, 0])
+        self.assertEqual(result_1_2.tolist(), [0, 0])
 
 
 class TestFunctionRegionSeriesSame(unittest.TestCase):
@@ -197,14 +197,14 @@ class TestFunctionRegionSeriesSame(unittest.TestCase):
 
         # test values
         result_0_0 = output_region.series_at(Point(0, 0))
-        self.assertEquals(result_0_0.tolist(), [15, 3])
+        self.assertEqual(result_0_0.tolist(), [15, 3])
         result_0_1 = output_region.series_at(Point(0, 1))
-        self.assertEquals(result_0_1.tolist(), [20, 4])
+        self.assertEqual(result_0_1.tolist(), [20, 4])
         result_0_2 = output_region.series_at(Point(0, 2))
-        self.assertEquals(result_0_2.tolist(), [5, 1])
+        self.assertEqual(result_0_2.tolist(), [5, 1])
         result_1_0 = output_region.series_at(Point(1, 0))
-        self.assertEquals(result_1_0.tolist(), [35, 7])
+        self.assertEqual(result_1_0.tolist(), [35, 7])
         result_1_1 = output_region.series_at(Point(1, 1))
-        self.assertEquals(result_1_1.tolist(), [40, 8])
+        self.assertEqual(result_1_1.tolist(), [40, 8])
         result_1_2 = output_region.series_at(Point(1, 2))
-        self.assertEquals(result_1_2.tolist(), [0, 0])
+        self.assertEqual(result_1_2.tolist(), [0, 0])

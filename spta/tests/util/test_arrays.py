@@ -34,7 +34,7 @@ class TestSquarePartitioning(unittest.TestCase):
 
         # then we get 12 regions each of size (20/4) x (12/3) = (5x4)
 
-        self.assertEquals(matrix.shape, (20, 12))
+        self.assertEqual(matrix.shape, (20, 12))
 
         # test region i=0 (first)
         matrix_0 = matrix[0:5, 0:4]
@@ -70,7 +70,7 @@ class TestSquarePartitioning(unittest.TestCase):
 
         # then we get 12 regions, but the last column is a bit wider...
 
-        self.assertEquals(matrix.shape, (20, 13))
+        self.assertEqual(matrix.shape, (20, 13))
 
         # test region i = 1
         matrix_1 = matrix[0:5, 4:8]
@@ -104,7 +104,7 @@ class TestSquarePartitioning(unittest.TestCase):
 
         # then we get 12 regions, but the last row is a bit taller...
 
-        self.assertEquals(matrix.shape, (21, 12))
+        self.assertEqual(matrix.shape, (21, 12))
 
         # test region i = 2, last column of first row, normal case
         matrix_2 = matrix[0:5, 8:12]
@@ -138,7 +138,7 @@ class TestSquarePartitioning(unittest.TestCase):
 
         # then we get 12 regions, but the last row is a bit taller and last col a bit wider
 
-        self.assertEquals(matrix.shape, (21, 13))
+        self.assertEqual(matrix.shape, (21, 13))
 
         # test region i = 1
         matrix_1 = matrix[0:5, 4:8]
@@ -172,7 +172,7 @@ class TestSquarePartitioning(unittest.TestCase):
 
         # then we get 12 regions, but the last column is less wide...
 
-        self.assertEquals(matrix.shape, (20, 11))
+        self.assertEqual(matrix.shape, (20, 11))
 
         # test region i = 1
         matrix_1 = matrix[0:5, 4:8]
@@ -206,6 +206,6 @@ class TestSquarePartitioning(unittest.TestCase):
 
         # then we should get 23 regions
         print(matrix[-1:])
-        self.assertEquals(matrix.shape, (90, 95))
+        self.assertEqual(matrix.shape, (90, 95))
         unique_values = np.unique(matrix.reshape((90 * 95, 1)), return_counts=False)
         self.assertEqual(len(unique_values), 23)

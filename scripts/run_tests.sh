@@ -8,4 +8,4 @@ $SCRIPTS_DIR/clean.sh
 
 # Run tests using pytest
 cd $SCRIPTS_DIR/..
-PYTHONPATH=. pytest-3 --pyargs spta -v
+PYTHONPATH=. pytest --pyargs spta -v

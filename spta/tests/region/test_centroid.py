@@ -33,7 +33,7 @@ class TestCalculateCentroid(unittest.TestCase):
 
         # then index 1 in the matrix has the least distance, so Point(0, 1)
         expected = Point(0, 1)
-        self.assertEquals(centroid, expected)
+        self.assertEqual(centroid, expected)
 
     def test_find_centroid_and_distances_clusters(self):
 
@@ -52,11 +52,11 @@ class TestCalculateCentroid(unittest.TestCase):
 
         # then index 1 -> Point(0, 1)
         expected0 = Point(0, 1)
-        self.assertEquals(centroid0, expected0)
+        self.assertEqual(centroid0, expected0)
 
         # when finding centroid of cluster1
         centroid1, _ = self.calculate_centroid.find_centroid_and_distances(cluster1)
 
         # then index 2 -> Point(0, 2)
         expected1 = Point(0, 2)
-        self.assertEquals(centroid1, expected1)
+        self.assertEqual(centroid1, expected1)

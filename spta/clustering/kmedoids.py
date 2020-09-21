@@ -60,7 +60,7 @@ class KmedoidsClusteringMetadata(ClusteringMetadata):
         NOTE: This implementation assumes that initial_medoids has not been set!
         '''
         parts = repr_string.split('_')
-        assert(parts[0], 'kmedoids')
+        assert(parts[0] == 'kmedoids')
 
         # 1. k
         k_string = parts[1]

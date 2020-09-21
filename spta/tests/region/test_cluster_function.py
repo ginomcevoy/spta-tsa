@@ -40,15 +40,15 @@ class TestFunctionRegionOnSpatioTemporalCluster(unittest.TestCase):
         mean_1_0 = np.mean(spt_region.series_at(Point(1, 0)))
         mean_1_2 = np.mean(spt_region.series_at(Point(1, 2)))
 
-        self.assertEquals(result_0_0, mean_0_0)
-        self.assertEquals(result_1_0, mean_1_0)
-        self.assertEquals(result_1_2, mean_1_2)
+        self.assertEqual(result_0_0, mean_0_0)
+        self.assertEqual(result_1_0, mean_1_0)
+        self.assertEqual(result_1_2, mean_1_2)
 
         # then an iteration should work over the cluster
         sum_of_means = 0
         for (point, a_mean) in mean_cluster_2:
             sum_of_means += a_mean
-        self.assertEquals(sum_of_means, mean_0_0 + mean_1_0 + mean_1_2)
+        self.assertEqual(sum_of_means, mean_0_0 + mean_1_0 + mean_1_2)
 
         # then a point outside the cluster should be invalid
         with self.assertRaises(ValueError):
