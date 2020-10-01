@@ -133,6 +133,20 @@ class ClusteringSuite(log_util.LoggerMixin):
         csv_dir = self.csv_dir(output_home, region_metadata, distance_measure)
         return '{}/{}'.format(csv_dir, self.min_distance_csv_filename(count, random_seed))
 
+    def classifier_csv_filename(self, prediction_region, tp):
+        '''
+        Given a classifier that was trained with the information provided by min_distance,
+        and given its output for classifying the points in a prediction region with a value of
+        tp for number of past samples, return the CSV filename.
+
+        Example:
+        clustering__classifier_result__kmedoids-quick__region-0-5-0-5__tp8.csv
+        '''
+        # TODO make region calculate its own string
+        region_str = 'region-0-5-0-5'
+        tp_str = 'tp8'
+        return 'clustering__classifier_result__{!r}__{}__{}.csv'.format(self, region_str, tp_str)
+
     def __iter__(self):
         '''
         Used for iterating over metadata instances.
