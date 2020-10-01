@@ -9,6 +9,8 @@ from spta.region.metadata import SpatioTemporalRegionMetadata
 from spta.distance.dtw import DistanceByDTW
 from spta.clustering.suite import ClusteringSuite
 
+from spta.tests.stub import stub_clustering
+
 
 class ClusteringSuiteTest(unittest.TestCase):
     '''
@@ -129,12 +131,8 @@ class ClusteringSuiteTest(unittest.TestCase):
 
     def test_analysis_csv_filename(self):
 
-        # given a range of k and random_seed for kmedoids metadata
-        identifier = 'quick'
-        metadata_name = 'kmedoids'
-        ks = range(2, 4)  # k=2, k=3
-        random_seeds = range(0, 2)  # 0, 1
-        kmedoids_suite = ClusteringSuite(identifier, metadata_name, k=ks, random_seed=random_seeds)
+        # given
+        kmedoids_suite = stub_clustering.kmedoids_quick_stub()
 
         # when
         result = kmedoids_suite.analysis_csv_filename()
@@ -145,12 +143,8 @@ class ClusteringSuiteTest(unittest.TestCase):
 
     def test_analysis_csv_filepath(self):
 
-        # given a range of k and random_seed for kmedoids metadata
-        identifier = 'quick'
-        metadata_name = 'kmedoids'
-        ks = range(2, 4)  # k=2, k=3
-        random_seeds = range(0, 2)  # 0, 1
-        kmedoids_suite = ClusteringSuite(identifier, metadata_name, k=ks, random_seed=random_seeds)
+        # given
+        kmedoids_suite = stub_clustering.kmedoids_quick_stub()
 
         # given a region metadata and a distance measure
         region_metadata = SpatioTemporalRegionMetadata('nordeste_small', Region(40, 50, 50, 60),
@@ -168,12 +162,8 @@ class ClusteringSuiteTest(unittest.TestCase):
 
     def test_min_distance_csv_filename(self):
 
-        # given kmedoids metadata
-        identifier = 'quick'
-        metadata_name = 'kmedoids'
-        ks = range(2, 4)  # k=2, k=3
-        random_seeds = range(0, 2)  # 0, 1
-        kmedoids_suite = ClusteringSuite(identifier, metadata_name, k=ks, random_seed=random_seeds)
+        # given
+        kmedoids_suite = stub_clustering.kmedoids_quick_stub()
 
         # given input for <count> random points
         count = 10
@@ -188,12 +178,8 @@ class ClusteringSuiteTest(unittest.TestCase):
 
     def test_min_distance_csv_filepath(self):
 
-        # given kmedoids metadata
-        identifier = 'quick'
-        metadata_name = 'kmedoids'
-        ks = range(2, 4)  # k=2, k=3
-        random_seeds = range(0, 2)  # 0, 1
-        kmedoids_suite = ClusteringSuite(identifier, metadata_name, k=ks, random_seed=random_seeds)
+        # given
+        kmedoids_suite = stub_clustering.kmedoids_quick_stub()
 
         # given a region metadata and a distance measure
         region_metadata = SpatioTemporalRegionMetadata('nordeste_small', Region(40, 50, 50, 60),
