@@ -4,11 +4,10 @@ import random
 from spta.dataset import synthetic_temporal
 
 
-def generate_synthetic_series(clustering_k_min, clustering_k_max, clustering_seeds, num_entries,
+def generate_synthetic_series(available_ks, clustering_seeds, num_entries,
                               series_len, random_seed, a_weight=0.01, b_min=298, b_max=302, noise=0.2):
 
     random.seed(random_seed)
-    available_ks = range(clustering_k_min, clustering_k_max + 1)
 
     output = []
 
@@ -46,12 +45,12 @@ def generate_synthetic_series(clustering_k_min, clustering_k_max, clustering_see
     return output
 
 
-def generate_synthetic_csv(clustering_k_min, clustering_k_max, clustering_seeds, num_entries,
+def generate_synthetic_csv(available_ks, clustering_seeds, num_entries,
                            series_len, random_seed, csv_filename,
                            region_id='whole_real_brazil_2014_2014_1spd', clustering_type='kmedoids',
                            clustering_mode='lite', a_weight=0.01, b_min=298, b_max=302, noise=0.2):
 
-    synthetic_series = generate_synthetic_series(clustering_k_min, clustering_k_max, clustering_seeds, num_entries,
+    synthetic_series = generate_synthetic_series(available_ks, clustering_seeds, num_entries,
                                                  series_len, random_seed, a_weight, b_min, b_max, noise)
 
     with open(csv_filename, 'w', newline='') as csv_file:
@@ -78,12 +77,11 @@ def generate_synthetic_csv(clustering_k_min, clustering_k_max, clustering_seeds,
 
 
 if __name__ == '__main__':
-    clustering_k_min = 2
-    clustering_k_max = 52
+    available_ks = [32, 52, 72]
     clustering_seeds = (0, )
     num_entries = 5000
     series_len = 365
     random_seed = 0
     csv_filename = 'outputs/test.csv'
-    generate_synthetic_csv(clustering_k_min, clustering_k_max, clustering_seeds, num_entries,
+    generate_synthetic_csv(available_ks, clustering_seeds, num_entries,
                            series_len, random_seed, csv_filename)
