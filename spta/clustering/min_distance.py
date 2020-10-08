@@ -265,13 +265,18 @@ class FindClusterWithMinimumDistance(log_util.LoggerMixin):
                 (global_min_clustering_repr, global_min_cluster_index, global_min_medoid) = result
 
                 # the row elements need to match the header:
-                # region_id, <clustering_metadata>, series[0], series[1].... series[x_len]
+                # region_id, <clustering_metadata>, <medoid_data>, series[0], series[1].... series[x_len]
                 region_id = repr(self.region_metadata)
                 row = [region_id]
 
+                # clustering_metadata
                 clustering_metadata = factory.from_repr(global_min_clustering_repr)
                 row.extend(list(clustering_metadata.as_dict().values()))
+
+                # medoid data
                 row.append(global_min_cluster_index)
+                row.append(global_min_medoid.x)
+                row.append(global_min_medoid.y)
 
                 random_point_series = self.spt_region.series_at(random_point)
                 random_point_series_str = [
@@ -328,7 +333,8 @@ def calculate_csv_header_given_suite_result(suite_result, series_len):
     clustering_header_elems = list(first_clustering_metadata.as_dict().keys())
     header.extend(clustering_header_elems)
 
-    header.append('cluster_index')
+    # medoid-specific columns
+    header.extend(['cluster_index', 'medoid_x', 'medoid_y'])
 
     # we want to store each series element in its own column
     series_header_elems = [
