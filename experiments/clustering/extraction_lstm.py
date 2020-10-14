@@ -7,7 +7,7 @@ import argparse
 from experiments.metadata.region import predefined_regions
 from experiments.metadata.clustering import get_suite, suite_options
 
-from spta.clustering.min_distance import FindClusterWithMinimumDistance
+from spta.clustering.min_distance import FindClusterWithMinimumDistance, MedoidSeriesFormatter
 from spta.distance.dtw import DistanceByDTW
 
 from spta.util import log as log_util
@@ -72,11 +72,16 @@ def analyze_suite(args, logger):
     min_distance_finder = FindClusterWithMinimumDistance(region_metadata, distance_measure,
                                                          clustering_suite)
 
+    # this will find the medoid that minimizes its distance with list of random points
     suite_result = min_distance_finder.retrieve_suite_result_csv(output_home)
     min_distance_finder.evaluate_medoid_distance_of_random_points(count=args.random,
                                                                   random_seed=args.random_seed,
                                                                   suite_result=suite_result,
                                                                   output_home=output_home)
+
+    # output medoid data as CSV
+    medoid_formatter = MedoidSeriesFormatter(region_metadata, distance_measure, clustering_suite)
+    medoid_formatter.produce_csv(output_home)
 
 
 def metadata_from_args(args):

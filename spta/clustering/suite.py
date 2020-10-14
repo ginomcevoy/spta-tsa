@@ -133,6 +133,18 @@ class ClusteringSuite(log_util.LoggerMixin):
         csv_dir = self.csv_dir(output_home, region_metadata, distance_measure)
         return '{}/{}'.format(csv_dir, self.min_distance_csv_filename(count, random_seed))
 
+    def medoid_series_csv_filename(self):
+        '''
+        Returns the CSV filename for the list of medoids that appear in a clustering suite.
+        The CSV will describe the clustering metadata, the medoid index and the time series
+        that corresponds to a given spatio-temporal region.
+        '''
+        return 'medoid_data__{!r}.csv'.format(self)
+
+    def medoid_series_csv_filepath(self, output_home, region_metadata, distance_measure):
+        csv_dir = self.csv_dir(output_home, region_metadata, distance_measure)
+        return '{}/{}'.format(csv_dir, self.medoid_series_csv_filename())
+
     def classifier_csv_filename(self, prediction_region, tp):
         '''
         Given a classifier that was trained with the information provided by min_distance,

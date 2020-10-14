@@ -291,6 +291,153 @@ class FindClusterWithMinimumDistance(log_util.LoggerMixin):
         self.logger.info(msg.format(csv_filepath))
 
 
+class MedoidSeriesFormatter(log_util.LoggerMixin):
+    '''
+    Given a clustering suite, generates a CSV with the following information:
+
+    region_id type k seed mode cluster_index medoid_x medoid_y s0 s1 s2...
+
+    Where:
+        region_id identifies a spatio-temporal region
+        (type, k, seed, mode) is a clustering metadata (kmedoids)
+        (cluster_index, medoid_x, medoid_y) identifies a medoid by its index and coordinates
+        (s0, s1, ...) is the temporal series of the medoid for the spatio-temporal region
+    '''
+
+    def __init__(self, region_metadata, distance_measure, clustering_suite):
+        self.region_metadata = region_metadata
+        self.distance_measure = distance_measure
+        self.clustering_suite = clustering_suite
+
+    def retrieve_medoid_data(self, suite_result, spt_region):
+        '''
+        Retrieves all the data specified, by using the clustering metadata in each suite element
+        and extracting the series in the medoid.
+        '''
+        # the actual output needs the series, so we will build a new output based on suite_result
+        # but with a nested dictionary inside the array:
+        # {
+        #   clustering_metadata: {
+        #      (medoid_list)
+        #      [
+        #         {
+        #            cluster_index: 0,
+        #            medoid_x: <x_value0>,
+        #            medoid_y: <y_value0>,
+        #            series: [s0_0, s0_1, s0_2, ...],
+        #         },
+        #         {
+        #            cluster_index: 1,
+        #            medoid_x: <x_value1>,
+        #            medoid_y: <y_value1>,
+        #            series: [s1_0, s1_1, s1_2, ...],
+        #         },
+        #      ]
+        #   }
+        # }
+        #
+        # (first dictionary)
+        #    (medoid_list)
+        #       (medoid_dictionary)
+        #
+        suite_medoid_data = {}
+
+        # PROBLEM: the medoids are in absolute coordinates, but the indices of the
+        # distance matrix are in coordinates relative to the region.
+        # Use the region metadata to convert the absolute coordinates by removing the offset.
+        # TODO improve this someday
+        x_offset, y_offset = self.region_metadata.region.x1, self.region_metadata.region.y1
+        msg = 'Region offset for {}: ({}, {})'.format(self.region_metadata, x_offset, y_offset)
+        self.logger.debug(msg)
+
+        # Iterating each clustering representation, then each medoid in it
+        for clustering_repr, medoids in suite_result.items():
+
+            # the first dictionary
+            suite_medoid_data[clustering_repr] = []
+
+            # build the medoid list by iterating each medoid
+            for i, medoid in enumerate(medoids):
+
+                # for each medoid, build the medoid_dictionary here
+                medoid_entry = {}
+                medoid_entry['cluster_index'] = i
+
+                # here we don't convert coordinates, expose absolute coordinates to the CSV
+                medoid_entry['medoid_x'] = medoid.x
+                medoid_entry['medoid_y'] = medoid.y
+
+                # for the series we do need the converted coordinates
+                medoid_region_point = Point(medoid.x - x_offset, medoid.y - y_offset)
+                medoid_entry['series'] = spt_region.series_at(medoid_region_point)
+
+                suite_medoid_data[clustering_repr].append(medoid_entry)
+
+        return suite_medoid_data
+
+    def produce_csv(self, output_home):
+        '''
+        Gneerates the CSV
+        '''
+        # reuse FindClusterWithMinimumDistance implementation to retrieve suite data
+        min_distance_finder = FindClusterWithMinimumDistance(region_metadata=self.region_metadata,
+                                                             distance_measure=self.distance_measure,
+                                                             clustering_suite=self.clustering_suite)
+        suite_result = min_distance_finder.retrieve_suite_result_csv(output_home)
+        spt_region = min_distance_finder.spt_region
+
+        factory = ClusteringMetadataFactory()
+
+        # call helper method
+        suite_medoid_data = self.retrieve_medoid_data(suite_result, spt_region)
+
+        # prepare the output CSV for min_distance
+        csv_filepath = \
+            self.clustering_suite.medoid_series_csv_filepath(output_home=output_home,
+                                                             region_metadata=self.region_metadata,
+                                                             distance_measure=self.distance_measure)
+
+        # create the CSV
+        with open(csv_filepath, 'w', newline='') as csv_file:
+            csv_writer = csv.writer(csv_file, delimiter=' ', quotechar='|',
+                                    quoting=csv.QUOTE_MINIMAL)
+
+            # the header depends on clustering type
+            # it is the same as for FindClusterWithMinimumDistance!
+            header = calculate_csv_header_given_suite_result(suite_result, spt_region.series_len)
+            csv_writer.writerow(header)
+
+            # to iterate each tuple, we need to iterate both the clustering metadata and the medoids
+            for clustering_repr, medoid_entries in suite_medoid_data.items():
+
+                for medoid_entry in medoid_entries:
+
+                    # the row elements need to match the header:
+                    # region_id, <clustering_metadata>, <medoid_data>, series[0], series[1].... series[x_len]
+                    region_id = repr(self.region_metadata)
+                    row = [region_id]
+
+                    # clustering_metadata
+                    clustering_metadata = factory.from_repr(clustering_repr)
+                    row.extend(list(clustering_metadata.as_dict().values()))
+
+                    # medoid data
+                    row.append(medoid_entry['cluster_index'])
+                    row.append(medoid_entry['medoid_x'])
+                    row.append(medoid_entry['medoid_y'])
+
+                    medoid_series_str = [
+                        '{:0.3f}'.format(elem)
+                        for elem in medoid_entry['series']
+                    ]
+                    row.extend(medoid_series_str)
+
+                    csv_writer.writerow(row)
+
+        msg = 'Saved medoid_data at {}'
+        self.logger.info(msg.format(csv_filepath))
+
+
 def extract_all_medoid_indices_from_suite_result(suite_result, spt_region):
     '''
     Given the suite_result dictionary built from its CSV, obtain a set of all the medoid indices.

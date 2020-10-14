@@ -199,3 +199,23 @@ class ClusteringSuiteTest(unittest.TestCase):
         expected = 'outputs/nordeste_small_2015_2015_1spd/dtw/' \
             'random_point_dist_medoid__kmedoids-quick_count10_seed0.csv'
         self.assertEqual(result, expected)
+
+    def test_medoid_series_csv_filepath(self):
+
+        # given
+        kmedoids_suite = stub_clustering.kmedoids_quick_stub()
+
+        # given a region metadata and a distance measure
+        region_metadata = SpatioTemporalRegionMetadata('nordeste_small', Region(40, 50, 50, 60),
+                                                       2015, 2015, 1, scaled=False)
+        distance_measure = DistanceByDTW()
+        output_home = 'outputs'
+
+        # when
+        result = kmedoids_suite.medoid_series_csv_filepath(output_home, region_metadata,
+                                                           distance_measure)
+
+        # then
+        expected = 'outputs/nordeste_small_2015_2015_1spd/dtw/' \
+            'medoid_data__kmedoids-quick.csv'
+        self.assertEqual(result, expected)
