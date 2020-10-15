@@ -1,3 +1,7 @@
+import csv
+import os
+
+from spta.region import Point
 from .factory import ClusteringMetadataFactory
 
 from spta.util import log as log_util
@@ -91,6 +95,65 @@ class ClusteringSuite(log_util.LoggerMixin):
                                                        **single_value_parameters))
 
         return instances
+
+    def retrieve_suite_result_csv(self, output_home, region_metadata, distance_measure):
+        '''
+        This will open the result CSV of analizing the current clustering suite, e.g.
+        outputs/nordeste_small_2015_2015_1spd/dtw/clustering__kmedoids-quick.csv
+
+        Then it reads, for each tuple, the metadata representation and the list of medoids.
+        Returns a dictionary, where each key is a metadata representation and the value is the
+        corresponding list of medoids. Given the metadata representation string, the metadata
+        instance can be retrieved using ClusteringMetadataFactory.from_repr()
+
+        {
+            'kmedoids_k2_seed0_lite': [Point(45,86), Point(47,91)],
+            'kmedoids_k3_seed0_lite': [Point(45,86), Point(48,89), Point(45,92)],
+            ...
+        }
+        '''
+        result = {}
+
+        # the suite knows where its result should be stored
+        analysis_csv_filepath = \
+            self.analysis_csv_filepath(output_home, region_metadata, distance_measure)
+
+        if not os.path.isfile(analysis_csv_filepath):
+            raise ValueError('Could not find CSV: {}'.format(analysis_csv_filepath))
+
+        # open the CSV, ignore header
+        with open(analysis_csv_filepath, newline='') as csvfile:
+            csv_reader = csv.reader(csvfile, delimiter=' ', quotechar='|',
+                                    quoting=csv.QUOTE_MINIMAL)
+            # ignore header
+            next(csv_reader)
+
+            for row in csv_reader:
+                # the first column is the representation of the clustering, this is used as key
+                clustering_repr = row[0]
+
+                # the second column is the total result, don't want this
+                # the third column is the list of medoids as string, use this to create the point
+                # instances representing the medoids of the clustering
+                medoids_str = row[2]
+
+                # string manipulations to retrieve the medoids as Point instances
+                medoids_str_elems = medoids_str.split(' ')[:-1]
+                medoids_str_coord_pairs = [
+                    medoids_str_elem[1:-1].split(',')
+                    for medoids_str_elem
+                    in medoids_str_elems
+                ]
+                medoids = [
+                    Point(int(medoids_str_coord_pair[0]), int(medoids_str_coord_pair[1]))
+                    for medoids_str_coord_pair
+                    in medoids_str_coord_pairs
+                ]
+
+                # store this tuple
+                result[clustering_repr] = medoids
+
+        return result
 
     def csv_dir(self, output_home, region_metadata, distance_measure):
         '''

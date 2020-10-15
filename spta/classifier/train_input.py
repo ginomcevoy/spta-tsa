@@ -5,20 +5,16 @@ now is to choose the most appropriate clustering given a predictive query.
 
 Here, we explore the space of clustering metadata (e.g. k-medoids) to find the medoids which have
 the minimum distance (e.g. DTW) with a given point in the region.
-
-TODO Move some of this logic to a "SuiteResult" class in spta.clustering.suite
-TODO Cannot do it now because the logic that creates the CSV is in experiments instead of spta.
 '''
 import csv
 import numpy as np
 import os
 
 from spta.region import Point
+from spta.clustering.factory import ClusteringMetadataFactory
 
 from spta.util import log as log_util
 from spta.util import maths as maths_util
-
-from .factory import ClusteringMetadataFactory
 
 
 class FindClusterWithMinimumDistance(log_util.LoggerMixin):
@@ -50,65 +46,10 @@ class FindClusterWithMinimumDistance(log_util.LoggerMixin):
         # need the actual region data for this (should have been only its metadata)
         self.spt_region = self.region_metadata.create_instance()
 
-    def retrieve_suite_result_csv(self, output_home):
-        '''
-        This will open the result CSV of analizing a clustering suite, e.g.
-        outputs/nordeste_small_2015_2015_1spd/dtw/clustering__kmedoids-quick.csv
-
-        Then it reads, for each tuple, the metadata representation and the list of medoids.
-        Returns a dictionary, where each key is a metadata representation and the value is the
-        corresponding list of medoids. Given the metadata representation string, the metadata
-        instance can be retrieved using ClusteringMetadataFactory.from_repr()
-        '''
-        result = {}
-
-        # the suite knows where its result should be stored
-        analysis_csv_filepath = \
-            self.clustering_suite.analysis_csv_filepath(output_home=output_home,
-                                                        region_metadata=self.region_metadata,
-                                                        distance_measure=self.distance_measure)
-
-        if not os.path.isfile(analysis_csv_filepath):
-            raise ValueError('Could not find CSV: {}'.format(analysis_csv_filepath))
-
-        # open the CSV, ignore header
-        with open(analysis_csv_filepath, newline='') as csvfile:
-            csv_reader = csv.reader(csvfile, delimiter=' ', quotechar='|',
-                                    quoting=csv.QUOTE_MINIMAL)
-            # ignore header
-            next(csv_reader)
-
-            for row in csv_reader:
-                # the first column is the representation of the clustering, this is used as key
-                clustering_repr = row[0]
-
-                # the second column is the total result, don't want this
-                # the third column is the list of medoids as string, use this to create the point
-                # instances representing the medoids of the clustering
-                medoids_str = row[2]
-
-                # string manipulations to retrieve the medoids as Point instances
-                medoids_str_elems = medoids_str.split(' ')[:-1]
-                medoids_str_coord_pairs = [
-                    medoids_str_elem[1:-1].split(',')
-                    for medoids_str_elem
-                    in medoids_str_elems
-                ]
-                medoids = [
-                    Point(int(medoids_str_coord_pair[0]), int(medoids_str_coord_pair[1]))
-                    for medoids_str_coord_pair
-                    in medoids_str_coord_pairs
-                ]
-
-                # store this tuple
-                result[clustering_repr] = medoids
-
-        return result
-
     def find_medoid_with_minimum_distance_to_point(self, point, suite_result,
                                                    with_matrix=True):
         '''
-        Given a point, explore the list of medoids retrieved in retrieve_suite_result_csv()
+        Given a point, explore the list of medoids from clustering_suite.retrieve_suite_result_csv()
         to find the medoid with the minimum distance. Uses the distance_measure, and should
         leverage a distance matrix for speed.
 
@@ -308,6 +249,7 @@ class MedoidSeriesFormatter(log_util.LoggerMixin):
         self.region_metadata = region_metadata
         self.distance_measure = distance_measure
         self.clustering_suite = clustering_suite
+        self.spt_region = self.region_metadata.create_instance()
 
     def retrieve_medoid_data(self, suite_result, spt_region):
         '''
@@ -379,17 +321,14 @@ class MedoidSeriesFormatter(log_util.LoggerMixin):
         '''
         Gneerates the CSV
         '''
-        # reuse FindClusterWithMinimumDistance implementation to retrieve suite data
-        min_distance_finder = FindClusterWithMinimumDistance(region_metadata=self.region_metadata,
-                                                             distance_measure=self.distance_measure,
-                                                             clustering_suite=self.clustering_suite)
-        suite_result = min_distance_finder.retrieve_suite_result_csv(output_home)
-        spt_region = min_distance_finder.spt_region
+        suite_result = self.clustering_suite.retrieve_suite_result_csv(output_home=output_home,
+                                                                       region_metadata=self.region_metadata,
+                                                                       distance_measure=self.distance_measure)
 
         factory = ClusteringMetadataFactory()
 
         # call helper method
-        suite_medoid_data = self.retrieve_medoid_data(suite_result, spt_region)
+        suite_medoid_data = self.retrieve_medoid_data(suite_result, self.spt_region)
 
         # prepare the output CSV for min_distance
         csv_filepath = \
@@ -404,7 +343,7 @@ class MedoidSeriesFormatter(log_util.LoggerMixin):
 
             # the header depends on clustering type
             # it is the same as for FindClusterWithMinimumDistance!
-            header = calculate_csv_header_given_suite_result(suite_result, spt_region.series_len)
+            header = calculate_csv_header_given_suite_result(suite_result, self.spt_region.series_len)
             csv_writer.writerow(header)
 
             # to iterate each tuple, we need to iterate both the clustering metadata and the medoids

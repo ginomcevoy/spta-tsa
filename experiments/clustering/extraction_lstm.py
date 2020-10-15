@@ -7,7 +7,7 @@ import argparse
 from experiments.metadata.region import predefined_regions
 from experiments.metadata.clustering import get_suite, suite_options
 
-from spta.clustering.min_distance import FindClusterWithMinimumDistance, MedoidSeriesFormatter
+from spta.classifier.train_input import FindClusterWithMinimumDistance, MedoidSeriesFormatter
 from spta.distance.dtw import DistanceByDTW
 
 from spta.util import log as log_util
