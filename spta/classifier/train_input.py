@@ -10,14 +10,16 @@ import csv
 import numpy as np
 import os
 
-from spta.region import Point
+from spta.region import Point, Region
 from spta.clustering.factory import ClusteringMetadataFactory
+from spta.solver.auto_arima import AutoARIMASolverPickler
+from spta.solver.metadata import SolverMetadataBuilder
 
 from spta.util import log as log_util
 from spta.util import maths as maths_util
 
 
-CHOICE_CRITERIA = ['min_distance', ]
+CHOICE_CRITERIA = ['min_distance', 'min_error']
 
 
 class TrainDataWithRandomPoints(log_util.LoggerMixin):
@@ -53,14 +55,18 @@ class TrainDataWithRandomPoints(log_util.LoggerMixin):
         self.distance_measure = distance_measure
         self.spt_region = self.region_metadata.create_instance()
 
-        self.choice_strategies = {
-            'min_distance': MedoidsChoiceMinDistance(region_metadata, distance_measure)
+    def get_choice_strategy(self, criterion, output_home, **choice_args):
+        choice_strategies = {
+            'min_distance': MedoidsChoiceMinDistance(self.region_metadata, self.distance_measure),
+            'min_error': MedoidsChoiceMinPredictionError(self.region_metadata, self.distance_measure, output_home, **choice_args)
         }
+        return choice_strategies[criterion]
 
-    def evaluate_score_of_random_points(self, clustering_suite, count, random_seed, criterion, output_home):
+    def evaluate_score_of_random_points(self, clustering_suite, count, random_seed, criterion, output_home,
+                                        **choice_args):
 
         # strategy that will calculate the medoid M given the point P
-        choice_strategy = self.choice_strategies[criterion]
+        choice_strategy = self.get_choice_strategy(criterion, output_home, **choice_args)
 
         # read suite partitions from previously calculated result
         suite_result = clustering_suite.retrieve_suite_result_csv(output_home=output_home,
@@ -80,10 +86,10 @@ class TrainDataWithRandomPoints(log_util.LoggerMixin):
                                                                     x_len, y_len)
 
         # prepare the output CSV for min_distance
-        csv_filepath = choice_strategy. csv_filepath(output_home=output_home,
-                                                     clustering_suite=clustering_suite,
-                                                     count=count,
-                                                     random_seed=random_seed)
+        csv_filepath = choice_strategy.csv_filepath(output_home=output_home,
+                                                    clustering_suite=clustering_suite,
+                                                    count=count,
+                                                    random_seed=random_seed)
 
         # create the CSV
         with open(csv_filepath, 'w', newline='') as csv_file:
@@ -98,7 +104,7 @@ class TrainDataWithRandomPoints(log_util.LoggerMixin):
             for random_point in random_points:
 
                 # find the medoid M for the point P
-                result = choice_strategy.choose_medoid(suite_result, random_point)
+                result = choice_strategy.choose_medoid(suite_result, random_point, **choice_args)
                 (global_min_clustering_repr, global_min_cluster_index, global_min_medoid) = result
 
                 # the row elements need to match the header:
@@ -165,14 +171,14 @@ class MedoidsChoiceStrategy(log_util.LoggerMixin):
         }
     '''
 
-    def get_medoid_penalties(self, medoids, point):
+    def get_medoid_penalties(self, clustering_repr, medoids, point):
         '''
         Implementation of the penalization score, the lower the better for a medoid.
         Should return a list of the scores with the same order as the medoids.
         '''
         pass
 
-    def choose_medoid(self, suite_result, point):
+    def choose_medoid(self, suite_result, point, **choice_args):
         '''
         Given a point, explore the list of medoids from clustering_suite.retrieve_suite_result_csv()
         to find the medoid with the lowest penalization score.
@@ -202,7 +208,7 @@ class MedoidsChoiceStrategy(log_util.LoggerMixin):
         for clustering_repr, medoids in suite_result.items():
 
             # subclasses will implement this
-            scores = self.get_medoid_penalties(medoids, point)
+            scores = self.get_medoid_penalties(clustering_repr, medoids, point)
 
             # find the medoid with minimum score in the current clustering_repr
             current_min_cluster_index = np.argmin(scores)
@@ -258,7 +264,7 @@ class MedoidsChoiceMinDistance(MedoidsChoiceStrategy):
         # need the actual region for this
         self.spt_region = self.region_metadata.create_instance()
 
-    def get_medoid_penalties(self, medoids, point):
+    def get_medoid_penalties(self, clustering_repr, medoids, point):
         '''
         Given N, the train input consists of finding N random points in the region that are *not* medoids
         found in a clustering suite. For these N points, find the medoid for which the DTW distance
@@ -290,6 +296,113 @@ class MedoidsChoiceMinDistance(MedoidsChoiceStrategy):
         csv_dir = clustering_suite.csv_dir(output_home, self.region_metadata, self.distance_measure)
         filename = 'random_point_dist_medoid__{!r}_count{}_seed{}.csv'.format(clustering_suite, count, random_seed)
         return os.path.join(csv_dir, filename)
+
+
+class MedoidsChoiceMinPredictionError(MedoidsChoiceStrategy):
+
+    '''
+    Given a point, explore the list of medoids to find the medoid with the minimum distance.
+    Uses the distance_measure, and requires a pre-calculated distance matrix.
+    '''
+
+    def __init__(self, region_metadata, distance_measure, output_home, model_params, test_len, error_type):
+        self.region_metadata = region_metadata
+        self.distance_measure = distance_measure
+
+        # PROBLEM: the medoids are in absolute coordinates, but the indices of the
+        # distance matrix are in coordinates relative to the region.
+        # Use the region metadata to convert the absolute coordinates by removing the offset.
+        # TODO improve this someday
+        self.x_offset, self.y_offset = region_metadata.region.x1, region_metadata.region.y1
+        msg = 'Region offset for {}: ({}, {})'.format(self.region_metadata, self.x_offset, self.y_offset)
+        self.logger.debug(msg)
+
+        # need the actual region for this
+        self.spt_region = self.region_metadata.create_instance()
+
+        self.model_params = model_params
+        self.test_len = test_len
+        self.error_type = error_type
+        self.output_home = output_home
+
+        # cache solvers so that we don't reconstruct them every single time
+        self.solvers = {}
+
+    def get_medoid_penalties(self, clustering_repr, medoids, point):
+        '''
+        Given N, the train input consists of finding N random points in the region that are *not* medoids
+        found in a clustering suite. For these N points, find the medoid for which the prediction error
+        of the model in the medoid is minimized, when predicting the last test_len elements of the series
+        in point.
+        '''
+        # recover the solver, leverage cache
+        solver_metadata = self.build_solver_metadata(clustering_repr)
+        solver_repr = repr(solver_metadata)
+        self.logger.debug('Looking for solver metadata: {}'.format(solver_repr))
+        if solver_repr in self.solvers:
+            solver = self.solvers[solver_repr]
+            self.logger.debug('Using recovered solver: {}'.format(solver))
+        else:
+            # new solver
+            solver_pickler = AutoARIMASolverPickler(solver_metadata)
+            solver = solver_pickler.load_solver()
+            self.solvers[solver_repr] = solver
+            self.logger.debug('Adding new solver: {}'.format(solver))
+
+        # there are TWO main options here:
+        #
+        # 1. Use the solver to make calculate the predictions and corresponding errors.
+        #    To do this, we use in-sample forecasting which forces test_len (TODO FIXME need better interface here!)
+        #    There will only be one usable medoid, the others will get np.Inf as the penalty score.
+        #    NOTE: The solver will use the medoid for which the point belongs to according to its partition.
+        #
+        # 2. Use the solver only to get to the models, but not use it for predictions. Instead, calculate the prediction
+        #    error of each medoid and use it as the score.
+        #
+        # We are here using method 1.
+
+        # start from max penalties, only one medoid will get its proper score which is the prediction error.
+        penalties = np.repeat(np.Inf, repeats=len(medoids))
+
+        # build a 1x1 region and ask the solver to calculate the prediction
+        # we use forecast_len = 0 to signal in-sample forecasting
+        prediction_region = Region(point.x, point.x + 1, point.y, point.y + 1)
+        prediction_result = solver.predict(prediction_region, forecast_len=0, output_home=self.output_home, plot=False)
+
+        # recover the error using (0, 0) relative to the prediction region
+        forecast_error_at_representative = prediction_result.prediction_error_at(Point(0, 0))
+
+        # which medoid was it? to answer this we need the partition
+        # the interface expects a list of points, build a tuple and get only element
+        cluster_index_of_representative = solver.partition.membership_of_points((point, ))[0]
+
+        # adjust the penalty of the medoid that represents the point
+        penalties[cluster_index_of_representative] = forecast_error_at_representative
+        return penalties
+
+    def csv_filepath(self, output_home, clustering_suite, count, random_seed):
+        '''
+        Returns the CSV filename relevant to minimizing the prediction error of the model in the medoid.
+        '''
+        csv_dir = clustering_suite.csv_dir(output_home, self.region_metadata, self.distance_measure)
+        filename_template = 'random_point_medoid_min_pred_error__{!r}__tp{}__{}__{!r}_count{}_seed{}.csv'
+        filename = filename_template.format(self.model_params, self.test_len, self.error_type,
+                                            clustering_suite, count, random_seed)
+        return os.path.join(csv_dir, filename)
+
+    def build_solver_metadata(self, clustering_repr):
+        '''
+        With the available information, it is possible to reconstruct the solver metadata
+        of the solver with the required models. Once the solver is recovered from persistence,
+        the models of the medoids can be accessed, and the prediction error calculated.
+        '''
+        # recover the clustering metadata from the string
+        factory = ClusteringMetadataFactory()
+        clustering_metadata = factory.from_repr(clustering_repr)
+
+        builder = SolverMetadataBuilder(self.region_metadata, self.model_params, self.test_len, self.error_type)
+        builder.with_clustering(clustering_metadata, self.distance_measure)
+        return builder.build()
 
 
 class MedoidSeriesFormatter(log_util.LoggerMixin):

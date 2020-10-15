@@ -5,8 +5,8 @@ Unit tests for spta.classifier.train_input module.
 from spta.region import Region, Point
 from spta.region.metadata import SpatioTemporalRegionMetadata
 
-from spta.classifier.train_input import MedoidsChoiceMinDistance
-from spta.clustering.suite import ClusteringSuite
+from spta.arima import AutoArimaParams
+from spta.classifier.train_input import MedoidsChoiceMinDistance, MedoidsChoiceMinPredictionError
 from spta.distance.dtw import DistanceByDTW
 
 from spta.tests.stub import stub_clustering
@@ -20,15 +20,10 @@ class TestMedoidsChoiceMinDistance(unittest.TestCase):
     '''
 
     def setUp(self):
-        # necessary setup to find the CSV file with path
-        # resources/nordeste_small_2015_2015_1spd/dtw/clustering__kmedoids-quick.csv
-        self.output_home = 'spta/tests/resources'
         self.region_metadata = SpatioTemporalRegionMetadata('nordeste_small',
                                                             Region(43, 50, 85, 95), 2015, 2015, 1,
                                                             scaled=False)
         self.distance_measure = DistanceByDTW()
-        self.clustering_suite = ClusteringSuite('quick', 'kmedoids', k=range(2, 3),
-                                                random_seed=range(0, 2))
 
     def test_choose_medoid(self):
         # NOTE this requires a pre-calculated distance matrix!
@@ -70,3 +65,67 @@ class TestMedoidsChoiceMinDistance(unittest.TestCase):
         expected = 'outputs/nordeste_small_2015_2015_1spd/dtw/' \
             'random_point_dist_medoid__kmedoids-quick_count10_seed0.csv'
         self.assertEqual(result, expected)
+
+
+class TestMedoidsChoiceMinPredictionError(unittest.TestCase):
+    '''
+    Unit tests for train_input.MedoidsChoiceMinPredictionError class.
+    '''
+
+    def setUp(self):
+        self.region_metadata = SpatioTemporalRegionMetadata('nordeste_small',
+                                                            Region(43, 50, 85, 95), 2015, 2015, 1,
+                                                            scaled=False)
+        self.distance_measure = DistanceByDTW()
+
+    def test_csv_filepath(self):
+
+        # given
+        kmedoids_suite = stub_clustering.kmedoids_quick_stub()
+        output_home = 'outputs'
+
+        # given input for <count> random points
+        count = 10
+        random_seed = 0
+
+        # given some solver metadata
+        model_params = AutoArimaParams(1, 1, 3, 3, None, True)
+        test_len = 8
+        error_type = 'sMAPE'
+
+        instance = MedoidsChoiceMinPredictionError(region_metadata=self.region_metadata,
+                                                   distance_measure=self.distance_measure,
+                                                   model_params=model_params,
+                                                   test_len=test_len,
+                                                   error_type=error_type,
+                                                   output_home=output_home)
+
+        # when
+        result = instance.csv_filepath(output_home, kmedoids_suite, count, random_seed)
+
+        # then
+        expected = 'outputs/nordeste_small_2015_2015_1spd/dtw/' \
+            'random_point_medoid_min_pred_error__auto-arima-start_p1-start_q1-max_p3-max_q3-dNone-stepwiseTrue__tp8__sMAPE__kmedoids-quick_count10_seed0.csv'
+        self.assertEqual(result, expected)
+
+    def test_build_solver_metadata(self):
+
+        # given
+        clustering_repr = 'kmedoids_k3_seed0_lite'
+        output_home = 'outputs'
+
+        # given some solver metadata
+        model_params = AutoArimaParams(1, 1, 3, 3, None, True)
+        test_len = 8
+        error_type = 'sMAPE'
+
+        instance = MedoidsChoiceMinPredictionError(region_metadata=self.region_metadata,
+                                                   distance_measure=self.distance_measure,
+                                                   model_params=model_params,
+                                                   test_len=test_len,
+                                                   error_type=error_type,
+                                                   output_home=output_home)
+        solver_metadata = instance.build_solver_metadata(clustering_repr)
+        self.assertTrue(solver_metadata is not None)
+        self.assertEqual(solver_metadata.error_type, 'sMAPE')
+        self.assertEqual(solver_metadata.clustering_metadata.k, 3)

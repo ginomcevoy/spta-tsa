@@ -219,6 +219,7 @@ class AutoARIMASolver(log_util.LoggerMixin):
     point in the subregion, the forecast at the medoid of the cluster for which each point is
     a member.
     '''
+
     def __init__(self, solver_metadata, partition, arima_model_region_training,
                  arima_model_region_whole, generalization_errors):
 
@@ -248,7 +249,8 @@ class AutoARIMASolver(log_util.LoggerMixin):
             self.prepare_for_predictions()
 
         # plot the whole region and the prediction region
-        self.plot_regions(prediction_region, output_home)
+        if plot:
+            self.plot_regions(prediction_region, output_home)
 
         px1, px2, py1, py2 = prediction_region.x1, prediction_region.x2, prediction_region.y1, \
             prediction_region.y2

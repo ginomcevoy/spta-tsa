@@ -136,6 +136,11 @@ class MetadataWithClustering(SolverMetadataBasic):
         return '{} {} {} {} {}'.format(self.region_metadata, self.clustering_metadata,
                                        self.distance_measure, self.model_params, self.error_type)
 
+    def __repr__(self):
+        return '{!r}__{!r}__{!r}__{!r}__{}'.format(self.region_metadata, self.clustering_metadata,
+                                                   self.distance_measure, self.model_params,
+                                                   self.error_type)
+
 
 class SolverMetadataBuilder():
     '''
