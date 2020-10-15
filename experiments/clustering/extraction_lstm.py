@@ -7,7 +7,7 @@ import argparse
 from experiments.metadata.region import predefined_regions
 from experiments.metadata.clustering import get_suite, suite_options
 
-from spta.classifier.train_input import FindClusterWithMinimumDistance, MedoidSeriesFormatter
+from spta.classifier.train_input import TrainDataWithRandomPoints, MedoidSeriesFormatter, CHOICE_CRITERIA
 from spta.distance.dtw import DistanceByDTW
 
 from spta.util import log as log_util
@@ -18,7 +18,7 @@ def processRequest():
     # parses the arguments
     desc = 'Extraction LSTM...'
 
-    usage = '%(prog)s [-h] <region> [kmedoids|regular] <clustering_suite> [--random=1000] ' \
+    usage = '%(prog)s [-h] <region> [kmedoids|regular] <clustering_suite> <criterion> [--random=1000] ' \
         '[--random-seed=0] [--log LOG]'
     parser = argparse.ArgumentParser(prog='cluster-extraction-lstm', description=desc,
                                      usage=usage)
@@ -35,6 +35,9 @@ def processRequest():
     # required argument: clustering ID
     parser.add_argument('clustering_suite', help='ID of the clustering suite',
                         choices=suite_options())
+
+    # required argument: criterion to choose medoid
+    parser.add_argument('criterion', help='How to choose the medoid for a random point', choices=CHOICE_CRITERIA)
 
     # random parameters
     help_msg = 'Number of random points for extraction (default: %(default)s)'
@@ -69,15 +72,13 @@ def analyze_suite(args, logger):
     distance_measure.load_distance_matrix_2d(region_metadata.distances_filename,
                                              region_metadata.region)
 
-    min_distance_finder = FindClusterWithMinimumDistance(region_metadata, distance_measure,
-                                                         clustering_suite)
-
     # this will find the medoid that minimizes its distance with list of random points
-    suite_result = min_distance_finder.retrieve_suite_result_csv(output_home)
-    min_distance_finder.evaluate_medoid_distance_of_random_points(count=args.random,
-                                                                  random_seed=args.random_seed,
-                                                                  suite_result=suite_result,
-                                                                  output_home=output_home)
+    train_data_generator = TrainDataWithRandomPoints(region_metadata, distance_measure)
+    train_data_generator.evaluate_score_of_random_points(clustering_suite=clustering_suite,
+                                                         count=args.random,
+                                                         random_seed=args.random_seed,
+                                                         criterion=args.criterion,
+                                                         output_home=output_home)
 
     # output medoid data as CSV
     medoid_formatter = MedoidSeriesFormatter(region_metadata, distance_measure, clustering_suite)

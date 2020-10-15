@@ -162,41 +162,6 @@ class ClusteringSuiteTest(unittest.TestCase):
         expected = 'outputs/nordeste_small_2015_2015_1spd/dtw/clustering__kmedoids-quick.csv'
         self.assertEqual(result, expected)
 
-    def test_min_distance_csv_filename(self):
-
-        # given
-        kmedoids_suite = stub_clustering.kmedoids_quick_stub()
-
-        # given input for <count> random points
-        count = 10
-        random_seed = 0
-
-        # when
-        result = kmedoids_suite.min_distance_csv_filename(count, random_seed)
-
-        # then
-        expected = 'random_point_dist_medoid__kmedoids-quick_count10_seed0.csv'
-        self.assertEqual(result, expected)
-
-    def test_min_distance_csv_filepath(self):
-
-        # given
-        kmedoids_suite = stub_clustering.kmedoids_quick_stub()
-        output_home = 'outputs'
-
-        # given input for <count> random points
-        count = 10
-        random_seed = 0
-
-        # when
-        result = kmedoids_suite.min_distance_csv_filepath(output_home, self.region_metadata,
-                                                          self.distance_measure, count, random_seed)
-
-        # then
-        expected = 'outputs/nordeste_small_2015_2015_1spd/dtw/' \
-            'random_point_dist_medoid__kmedoids-quick_count10_seed0.csv'
-        self.assertEqual(result, expected)
-
     def test_medoid_series_csv_filepath(self):
 
         # given
