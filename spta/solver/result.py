@@ -25,6 +25,7 @@ class PredictionQueryResult(BaseRegion):
     - The cluster index associated to the cluster for which the point is identified
 
     '''
+
     def __init__(self, solver_metadata, forecast_len, forecast_subregion, error_subregion,
                  prediction_region, spt_region, output_home):
         '''
@@ -145,6 +146,9 @@ class PredictionQueryResult(BaseRegion):
 
     def to_domain_coordinates(self, relative_point):
         return Point(relative_point.x + self.offset_x, relative_point.y + self.offset_y)
+
+    def to_relative_coordinates(self, domain_point):
+        return Point(domain_point.x - self.offset_x, domain_point.y - self.offset_y)
 
     def absolute_coordinates_of(self, domain_point):
         '''
@@ -583,6 +587,99 @@ class ResultWithPartition(PredictionQueryResult):
         return self.decorated.result_prefix()
 
 
+class ResultFromClassifier(PredictionQueryResult):
+    '''
+    Reifies the decorator pattern to add support for classifier information to the results.
+    '''
+
+    def __init__(self, decorated, clustering_suite, classifier_labels_by_point):
+
+        # inherit these properties from decorated results
+        super(ResultFromClassifier, self).__init__(solver_metadata=decorated.metadata,
+                                                   forecast_len=decorated.forecast_len,
+                                                   forecast_subregion=decorated.forecast_subregion,
+                                                   error_subregion=decorated.error_subregion,
+                                                   prediction_region=decorated.prediction_region,
+                                                   spt_region=decorated.spt_region,
+                                                   output_home=decorated.output_home)
+        self.decorated = decorated
+
+        # classifier-specific
+        self.clustering_suite = clustering_suite
+        self.classifier_labels_by_point = classifier_labels_by_point
+
+    def lines_for_point(self, relative_point):
+        '''
+        A summary of the prediction result for a given point in the prediction region.
+        Here, the decorated list of lines is kept, only the first line is changed to add
+        classifier information.
+        '''
+        lines = self.decorated.lines_for_point(relative_point)
+
+        # undo the prediction offset to get coordinates in the domain region
+        domain_point = self.to_domain_coordinates(relative_point)
+
+        # switch the first line with this line
+        lines[0] = self.text_intro_for_domain_point(domain_point)
+        return lines
+
+    def text_intro_for_domain_point(self, domain_point):
+        '''
+        Description of point, adds classifier information.
+        '''
+        msg = 'Point: {} (label {})'
+
+        relative_point = self.decorated.to_relative_coordinates(domain_point)
+        return msg.format(self.decorated.absolute_coordinates_of(domain_point),
+                          self.classifier_labels_by_point[relative_point])
+
+    def result_header(self):
+        '''
+        The header for the result, e.g. CSV.
+        Inserts the label to the header, at the second position
+        '''
+        header_row = self.decorated.result_header()
+        header_row.insert(1, 'label')
+        return header_row
+
+    def result_tuple_for_point(self, relative_point):
+        '''
+        A tuple for the result, given a point in the prediction region.
+        Inserts the label of the point to the tuple, at the second position.
+        '''
+        # the tuple without clustering
+        point_tuple = self.decorated.result_tuple_for_point(relative_point)
+
+        classifier_label = self.classifier_labels_by_point[relative_point]
+        point_tuple.insert(1, classifier_label)
+
+        return point_tuple
+
+    def summary_header(self):
+        '''
+        The header for the summary, e.g. when exported via CSV
+        Adds a column for the clustering suite.
+        '''
+        summary_header_with_suite = ['suite']
+
+        # add the rest of the columns
+        summary_header_decorated = self.decorated.summary_header()
+        summary_header_with_suite.extend(summary_header_decorated)
+        return tuple(summary_header_with_suite)
+
+    def summary_tuple(self):
+        '''
+        A tuple that summarizes this result, e.g. when exported via CSV
+        Adds clustering suite info
+        '''
+        summary_with_suite = ['{!r}'.format(self.clustering_suite)]
+
+        # add the rest of the summary
+        summary_tuple_decorated = self.decorated.summary_tuple()
+        summary_with_suite.extend(summary_tuple_decorated)
+        return tuple(summary_with_suite)
+
+
 class PredictionQueryResultBuilder(object):
     '''
     Reifies builder pattern to create instances of PredictionQueryRegion.
@@ -616,6 +713,13 @@ class PredictionQueryResultBuilder(object):
         Adds support for clustering via the calculated partition.
         '''
         self.result = ResultWithPartition(self.result, partition)
+        return self
+
+    def from_classifier(self, clustering_suite, classifier_labels_by_point):
+        '''
+        Add support for suite and classifier labels.
+        '''
+        self.result = ResultFromClassifier(self.result, clustering_suite, classifier_labels_by_point)
         return self
 
     def build(self):

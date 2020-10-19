@@ -5,6 +5,8 @@ the forecast errors for each point. Finally, print the results and save as CSV.
 
 This exhaustive approach (100 models for a 10x10 region) is meant to be compared against the
 approach where the representative models are used (at the medoids of each cluster).
+
+TODO Create a proper 'Solver' subclass for this case, need to define a proper interface!
 '''
 
 import argparse

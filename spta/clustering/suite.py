@@ -163,6 +163,14 @@ class ClusteringSuite(log_util.LoggerMixin):
         region_output_dir = region_metadata.output_dir(output_home)
         return '{}/{!r}'.format(region_output_dir, distance_measure)
 
+    def csv_suite_dir(self, output_home, region_metadata, distance_measure):
+        '''
+        Directory of CSV files for solvers using this suite (e.g. classifier)
+        '''
+        csv_dir = self.csv_dir(output_home, region_metadata, distance_measure)
+        subdir = '{!r}'.format(self)
+        return os.path.join(csv_dir, subdir)
+
     def analysis_csv_filename(self):
         '''
         Name of output CSV when analyzing this suite.

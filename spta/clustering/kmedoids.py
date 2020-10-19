@@ -74,6 +74,19 @@ class KmedoidsClusteringMetadata(ClusteringMetadata):
         mode = parts[3]   # e.g. lite
         return KmedoidsClusteringMetadata(k, random_seed=random_seed, mode=mode)
 
+    @classmethod
+    def from_classifier_label(cls, classifier_label, mode='lite'):
+        '''
+        Given the output of a classifier that chooses a suitable medoid from a clustering suite,
+        recover a clustering metadata. Adapts the input to use from_repr.
+        '''
+        # 13-0-6 -> kmedoids_k13_seed0_lite
+        label_parts = classifier_label.split('-')
+        assert(len(label_parts), 3)
+
+        repr_string = 'kmedoids_k{}_seed{}_{}'.format(label_parts[0], label_parts[1], mode)
+        return cls.from_repr(repr_string)
+
 
 def kmedoids_metadata_generator(k_values, seed_values, mode='lite', initial_medoids=None,
                                 max_iter=1000, tol=0.001, verbose=True):

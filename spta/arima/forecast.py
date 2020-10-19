@@ -364,3 +364,18 @@ class ArimaForecastingAutoArima(ArimaForecasting):
         self.logger.debug('(p, d, q) at (0, 0) = {}'.format(pdq_0_0))
 
         return arima_models
+
+
+class ArimaForecastingExternal(ArimaForecasting):
+    '''
+    Assumes that the training of the ARIMA models has already taken place elsewhere
+    (e.g. the models have been loaded from pickle objects)
+    '''
+
+    def __init__(self, arima_params_obj, arima_model_region, parallel_workers=None):
+        super(ArimaForecastingExternal, self).__init__(arima_params_obj, parallel_workers)
+        self.arima_model_region = arima_model_region
+
+    def train_models_impl(self, training_region, auto_arima_params):
+        # no training, we already have the models
+        return self.arima_model_region

@@ -91,3 +91,15 @@ class TestKmedoidsClusteringMetadata(unittest.TestCase):
         self.assertEqual(instance.random_seed, 0)
         self.assertEqual(instance.mode, 'lite')
 
+    def test_from_classifier_label_k13_seed0(self):
+        # given
+        classifier_label = '13-0-6'
+
+        # when
+        instance = KmedoidsClusteringMetadata.from_classifier_label(classifier_label)
+
+        # then
+        self.assertEqual(instance.__class__.__name__, 'KmedoidsClusteringMetadata')
+        self.assertEqual(instance.k, 13)
+        self.assertEqual(instance.random_seed, 0)
+        self.assertEqual(instance.mode, 'lite')

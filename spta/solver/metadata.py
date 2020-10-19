@@ -142,6 +142,45 @@ class MetadataWithClustering(SolverMetadataBasic):
                                                    self.error_type)
 
 
+class MetadataForClusteringSuite(SolverMetadataBasic):
+    '''
+    Reifies decorator pattern to add support for solvers that use clustering suite.
+    '''
+
+    def __init__(self, solver_metadata, clustering_suite, distance_measure):
+        self.decorated = solver_metadata
+
+        # basic solver data
+        self.region_metadata = self.decorated.region_metadata
+        self.model_params = self.decorated.model_params
+        self.error_type = self.decorated.error_type
+        self.test_len = self.decorated.test_len
+
+        # clustering-specific
+        self.clustering_suite = clustering_suite
+        self.distance_measure = distance_measure
+
+    def output_dir(self, output_home):
+        '''
+        Directory to store outputs relevant to this solver metadata.
+        This implementation uses region metadata, clustering suite and the distance measure.
+        '''
+        suite_dir = self.clustering_suite.csv_suite_dir(output_home=output_home,
+                                                        region_metadata=self.region_metadata,
+                                                        distance_measure=self.distance_measure)
+        model_params_dir = '{!r}'.format(self.model_params)
+        return os.path.join(suite_dir, model_params_dir)
+
+    def __str__(self):
+        return '{} {} {} {} {}'.format(self.region_metadata, self.clustering_suite,
+                                       self.distance_measure, self.model_params, self.error_type)
+
+    def __repr__(self):
+        return '{!r}__{!r}__{!r}__{!r}__{}'.format(self.region_metadata, self.clustering_suite,
+                                                   self.distance_measure, self.model_params,
+                                                   self.error_type)
+
+
 class SolverMetadataBuilder():
     '''
     Reifies builder pattern to create metadata instances.
@@ -153,6 +192,11 @@ class SolverMetadataBuilder():
     def with_clustering(self, clustering_metadata, distance_measure):
         self.metadata = MetadataWithClustering(self.metadata, clustering_metadata,
                                                distance_measure)
+        return self
+
+    def for_suite(self, clustering_suite, distance_measure):
+        self.metadata = MetadataForClusteringSuite(self.metadata, clustering_suite,
+                                                   distance_measure)
         return self
 
     def build(self):
