@@ -12,7 +12,7 @@ from spta.arima import analysis as arima_analysis
 
 from spta.clustering.factory import ClusteringFactory
 from spta.distance.dtw import DistanceByDTW
-from spta.region.error import error_functions
+from spta.model.error import error_functions
 
 from spta.util import fs as fs_util
 from spta.util import log as log_util

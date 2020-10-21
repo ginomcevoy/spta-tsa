@@ -4,7 +4,8 @@ import os
 
 from spta.region import Point
 from spta.region.base import BaseRegion
-from spta.region.train import SplitTrainingAndTestLast
+
+from spta.model.train import SplitTrainingAndTestLast
 
 from spta.util import fs as fs_util
 from spta.util import arrays as arrays_util

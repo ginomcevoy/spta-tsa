@@ -2,7 +2,7 @@ import numpy as np
 from spta.region.function import FunctionRegionSeries
 
 
-class ForecastModelRegion(FunctionRegionSeries):
+class ModelRegion(FunctionRegionSeries):
     '''
     A FunctionRegion that assumes that a trained forecasting model is present at each point,
     so that a forecast is produced when the function is applied over a region.
@@ -12,7 +12,7 @@ class ForecastModelRegion(FunctionRegionSeries):
     the model at (i, j).
 
     Subclasses must provide a specific model function call.
-    When creating an instance of of this class using a TrainingFunctionRegion, make sure
+    When creating an instance of of this class using ModelTrainer, make sure
     that function region has dtype=object (to store a model object instead of a value).
     '''
 
@@ -53,4 +53,4 @@ class ForecastModelRegion(FunctionRegionSeries):
         Decorate to get the forecast series length from output_len, used by function_at.
         '''
         self.forecast_len = output_len
-        return super(ForecastModelRegion, self).apply_to(spt_region, output_len)
+        return super(ModelRegion, self).apply_to(spt_region, output_len)

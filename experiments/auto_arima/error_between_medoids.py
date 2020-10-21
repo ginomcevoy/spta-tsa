@@ -17,8 +17,9 @@ import os
 
 from spta.distance.dtw import DistanceByDTW
 
-from spta.region.error import ErrorAnalysis, error_functions
-from spta.region.train import SplitTrainingAndTestLast
+from spta.model.error import ErrorAnalysis, error_functions
+from spta.model.train import SplitTrainingAndTestLast
+
 from spta.solver.auto_arima import AutoARIMATrainer
 
 from spta.util import fs as fs_util

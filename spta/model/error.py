@@ -3,8 +3,9 @@ Module to calculate forecasting errors over spatio-temporal regions.
 '''
 import numpy as np
 
-from .spatial import SpatialDecorator
-from .function import FunctionRegionScalar
+from spta.region.spatial import SpatialDecorator
+from spta.region.function import FunctionRegionScalar
+
 from .error_parallel import ParallelForecastError
 
 from spta.util import arrays as arrays_util
@@ -44,6 +45,7 @@ class ErrorRegion(SpatialDecorator):
 
     Here we don't work with forecast/observation regions, for that see MeasureForecastingError.
     '''
+
     def __init__(self, decorated_region, error_combine_func=arrays_util.root_mean_squared,
                  **kwargs):
         super(ErrorRegion, self).__init__(decorated_region, **kwargs)
@@ -78,6 +80,7 @@ class MeasureForecastingError(FunctionRegionScalar):
     Given a forecast region, calculate an ErrorRegion where the error is calculated using an
     error function of the specified type (error_type).
     '''
+
     def __init__(self, error_func, observation_region, training_region=None):
         '''
         Create the function region that measures the error.

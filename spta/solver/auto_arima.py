@@ -13,9 +13,10 @@ from spta.arima import training
 
 from spta.clustering.factory import ClusteringFactory
 
-from spta.region.error import MeasureForecastingError, get_error_func
+from spta.model.error import MeasureForecastingError, get_error_func
+from spta.model.train import SplitTrainingAndTestLast
+
 from spta.region.scaling import SpatioTemporalScaled
-from spta.region.train import SplitTrainingAndTestLast
 
 from spta.util import fs as fs_util
 from spta.util import log as log_util

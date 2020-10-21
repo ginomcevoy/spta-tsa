@@ -15,9 +15,8 @@ import numpy as np
 from spta.arima.forecast import ArimaForecastingAutoArima
 
 from spta.region import Region
-from spta.region.error import error_functions
+from spta.model.error import error_functions
 from spta.region.scaling import SpatioTemporalScaled
-# from spta.region.train import SplitTrainingAndTestLast
 
 from spta.solver.metadata import SolverMetadataBuilder
 from spta.solver.result import PredictionQueryResultBuilder
@@ -99,10 +98,6 @@ def process_request(args):
 
     # subset to get prediction region
     prediction_spt_region = spt_region.region_subset(prediction_region)
-
-    # , then split into training/test subregions
-    # splitter = SplitTrainingAndTestLast(forecast_len)
-    # (training_subregion, test_subregion) = splitter.split(prediction_spt_region)
 
     # delegate model training to this implementation
     # no need for the actual models

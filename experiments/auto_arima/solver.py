@@ -17,7 +17,7 @@ from spta.clustering.regular import RegularClusteringMetadata
 from spta.distance.dtw import DistanceByDTW
 
 from spta.region import Region
-from spta.region.error import error_functions
+from spta.model.error import error_functions
 from spta.solver.auto_arima import AutoARIMATrainer, AutoARIMASolverPickler
 from spta.solver.metadata import SolverMetadataBuilder
 from spta.util import log as log_util

@@ -1,4 +1,5 @@
 from spta.region import TimeInterval
+
 from spta.util import log as log_util
 
 

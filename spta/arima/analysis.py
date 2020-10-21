@@ -54,7 +54,7 @@ class ArimaErrorAnalysis(log_util.LoggerMixin):
     def evaluate_forecast_errors(self, spt_region, error_type, forecast_len=FORECAST_LENGTH):
         '''
         Performs the main analysis, logs progress and returns the results.
-        See spta.region.error.get_error_func for available error types.
+        See spta.model.error.get_error_func for available error types.
         '''
 
         # orchestrate the tasks of ArimaForecasting to achieve the requested results

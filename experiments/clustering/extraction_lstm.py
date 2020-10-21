@@ -8,7 +8,7 @@ from experiments.metadata.arima import predefined_auto_arima
 from experiments.metadata.region import predefined_regions
 from experiments.metadata.clustering import get_suite, suite_options
 
-from spta.region.error import error_functions
+from spta.model.error import error_functions
 from spta.classifier.train_input import TrainDataWithRandomPoints, MedoidSeriesFormatter, CHOICE_CRITERIA
 from spta.distance.dtw import DistanceByDTW
 

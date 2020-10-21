@@ -150,5 +150,5 @@ class ParallelForecastError(object):
         np.copyto(decorated_region.as_numpy, output_2d)
 
         # to avoid circular imports
-        from spta.region.error import ErrorRegion
+        from spta.model.error import ErrorRegion
         return ErrorRegion(decorated_region)

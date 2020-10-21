@@ -9,17 +9,17 @@ Forecasting with ARIMA models. Contains:
 import time
 
 from spta.region import Point
-from spta.region.forecast import ForecastModelRegion
-from spta.region.train import SplitTrainingAndTestLast
-from spta.region.error import ErrorAnalysis
-from spta.region.scaling import SpatioTemporalScaled
+
+from spta.model.base import ModelRegion
+from spta.model.train import SplitTrainingAndTestLast
+from spta.model.error import ErrorAnalysis
 
 from spta.util import log as log_util
 
 from . import training
 
 
-class ArimaModelRegion(ForecastModelRegion):
+class ArimaModelRegion(ModelRegion):
     '''
     A FunctionRegion that uses the arima_forecast function to create a forecast region using
     ARIMA models.
@@ -103,7 +103,7 @@ class ArimaForecasting(log_util.LoggerMixin):
         using the test data as observation.
 
         Requires a string indicating the type of forecast error to be used.
-        See spta.region.error.get_error_func for available error functions.
+        See spta.model.error.get_error_func for available error functions.
 
         Returns the forecast region, the error region and the time it took to compute the forecast.
 
@@ -156,7 +156,7 @@ class ArimaForecasting(log_util.LoggerMixin):
         at the cetroid, and then replicate that forecast over the entire region, effectively using
         a single model for the entire region.
 
-        See spta.region.error.get_error_func for available error functions.
+        See spta.model.error.get_error_func for available error functions.
 
         Returns the error region.
         '''
@@ -185,8 +185,8 @@ class ArimaForecasting(log_util.LoggerMixin):
         observed values in the entire region. Obtain the MASE errors for each point, then compute
         the overall error made by combining the errors (RMSE).
 
-        See see spta.region.error.OverallErrorForEachForecast for details.
-        See spta.region.error.get_overall_error_func for available error functions.
+        See see spta.model.error.OverallErrorForEachForecast for details.
+        See spta.model.error.get_overall_error_func for available error functions.
         '''
         # check conditions
         self.check_forecast_request(forecast_len)
