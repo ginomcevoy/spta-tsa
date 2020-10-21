@@ -45,7 +45,7 @@ def centroid_by_region_and_distance(sptr_name, distance_measure):
         assert distance_measure.__class__.__name__ == 'DistanceByDTW'
 
         spt_region_metadata = predefined_regions()[sptr_name]
-        centroid, _ = CalculateCentroid.for_sptr_metadata(spt_region_metadata, distance_measure)
+        centroid = CalculateCentroid.for_sptr_metadata(spt_region_metadata, distance_measure)
 
     return centroid
 
