@@ -132,10 +132,8 @@ class ArimaForecasting(log_util.LoggerMixin):
         # this does not undo the scaling, but it gives a chance to be descaled in error_analysis...
         # TODO improve approach to: a) cleaner, b) have access to both scaled/descaled?
         if self.spt_region.has_scaling():
-            self.logger.debug('Descaling forecast_region_each')
-            forecast_region_each = SpatioTemporalScaled(forecast_region_each,
-                                                        scale_min=self.spt_region.scale_min,
-                                                        scale_max=self.spt_region.scale_max)
+            self.logger.debug('Adding scaling information to forecast_region_each')
+            forecast_region_each = self.spt_region.new_spatio_temporal_region(forecast_region_each.numpy_dataset)
 
         # save the forecast region with each model
         self.forecast_region_each = forecast_region_each
