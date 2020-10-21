@@ -60,7 +60,7 @@ class KmedoidsClusteringMetadata(ClusteringMetadata):
         NOTE: This implementation assumes that initial_medoids has not been set!
         '''
         parts = repr_string.split('_')
-        assert(parts[0] == 'kmedoids')
+        assert parts[0] == 'kmedoids'
 
         # 1. k
         k_string = parts[1]
@@ -82,7 +82,7 @@ class KmedoidsClusteringMetadata(ClusteringMetadata):
         '''
         # 13-0-6 -> kmedoids_k13_seed0_lite
         label_parts = classifier_label.split('-')
-        assert(len(label_parts), 3)
+        assert len(label_parts) == 3
 
         repr_string = 'kmedoids_k{}_seed{}_{}'.format(label_parts[0], label_parts[1], mode)
         return cls.from_repr(repr_string)

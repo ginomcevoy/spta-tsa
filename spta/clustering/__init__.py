@@ -236,7 +236,7 @@ class ClusteringAlgorithm(log_util.LoggerMixin):
         pickle_full_path = self.pickle_full_path(region_metadata)
         partition = PartitionRegion.try_from_pickle(pickle_full_path)
 
-        self.logger.debug('Loaded partition {} OK'.format(partition))
+        self.logger.info('Loaded previously calculated partition from {}'.format(pickle_full_path))
         return partition
 
     def pickle_full_path(self, region_metadata):
