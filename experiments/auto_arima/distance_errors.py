@@ -14,13 +14,12 @@ import csv
 import numpy as np
 import os
 
-from spta.arima.train import extract_pdq
+from spta.arima.train import TrainerAutoArima, extract_pdq
 from spta.distance.dtw import DistanceByDTW
 
 from spta.model.error import ErrorAnalysis, error_functions
 from spta.model.train import SplitTrainingAndTestLast
-
-from spta.solver.auto_arima import AutoARIMATrainer
+from spta.solver.train import SolverTrainer
 
 from spta.util import fs as fs_util
 from spta.util import log as log_util
@@ -92,20 +91,24 @@ def do_auto_arima_distance_errors(args, logger):
         logger.info('Clustering algorithm: {}'.format(clustering_metadata))
 
         # prepare to train a solver based on auto ARIMA
-        trainer = AutoARIMATrainer(region_metadata=region_metadata,
-                                   clustering_metadata=clustering_metadata,
-                                   distance_measure=DistanceByDTW(),
-                                   auto_arima_params=auto_arima_params,
-                                   test_len=forecast_len,
-                                   error_type=error_type)
+        # the training requires a number of samples used as test data (data retained from the model
+        # in order to calculate forecast error), this is test_len (--tp)
+        model_trainer = TrainerAutoArima(auto_arima_params, region_metadata.x_len, region_metadata.y_len)
+        solver_trainer = SolverTrainer(region_metadata=region_metadata,
+                                       clustering_metadata=clustering_metadata,
+                                       distance_measure=DistanceByDTW(),
+                                       model_trainer=model_trainer,
+                                       model_params=auto_arima_params,
+                                       test_len=forecast_len,
+                                       error_type=error_type)
 
         # use the trainer to get the cluster partition and corresponding medoids
         # will try to leverage pickle and load previous attempts, otherwise calculate and save
-        trainer.prepare_for_training()
-        partition = trainer.clustering_algorithm.partition(spt_region,
-                                                           with_medoids=True,
-                                                           save_csv_at='outputs',
-                                                           pickle_home='pickle')
+        solver_trainer.prepare_for_training()
+        partition = solver_trainer.clustering_algorithm.partition(spt_region,
+                                                                  with_medoids=True,
+                                                                  save_csv_at='outputs',
+                                                                  pickle_home='pickle')
 
         # use the partition to get k clusters
         clusters = partition.create_all_spt_clusters(spt_region, medoids=partition.medoids)
@@ -113,11 +116,11 @@ def do_auto_arima_distance_errors(args, logger):
         for cluster in clusters:
 
             # will do distance vs errors and errors between medoids
-            distance_vs_errors_for_cluster(cluster, trainer, partition, forecast_len, error_type,
+            distance_vs_errors_for_cluster(cluster, solver_trainer, partition, forecast_len, error_type,
                                            args.plots, logger)
 
 
-def distance_vs_errors_for_cluster(cluster, trainer, partition, forecast_len, error_type,
+def distance_vs_errors_for_cluster(cluster, solver_trainer, partition, forecast_len, error_type,
                                    with_plots, logger, output_home='outputs'):
 
     _, x_len, y_len = cluster.shape
@@ -131,15 +134,15 @@ def distance_vs_errors_for_cluster(cluster, trainer, partition, forecast_len, er
     training_cluster.centroid = cluster.centroid
 
     # get the distances of each point in the cluster to its medoid
-    distance_measure = trainer.distance_measure
+    distance_measure = solver_trainer.distance_measure
     distances_to_medoid = distance_measure.distances_to_point(cluster, cluster.centroid,
                                                               cluster.all_point_indices)
 
     # compute the forecast error (generalization error) when using the model at the medoid
     # the trainer almost has the appropriate implementation, just need to pass a list of medoids
     # instead of just one.
-    arima_model_region = trainer.train_auto_arima_at_medoids(training_region=training_cluster,
-                                                             medoids=(cluster.centroid,))
+    arima_model_region = solver_trainer.train_models_at_medoids(training_region=training_cluster,
+                                                                medoids=(cluster.centroid,))
 
     # this will evaluate the forecast errors
     error_analysis = ErrorAnalysis(observation_cluster, training_region=training_cluster,
@@ -179,14 +182,14 @@ def distance_vs_errors_for_cluster(cluster, trainer, partition, forecast_len, er
     # prepare the CSV output at:
     # outputs/<region>/<distance>/<clustering>/<auto_arima_params>
     # dist-error__<clustering>__<error>__<cluster>__auto-arima-<arima_params>.csv
-    csv_dir = trainer.metadata.output_dir(output_home)
+    csv_dir = solver_trainer.metadata.output_dir(output_home)
     fs_util.mkdir(csv_dir)
 
     # csv_filename = '{!r}_distance_errors_cluster_{}.csv'.format(trainer.metadata.model_params,
     #                                                             cluster.name)
     output_template = 'dist-error__{!r}__{}__{}__auto-arima-p{}-d{}-q{}.{}'
-    csv_filename = output_template.format(trainer.clustering_metadata, error_type, cluster.name,
-                                          p_medoid, d_medoid, q_medoid, 'csv')
+    csv_filename = output_template.format(solver_trainer.clustering_metadata, error_type,
+                                          cluster.name, p_medoid, d_medoid, q_medoid, 'csv')
     csv_full_path = os.path.join(csv_dir, csv_filename)
 
     # the CSV has this format:
@@ -196,14 +199,14 @@ def distance_vs_errors_for_cluster(cluster, trainer, partition, forecast_len, er
                                 quoting=csv.QUOTE_MINIMAL)
 
         # write header
-        distance_str = 'distance_{}'.format(trainer.distance_measure)
+        distance_str = 'distance_{}'.format(solver_trainer.distance_measure)
         csv_writer.writerow(['position', distance_str, 'forecast_error'])
 
         # each point in the cluster is a tuple in the CSV
         for i, (point_in_cluster, value) in enumerate(cluster):
 
             # transform the point to absolute coordinates (from original dataset)
-            coords = trainer.region_metadata.absolute_position_of_point(point_in_cluster)
+            coords = solver_trainer.region_metadata.absolute_position_of_point(point_in_cluster)
 
             # to get the distance, use the point ordering
             # this was the same ordering used for calculating the distances, so it's OK
@@ -229,17 +232,17 @@ def distance_vs_errors_for_cluster(cluster, trainer, partition, forecast_len, er
         info_text = '\n'.join((
             '{}'.format(cluster),
             'ARIMA: {}'.format(arima_order),
-            '{}'.format(trainer.clustering_metadata)))
+            '{}'.format(solver_trainer.clustering_metadata)))
 
         # save the plot
         # outputs/<region>/<distance>/<clustering>/<auto_arima_params>
         # dist-error__<clustering>__<error>__<cluster>__auto-arima-<arima_params>.pdf
-        plot_dir = trainer.metadata.output_dir(output_home)
+        plot_dir = solver_trainer.metadata.output_dir(output_home)
         # plot_name = '{!r}_distance_errors_cluster_{}.pdf'.format(trainer.metadata.model_params,
         #                                                          cluster.name)
         output_template = 'dist-error__{!r}__{}__{}__auto-arima-p{}-d{}-q{}.{}'
-        plot_name = output_template.format(trainer.clustering_metadata, error_type, cluster.name,
-                                           p_medoid, d_medoid, q_medoid, 'pdf')
+        plot_name = output_template.format(solver_trainer.clustering_metadata, error_type,
+                                           cluster.name, p_medoid, d_medoid, q_medoid, 'pdf')
         plot_full_path = os.path.join(plot_dir, plot_name)
 
         plot_util.plot_distances_vs_forecast_errors(distances_to_point=distances_to_medoid,

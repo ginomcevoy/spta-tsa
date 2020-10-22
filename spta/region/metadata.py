@@ -60,6 +60,9 @@ class SpatioTemporalRegionMetadata(log_util.LoggerMixin):
         self.scaled = scaled
         self.dataset_dir = dataset_dir
 
+        self.x_len = region.x2 - region.x1
+        self.y_len = region.y2 - region.y1
+
     @property
     def dataset_filename(self):
         '''
@@ -97,11 +100,10 @@ class SpatioTemporalRegionMetadata(log_util.LoggerMixin):
         Assumes that the medoid index has been calculated from the region specified in this
         metadata instance.
         '''
-        y_len = self.region.y2 - self.region.y1
 
         # get (i, j) position relative to the region
-        x_region = int(index / y_len)
-        y_region = index % y_len
+        x_region = int(index / self.y_len)
+        y_region = index % self.y_len
 
         # add region offset like this
         return self.absolute_position_of_point(Point(x_region, y_region))

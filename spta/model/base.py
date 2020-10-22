@@ -54,3 +54,10 @@ class ModelRegion(FunctionRegionSeries):
         '''
         self.forecast_len = output_len
         return super(ModelRegion, self).apply_to(spt_region, output_len)
+
+    def instance(self, model_numpy_array):
+        '''
+        Creates a new instance of the subclass with the specified models.
+        Useful when subsetting a ModelRegion.
+        '''
+        raise NotImplementedError

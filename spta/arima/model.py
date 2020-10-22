@@ -23,3 +23,6 @@ class ModelRegionArima(ModelRegion):
             return model_at_point.predict(forecast_len)
         '''
         return model_at_point.forecast(forecast_len)
+
+    def instance(self, model_numpy_array):
+        return ModelRegionArima(model_numpy_array)

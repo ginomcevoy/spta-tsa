@@ -186,6 +186,13 @@ class TrainerAutoArima(ModelTrainer):
 
         return arima_model_region
 
+    def create_refitter(self, arima_model_region):
+        '''
+        For auto ARIMA, the refitter will use TrainerArimaPDQ, where the hyper-parameters are extracted
+        from the model region.
+        '''
+        return TrainerRefitArima(arima_model_region)
+
 
 class TrainerRefitArima(ModelTrainer):
     '''

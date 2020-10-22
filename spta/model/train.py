@@ -68,6 +68,9 @@ class ModelTrainer(FunctionRegionScalar):
         self.model_params_and_shape = model_params_and_shape
         self.model_params_region = model_params_region
 
+        # to avoid problems with missing attribute
+        self.missing_count = 0
+
     def apply_to(self, training_region):
         '''
         Override the parent behavior of FunctionRegionScalar: instead of returning a value for f_{(x,y)}(x,y),
@@ -112,6 +115,20 @@ class ModelTrainer(FunctionRegionScalar):
         '''
         raise NotImplementedError
 
+    def create_refitter(self, model_region):
+        '''
+        Returns an instance of a new ModelTrainer that can refit an existing ModelRegion with new training
+        data. The refitter can be the trainer itself, or a new trainer that uses the underlying model
+        parameters that were calculated as part of the training process.
+
+        Example: for auto ARIMA, the process of training the model will find the ARIMA hyper-parameters
+        through grid search. The refitter then will use these hyper-parameters for the new training region,
+        instead of calculating them again.
+
+        By default, this returns the same trainer.
+        '''
+        return self
+
 
 class NoTrainer(ModelTrainer):
     '''
@@ -119,7 +136,9 @@ class NoTrainer(ModelTrainer):
     '''
 
     def __init__(self, trained_models):
-        super(ModelTrainer, self).__init__(model_params_region=trained_models)
+        # abusing the constructor here (trained_models are not parameters) but it should not fail
+        # the important thing is to provide apply_to
+        super(NoTrainer, self).__init__(model_params_region=trained_models)
         self.trained_models = trained_models
 
     def apply_to(self, training_region):

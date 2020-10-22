@@ -16,10 +16,14 @@ from spta.clustering.regular import RegularClusteringMetadata
 
 from spta.distance.dtw import DistanceByDTW
 
-from spta.region import Region
+from spta.arima.train import TrainerAutoArima
 from spta.model.error import error_functions
-from spta.solver.auto_arima import AutoARIMATrainer, AutoARIMASolverPickler
+from spta.region import Region
+
+from spta.solver.model import SolverPickler
+from spta.solver.train import SolverTrainer
 from spta.solver.metadata import SolverMetadataBuilder
+
 from spta.util import log as log_util
 
 from experiments.metadata.arima import predefined_auto_arima
@@ -156,15 +160,17 @@ def train_request(args):
     # get a trainer using metadata
     # the training requires a number of samples used as test data (data retained from the model
     # in order to calculate forecast error), this is test_len (--tp)
-    trainer = AutoARIMATrainer(region_metadata=region_metadata,
-                               clustering_metadata=clustering_metadata,
-                               distance_measure=DistanceByDTW(),
-                               auto_arima_params=auto_arima_params,
-                               test_len=args.tp,
-                               error_type=args.error)
+    model_trainer = TrainerAutoArima(auto_arima_params, region_metadata.x_len, region_metadata.y_len)
+    solver_trainer = SolverTrainer(region_metadata=region_metadata,
+                                   clustering_metadata=clustering_metadata,
+                                   distance_measure=DistanceByDTW(),
+                                   model_trainer=model_trainer,
+                                   model_params=auto_arima_params,
+                                   test_len=args.tp,
+                                   error_type=args.error)
 
     # train to get a solver
-    solver = trainer.train()
+    solver = solver_trainer.train()
 
     # persist this solver for later use
     solver.save()
@@ -193,7 +199,7 @@ def predict_request(args):
                                               distance_measure=distance_measure).build()
 
     # load solver from persistence
-    pickler = AutoARIMASolverPickler(solver_metadata=solver_metadata)
+    pickler = SolverPickler(solver_metadata=solver_metadata)
     solver = pickler.load_solver()
     print('')
     print('*********************************')

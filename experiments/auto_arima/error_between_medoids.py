@@ -15,12 +15,12 @@ import argparse
 import csv
 import os
 
+from spta.arima.train import TrainerAutoArima
 from spta.distance.dtw import DistanceByDTW
-
 from spta.model.error import ErrorAnalysis, error_functions
 from spta.model.train import SplitTrainingAndTestLast
 
-from spta.solver.auto_arima import AutoARIMATrainer
+from spta.solver.train import SolverTrainer
 
 from spta.util import fs as fs_util
 from spta.util import log as log_util
@@ -86,20 +86,24 @@ def do_auto_arima_errors_for_clustering(spt_region, region_metadata, clustering_
                                         auto_arima_params, forecast_len, error_type, logger):
 
     # prepare to train a solver based on auto ARIMA
-    trainer = AutoARIMATrainer(region_metadata=region_metadata,
-                               clustering_metadata=clustering_metadata,
-                               distance_measure=DistanceByDTW(),
-                               auto_arima_params=auto_arima_params,
-                               test_len=forecast_len,
-                               error_type=error_type)
+    # the training requires a number of samples used as test data (data retained from the model
+    # in order to calculate forecast error), this is test_len (--tp)
+    model_trainer = TrainerAutoArima(auto_arima_params, region_metadata.x_len, region_metadata.y_len)
+    solver_trainer = SolverTrainer(region_metadata=region_metadata,
+                                   clustering_metadata=clustering_metadata,
+                                   distance_measure=DistanceByDTW(),
+                                   model_trainer=model_trainer,
+                                   model_params=auto_arima_params,
+                                   test_len=forecast_len,
+                                   error_type=error_type)
 
     # use the trainer to get the cluster partition and corresponding medoids
     # will try to leverage pickle and load previous attempts, otherwise calculate and save
-    trainer.prepare_for_training()
-    partition = trainer.clustering_algorithm.partition(spt_region,
-                                                       with_medoids=True,
-                                                       save_csv_at='outputs',
-                                                       pickle_home='pickle')
+    solver_trainer.prepare_for_training()
+    partition = solver_trainer.clustering_algorithm.partition(spt_region,
+                                                              with_medoids=True,
+                                                              save_csv_at='outputs',
+                                                              pickle_home='pickle')
     medoids = partition.medoids
 
     # create training/test regions
@@ -111,10 +115,10 @@ def do_auto_arima_errors_for_clustering(spt_region, region_metadata, clustering_
                                    parallel_workers=None)
 
     # use the trainer again to run auto ARIMA at medoids
-    arima_model_region = trainer.train_auto_arima_at_medoids(training_region, medoids)
+    arima_model_region = solver_trainer.train_models_at_medoids(training_region, medoids)
 
     # prepare the CSV output for this clustering partition
-    csv_dir = trainer.metadata.output_dir('outputs')
+    csv_dir = solver_trainer.metadata.output_dir('outputs')
     fs_util.mkdir(csv_dir)
 
     # csv_filename = 'auto_arima_{}_errors_at_medoids.csv'.format(auto_arima_params)

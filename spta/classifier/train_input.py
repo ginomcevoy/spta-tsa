@@ -12,7 +12,7 @@ import os
 
 from spta.region import Point, Region
 from spta.clustering.factory import ClusteringMetadataFactory
-from spta.solver.auto_arima import AutoARIMASolverPickler
+from spta.solver.model import SolverPickler
 from spta.solver.metadata import SolverMetadataBuilder
 
 from spta.util import log as log_util
@@ -344,7 +344,7 @@ class MedoidsChoiceMinPredictionError(MedoidsChoiceStrategy):
             self.logger.debug('Using recovered solver: {}'.format(solver))
         else:
             # new solver
-            solver_pickler = AutoARIMASolverPickler(solver_metadata)
+            solver_pickler = SolverPickler(solver_metadata)
             solver = solver_pickler.load_solver()
             self.solvers[solver_repr] = solver
             self.logger.debug('Adding new solver: {}'.format(solver))
