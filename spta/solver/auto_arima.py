@@ -7,8 +7,8 @@ import matplotlib.pyplot as plt
 import pickle
 import os
 
-from spta.arima.forecast import ModelRegionArima
-from spta.arima import training
+from spta.arima.model import ModelRegionArima
+from spta.arima.train import TrainerAutoArima, TrainerRefitArima
 
 from spta.clustering.factory import ClusteringFactory
 
@@ -132,7 +132,7 @@ class AutoARIMATrainer(log_util.LoggerMixin):
         # full dataset (not the training subset, which uses a series subset)
         # Note that we must use arima_medoid_models_train instead of arima_replicated_models_train,
         # otherwise we would be re-training x_len * y_len models instead of just k!
-        arima_refit_function = training.TrainerRefitArima(arima_medoid_models_train)
+        arima_refit_function = TrainerRefitArima(arima_medoid_models_train)
         arima_medoid_models_whole = arima_refit_function.apply_to(spt_region)
 
         # replicate these refitted models, similar to step 2. above
@@ -153,9 +153,9 @@ class AutoARIMATrainer(log_util.LoggerMixin):
         The model from each medoid will be replicated throughout its cluster later.
         '''
         _, x_len, y_len = training_region.shape
-        trainer = TrainAtRepresentatives(training.TrainerAutoArima(self.auto_arima_params, x_len, y_len),
-                                         medoids)
-        return trainer.apply_to(training_region)
+        auto_arima_trainer = TrainerAutoArima(self.auto_arima_params, x_len, y_len)
+        auto_arima_trainer_at_medoids = TrainAtRepresentatives(auto_arima_trainer, medoids)
+        return auto_arima_trainer_at_medoids.apply_to(training_region)
 
     def replicate_representative_models(self, arima_models_at_medoids, partition, medoids):
         '''

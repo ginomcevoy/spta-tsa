@@ -8,8 +8,9 @@ import csv
 from collections import namedtuple
 import os
 
-from spta.arima.forecast import ArimaForecastingAutoArima
-from spta.arima import analysis as arima_analysis
+from spta.model.forecast import ForecastAnalysis
+from spta.arima.train import TrainerAutoArima
+# from spta.arima import analysis as arima_analysis
 
 from spta.clustering.factory import ClusteringFactory
 from spta.distance.dtw import DistanceByDTW
@@ -188,14 +189,14 @@ def analyze_auto_arima_for_cluster(spt_cluster, i, clustering_algorithm, auto_ar
     logger.info('*************************************************************')
 
     # do the analysis using auto_arima
-    forecasting_auto = ArimaForecastingAutoArima(auto_arima_params, parallel_workers)
-    analysis_auto = arima_analysis.ArimaErrorAnalysis(forecasting_auto)
+    auto_arima_trainer = TrainerAutoArima(auto_arima_params, spt_cluster.x_len, spt_cluster.y_len)
+    forecast_analysis = ForecastAnalysis(auto_arima_trainer, parallel_workers)
 
-    arima_forecasting, overall_errors, forecast_time, compute_time = \
-        analysis_auto.evaluate_forecast_errors(spt_cluster, error_type)
+    overall_errors, forecast_time, compute_time = \
+        forecast_analysis.analyze_errors(spt_cluster, error_type)
 
     # access the generated ARIMA models
-    arima_models = arima_forecasting.arima_models
+    arima_models = forecast_analysis.model_region
 
     # (p_medoid, d_medoid, q_medoid): the (p, d, q) hyper-parameters found by auto_arima
     # at the medoid of this cluster
@@ -248,8 +249,8 @@ def analyze_auto_arima_for_cluster(spt_cluster, i, clustering_algorithm, auto_ar
                                                   spt_cluster, p_medoid, d_medoid, q_medoid,
                                                   output_dir)
         plot_desc = '{!r}'.format(clustering_algorithm)
-        arima_forecasting.plot_distances_vs_errors(cluster_medoid,
-                                                   arima_analysis.FORECAST_LENGTH,
+        forecast_analysis.plot_distances_vs_errors(cluster_medoid,
+                                                   ForecastAnalysis.DEFAULT_FORECAST_LENGTH,
                                                    error_type,
                                                    clustering_algorithm.distance_measure,
                                                    plot_name=plot_name,

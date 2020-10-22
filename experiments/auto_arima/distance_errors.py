@@ -14,7 +14,7 @@ import csv
 import numpy as np
 import os
 
-from spta.arima.training import extract_pdq
+from spta.arima.train import extract_pdq
 from spta.distance.dtw import DistanceByDTW
 
 from spta.model.error import ErrorAnalysis, error_functions

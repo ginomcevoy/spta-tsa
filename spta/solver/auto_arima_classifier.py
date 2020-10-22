@@ -1,7 +1,9 @@
 import numpy as np
 
-from spta.arima.forecast import ModelRegionArima, ArimaForecastingExternal
+from spta.arima.model import ModelRegionArima
 from spta.clustering.kmedoids import KmedoidsClusteringMetadata
+from spta.model.forecast import ForecastAnalysis
+from spta.model.train import NoTrainer
 from spta.region import TimeInterval
 from spta.region.scaling import SpatioTemporalScaled
 
@@ -216,15 +218,16 @@ class SolverFromClassifier(log_util.LoggerMixin):
 
         # delegate forecasting to this implementation, does not do actual training and takes care
         # of forecast/error details
-        arima_forecasting = ArimaForecastingExternal(self.model_params, arima_model_region)
-        arima_forecasting.train_models(prediction_spt_region, self.test_len)
+        no_trainer = NoTrainer(arima_model_region)
+        forecast_analysis = ForecastAnalysis(no_trainer, parallel_workers=None)
+        forecast_analysis.train_models(prediction_spt_region, self.test_len)
 
         # do in-sample forecasting with models at each point, evaluate error
         forecast_region_each, error_region_each, time_forecast = \
-            arima_forecasting.forecast_at_each_point(forecast_len=self.test_len, error_type=self.error_type)
+            forecast_analysis.forecast_at_each_point(forecast_len=self.test_len, error_type=self.error_type)
 
         # also need the test subregion for results
-        test_subregion = arima_forecasting.test_region
+        test_subregion = forecast_analysis.test_region
 
         # handle descaling here: we want to present descaled data to users
         if region_metadata.scaled:

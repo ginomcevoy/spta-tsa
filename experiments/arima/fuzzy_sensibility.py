@@ -1,6 +1,8 @@
 '''
 Execute this program to perform fuzzy clustering on a spatio-temporal region, train ARIMA
 models,then do fuzzy sensibility analysis for each cluster.
+
+FIXME this doesnt work anymore
 '''
 import argparse
 

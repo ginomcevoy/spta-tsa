@@ -7,12 +7,13 @@ from statsmodels.tsa.arima.model import ARIMA
 # from pmdarima.arima import ARIMA
 from pmdarima.arima import auto_arima
 
+from spta.region import Point
 from spta.region.function import FunctionRegionScalarSame, FunctionRegionSeriesSame
 
 from spta.model.train import ModelTrainer
 
+from .model import ModelRegionArima
 from . import ArimaPDQ
-from . import forecast  # avoiding a circular import
 
 # For auto_arima, the order is extracted from the model.
 # Use this sentinel value when there is no model.
@@ -81,7 +82,19 @@ class TrainerArimaPDQ(ModelTrainer):
         return fitted_model
 
     def create_model_region(self, numpy_model_array):
-        return forecast.ModelRegionArima(numpy_model_array)
+        arima_model_region = ModelRegionArima(numpy_model_array)
+
+        # save the number of failed models... ugly but works
+        arima_model_region.missing_count = self.missing_count
+
+        # create a spatial region with AIC values and store it inside the arima_models object.
+        extract_aic = ExtractAicFromArima(arima_model_region.x_len, arima_model_region.y_len)
+        arima_model_region.aic_region = extract_aic.apply_to(arima_model_region)
+
+        aic_0_0 = arima_model_region.aic_region.value_at(Point(0, 0))
+        self.logger.debug('AIC at (0, 0) = {}'.format(aic_0_0))
+
+        return arima_model_region
 
 
 class TrainerAutoArima(ModelTrainer):
@@ -152,7 +165,26 @@ class TrainerAutoArima(ModelTrainer):
         return fitted_model
 
     def create_model_region(self, numpy_model_array):
-        return forecast.ModelRegionArima(numpy_model_array)
+        arima_model_region = ModelRegionArima(numpy_model_array)
+
+        # save the number of failed models... ugly but works
+        arima_model_region.missing_count = self.missing_count
+
+        # create a spatial region with AIC values and store it inside the arima_models object.
+        extract_aic = ExtractAicFromArima(arima_model_region.x_len, arima_model_region.y_len)
+        arima_model_region.aic_region = extract_aic.apply_to(arima_model_region)
+
+        # create a spatio-temporal region with (p, d, q) values and store it inside arima_models.
+        extract_pdq = ExtractPDQFromAutoArima(arima_model_region.x_len, arima_model_region.y_len)
+        arima_model_region.pdq_region = extract_pdq.apply_to(arima_model_region, 3)
+
+        aic_0_0 = arima_model_region.aic_region.value_at(Point(0, 0))
+        self.logger.debug('AIC at (0, 0) = {}'.format(aic_0_0))
+
+        pdq_0_0 = arima_model_region.pdq_region.series_at(Point(0, 0))
+        self.logger.debug('(p, d, q) at (0, 0) = {}'.format(pdq_0_0))
+
+        return arima_model_region
 
 
 class TrainerRefitArima(ModelTrainer):
@@ -203,7 +235,10 @@ class TrainerRefitArima(ModelTrainer):
         return self.arima_trainer.training_function(arima_params, training_series)
 
     def create_model_region(self, numpy_model_array):
-        return forecast.ModelRegionArima(numpy_model_array)
+        # reuse the ARIMA trainer logic again,
+        # but we need the missing_count from this instance
+        self.arima_trainer.missing_count = self.missing_count
+        return self.arima_trainer.create_model_region(numpy_model_array)
 
 
 def extract_aic(fitted_arima_at_point):

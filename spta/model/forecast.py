@@ -1,59 +1,38 @@
-'''
-Forecasting with ARIMA models. Contains:
-
-- ModelRegionArima, a function region that holds a trained ARIMA model at each point. Can create
-    a forecast region when called with an empty region.
-
-- ArimaForecasting, a class that orchestrates the training and forecasting of ARIMA models.
-'''
+from collections import namedtuple
+import numpy as np
 import time
 
-from spta.region import Point
-
-from spta.model.base import ModelRegion
 from spta.model.train import SplitTrainingAndTestLast
 from spta.model.error import ErrorAnalysis
 
 from spta.util import log as log_util
 
-from . import training
+
+ForecastErrors = namedtuple('ForecastErrors', ('each', 'minimum', 'min_local', 'centroid', 'maximum'))
 
 
-class ModelRegionArima(ModelRegion):
+class ForecastAnalysis(log_util.LoggerMixin):
     '''
-    A FunctionRegion that creates a forecast region using ARIMA models.
+    Manages the training of ModelRegion instances, their forecasts and the corresponding forecast errors.
+    Uses the Strategy pattern to work with different implementations of ModelTrainer.
 
-    See spta.model.base.ModelRegion for more details.
-    '''
+    NOTE: this implementation assumes that each time series is split into training and
+    test series, where:
 
-    def forecast_from_model(self, model_at_point, forecast_len, value_at_point, point):
-        '''
-        Creates a forecast from a trained ARIMA model.
-
-        When using statsmodels.tsa.arima_model.ARIMA:
-            return model_at_point.forecast(forecast_len)[0]
-
-        When using statsmodels.tsa.arima.model.ARIMA:
-            return model_at_point.forecast(forecast_len)
-
-        When using pmdarima.arima.ARIMA:
-            return model_at_point.predict(forecast_len)
-        '''
-        return model_at_point.forecast(forecast_len)
-
-
-class ArimaForecasting(log_util.LoggerMixin):
-    '''
-    Manages the training and forecasting of ARIMA models.
-    Base class for using both specified p,d,q hyperparameters and auto_arima.
+    1. the length of the test series is equal to the length of the forecast series
+    2. the training region has the same shape as spt_region (the trainer has the correct shape already)
     '''
 
-    def __init__(self, arima_params_obj, parallel_workers=None):
-        self.arima_params_obj = arima_params_obj
+    DEFAULT_FORECAST_LENGTH = 8
+
+    def __init__(self, trainer, parallel_workers=None):
         self.parallel_workers = parallel_workers
 
+        # strategy for training models
+        self.trainer = trainer
+
         # created when training
-        self.arima_models = None
+        self.model_region = None
         self.error_analysis = None
 
         # created when calling forecast_at_each_point
@@ -62,14 +41,8 @@ class ArimaForecasting(log_util.LoggerMixin):
     def train_models(self, spt_region, test_len):
         '''
         Separate a spatio-temporal region in training region and observation region.
-        Then, build one ARIMA model for each point, using its training series.
-
-        Returns a spatial region that contains, for each point an ARIMA model that can be
-        later used for forecasting.
-
-        NOTE: this implementation assumes that each time series is split into training and
-        test series, where the length of the test series is equal to the length of the forecast
-        series!
+        Then, build one model for each point, using its training series, returning a subclass
+        of ModelRegion that can be later used for forecasting.
         '''
         # save the region for future reference
         self.spt_region = spt_region
@@ -80,24 +53,19 @@ class ArimaForecasting(log_util.LoggerMixin):
         (self.training_region, self.test_region) = splitter.split(spt_region)
         self.test_len = test_len
 
-        # call specific ARIMA training implementation
-        self.arima_models = self.train_models_impl(self.training_region, self.arima_params_obj)
-
         # prepare the error analysis
         self.error_analysis = ErrorAnalysis(self.test_region, self.training_region,
                                             self.parallel_workers)
 
-        return self.arima_models
+        # call the strategy
+        self.logger.info('Training models using: {}'.format(self.trainer.__class__.__name__))
+        self.model_region = self.trainer.apply_to(self.training_region)
 
-    def train_models_impl(self, training_region, arima_params_obj):
-        '''
-        Subclasses must specify how ARIMA models are trained, e.g. using p,d,q or auto_arima.
-        '''
-        raise NotImplementedError
+        return self.model_region
 
     def forecast_at_each_point(self, forecast_len, error_type):
         '''
-        Create a forecast region, using the trained ARIMA model at each point to forecast the
+        Create a forecast region, using the trained model at each point to forecast the
         series at that point, with the given forecast length. Also, compute the forecast error
         using the test data as observation.
 
@@ -105,10 +73,6 @@ class ArimaForecasting(log_util.LoggerMixin):
         See spta.model.error.get_error_func for available error functions.
 
         Returns the forecast region, the error region and the time it took to compute the forecast.
-
-        NOTE: this implementation assumes that each time series is split into training and
-        test series, where the length of the test series is equal to the length of the forecast
-        series!
         '''
         # check conditions
         self.check_forecast_request(forecast_len)
@@ -118,10 +82,9 @@ class ArimaForecasting(log_util.LoggerMixin):
         # as the training region (and of the spatio-temporal region), thereby supporting clusters.
         empty_region_2d = self.training_region.empty_region_2d()
 
-        # use the ARIMA models to forecast for their respective points, measure time
-        # TODO put the timing code inside arima_models
+        # use the trained models to forecast for their respective points, measure time
         time_forecast_start = time.time()
-        forecast_region_each = self.arima_models.apply_to(empty_region_2d, forecast_len)
+        forecast_region_each = self.model_region.apply_to(empty_region_2d, forecast_len)
         forecast_region_each.name = 'forecast_region_each'
         time_forecast_end = time.time()
         time_forecast = time_forecast_end - time_forecast_start
@@ -145,15 +108,16 @@ class ArimaForecasting(log_util.LoggerMixin):
 
     def forecast_whole_region_with_single_model(self, point, forecast_len, error_type):
         '''
-        Using the ARIMA model that was trained at the specified point, forecast the entire region
+        Using the model that was trained at the specified point, forecast the entire region
         with the specified forecast length, and calculate the error.
 
-        The forecast is the same for each point, since only depends on how the particular model
-        was trained.
+        When not using scaling, the forecast is the same for each point, since only depends on how
+        the particular model was trained. With scaling however, the actual forecast will change:
+        the scaled constant is the same, but the local scaling at the point will produce differences.
 
-        Example: create the forecast and evaluate the error using the ARIMA model that was trained
-        at the cetroid, and then replicate that forecast over the entire region, effectively using
-        a single model for the entire region.
+        Example: create the forecast and evaluate the error using the model that was trained
+        at the centroid of the region, then replicate that forecast over the entire region, effectively
+        using a single model (representative) for the entire region.
 
         See spta.model.error.get_error_func for available error functions.
 
@@ -179,7 +143,7 @@ class ArimaForecasting(log_util.LoggerMixin):
 
     def forecast_whole_region_with_all_models(self, forecast_len, error_type):
         '''
-        Consider ARIMA models at different points as representatives of the region. For a given
+        Consider models at different points as representatives of the region. For a given
         point, use the forecast made by the model at *that* point, and use it to predict the
         observed values in the entire region. Obtain the MASE errors for each point, then compute
         the overall error made by combining the errors (RMSE).
@@ -192,7 +156,7 @@ class ArimaForecasting(log_util.LoggerMixin):
 
         # reuse the forecast at each point
         # if not available, calculate it now
-        # TODO: this assumes same forecast length!
+        # NOTE: this assumes same forecast length!
         if self.forecast_region_each is None:
             self.forecast_at_each_point(forecast_len, error_type)
 
@@ -204,6 +168,116 @@ class ArimaForecasting(log_util.LoggerMixin):
             self.error_analysis.overall_with_each_forecast(self.forecast_region_each, error_type)
 
         return overall_error_region
+
+    def analyze_errors(self, spt_region, error_type, forecast_len=DEFAULT_FORECAST_LENGTH):
+        '''
+        Perform the following analysis on a spatio-temporal region:
+
+        1. Build one model for each point, forecast forecast_len days and compute the error
+           of each forecast. This will create an error region (error_region_each).
+           Combine the errors using distance_measure.combine to obtain a single metric for the
+           prediction error. (error_region_each.combined_error)
+
+        2. Consider models at different points as representatives of the region. For a given point,
+           use the forecast made by the model at *that* point, and use it to predict the
+           observed values in the entire region. Obtain the MASE errors for each point
+           ("error_single_model"), then compute the overall error made by combining the errors (RMSE).
+
+        3. Consider the following points for 2.:
+            - minimum: the point that minimizes the error_single_model, i.e. has the minimum RMSE
+                of the MASE errors on each point, when using its model to forecast the entire region.
+
+            - min_local: the point that has the smallest forecast MASE error when forecasting its own
+                observation.
+
+            - centroid: the centroid of the region calculated externally, or using DTW if not provided.
+
+            - maximum: the point that maximizes its error_single_model. This is the worst possible
+                model for the region, used for comparison.
+
+        The centroid should be provided in the spatio-temporal region as spt_region.centroid
+        (it does not depend on the model, only on the dataset). If not provided, error is np.nan.
+        '''
+
+        # orchestrate the forecasting tasks above to achieve the requested results
+        # time everything, this will be the compute time
+        time_start = time.time()
+
+        # train
+        # NOTE: forecast_len = test_len!
+        self.train_models(spt_region, forecast_len)
+
+        # forecast using the model at each point
+        each_result = self.forecast_at_each_point(forecast_len, error_type)
+        (_, error_region_each, forecast_time) = each_result
+
+        overall_error_each = error_region_each.overall_error
+        log_msg = 'Combined {} error from all models: {}'
+        self.logger.info(log_msg.format(error_type, overall_error_each))
+
+        if spt_region.has_centroid:
+            # show the local error at the centroid
+            centroid = spt_region.centroid
+            local_error_centroid = error_region_each.value_at(centroid)
+            log_msg = 'Local error of model at the medoid {}: {}'
+            self.logger.debug(log_msg.format(centroid, local_error_centroid))
+
+        # find the errors when using each model to forecast the entire region
+        overall_error_region = self.forecast_whole_region_with_all_models(forecast_len, error_type)
+
+        # forecast computations finish here
+        time_end = time.time()
+        compute_time = time_end - time_start
+
+        #
+        # Best model: the one that minimizes the overall error when it is used to forecast
+        # the entire region
+        #
+        (point_overall_error_min, overall_error_min) = overall_error_region.find_minimum()
+        log_msg = 'Minimum overall {} error with single model at {}: {}'
+        self.logger.info(log_msg.format(error_type, point_overall_error_min, overall_error_min))
+
+        #
+        # Find the model with minimum "local error"
+        # This is the model that yields the minimum error when forecasting its own series.
+        # The error computed is the error when using *that* model to forecast the entire region.
+        #
+        (point_min_local_error, _) = error_region_each.find_minimum()
+        overall_error_min_local = overall_error_region.value_at(point_min_local_error)
+
+        log_msg = '{} error from model with min local error at {}: {}'
+        self.logger.info(log_msg.format(error_type, point_min_local_error,
+                                        overall_error_min_local))
+
+        #
+        # Use the model at the centroid
+        # ask the region for its centroid. If not available, the error is np.nan
+        #
+        if spt_region.has_centroid:
+            centroid = spt_region.centroid
+            overall_error_centroid = overall_error_region.value_at(centroid)
+        else:
+            centroid = None
+            overall_error_centroid = np.nan
+            self.logger.warn('Centroid was not pre-calculated!')
+
+        log_msg = '{} error from ARIMA model at centroid {}: {}'
+        self.logger.info(log_msg.format(error_type, centroid, overall_error_centroid))
+
+        #
+        # Worst ARIMA model: the one that maximizes the overall error when it is used to
+        # to forecast the entire region
+        #
+        (point_overall_error_max, overall_error_max) = overall_error_region.find_maximum()
+        log_msg = 'Maximum overall {} error with single ARIMA at {}: {}'
+        self.logger.info(log_msg.format(error_type, point_overall_error_max, overall_error_max))
+
+        # gather all errors
+        overall_errors = ForecastErrors(overall_error_each, overall_error_min,
+                                        overall_error_min_local, overall_error_centroid,
+                                        overall_error_max)
+
+        return overall_errors, forecast_time, compute_time
 
     def plot_distances_vs_errors(self, point_of_interest, forecast_len, error_type,
                                  distance_measure, plot_name=None, plot_desc=''):
@@ -241,7 +315,7 @@ class ArimaForecasting(log_util.LoggerMixin):
         subplot.plot(distances_to_point, forecast_errors, 'bo')
 
         # get ARIMA order at point of interest
-        fitted_arima_at_point = self.arima_models.value_at(point_of_interest)
+        fitted_arima_at_point = self.model_region.value_at(point_of_interest)
         arima_order = fitted_arima_at_point.model.order
 
         # title
@@ -277,102 +351,8 @@ class ArimaForecasting(log_util.LoggerMixin):
         '''
         assert forecast_len == self.test_len
 
-        if self.arima_models is None:
+        if self.model_region is None:
             raise ValueError('Forecast requested but models not trained!')
 
         if self.error_analysis is None:
             raise ValueError('ErrorAnalysis not available!')
-
-
-class ArimaForecastingPDQ(ArimaForecasting):
-    '''
-    Manages the training and forecasting of ARIMA models when using p, d, q hyperparameters.
-    See ArimaForecasting for full implementation.
-    '''
-
-    def train_models_impl(self, training_region, arima_pdq):
-        '''
-        Train ARIMA models where the same (p, d, q) hyperparameters are used over the entire
-        training region.
-        '''
-        self.logger.info('Using (p, d, q) = {}'.format(arima_pdq))
-
-        _, x_len, y_len = training_region.shape
-
-        # a function region with produces trained models when applied to a training region
-        # using p, d, q
-        arima_trainers = training.TrainerArimaPDQ(arima_pdq, x_len, y_len)
-
-        # train the models: this returns an instance of ModelRegionArima, that has an instance of
-        # statsmodels.tsa.arima.model.ARIMAResults at each point
-        arima_models = arima_trainers.apply_to(training_region)
-
-        # save the number of failed models... ugly but works
-        arima_models.missing_count = arima_trainers.missing_count
-
-        # create a spatial region with AIC values and store it inside the arima_models object.
-        extract_aic = training.ExtractAicFromArima(x_len, y_len)
-        arima_models.aic_region = extract_aic.apply_to(arima_models)
-
-        aic_0_0 = arima_models.aic_region.value_at(Point(0, 0))
-        self.logger.debug('AIC at (0, 0) = {}'.format(aic_0_0))
-
-        return arima_models
-
-
-class ArimaForecastingAutoArima(ArimaForecasting):
-    '''
-    Manages the training and forecasting of ARIMA models when using auto_arima.
-    See ArimaForecasting for full implementation.
-    '''
-
-    def train_models_impl(self, training_region, auto_arima_params):
-        '''
-        Train ARIMA models using auto_arima, which may choose different (p, d, q) hyperparameters
-        throughout the training region.
-        '''
-        _, x_len, y_len = training_region.shape
-
-        # a function region with produces trained models when applied to a training region
-        # using auto_arima
-        arima_trainers = training.TrainerAutoArima(auto_arima_params, x_len, y_len)
-
-        # train the models: this returns an instance of ModelRegionArima, that has an instance of
-        # statsmodels.tsa.arima.model.ARIMAResults at each point
-        # this is because we used auto_arima to get (p, d, q) order and then trained
-        # statsmodels.tsa.model.arima.ARIMA model with it
-        arima_models = arima_trainers.apply_to(training_region)
-
-        # save the number of failed models... ugly but works
-        arima_models.missing_count = arima_trainers.missing_count
-
-        # create a spatial region with AIC values and store it inside the arima_models object.
-        extract_aic = training.ExtractAicFromArima(x_len, y_len)
-        arima_models.aic_region = extract_aic.apply_to(arima_models)
-
-        # create a spatio-temporal region with (p, d, q) values and store it inside arima_models.
-        extract_pdq = training.ExtractPDQFromAutoArima(x_len, y_len)
-        arima_models.pdq_region = extract_pdq.apply_to(arima_models, 3)
-
-        aic_0_0 = arima_models.aic_region.value_at(Point(0, 0))
-        self.logger.debug('AIC at (0, 0) = {}'.format(aic_0_0))
-
-        pdq_0_0 = arima_models.pdq_region.series_at(Point(0, 0))
-        self.logger.debug('(p, d, q) at (0, 0) = {}'.format(pdq_0_0))
-
-        return arima_models
-
-
-class ArimaForecastingExternal(ArimaForecasting):
-    '''
-    Assumes that the training of the ARIMA models has already taken place elsewhere
-    (e.g. the models have been loaded from pickle objects)
-    '''
-
-    def __init__(self, arima_params_obj, arima_model_region, parallel_workers=None):
-        super(ArimaForecastingExternal, self).__init__(arima_params_obj, parallel_workers)
-        self.arima_model_region = arima_model_region
-
-    def train_models_impl(self, training_region, auto_arima_params):
-        # no training, we already have the models
-        return self.arima_model_region

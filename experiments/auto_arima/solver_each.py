@@ -12,7 +12,8 @@ TODO Create a proper 'Solver' subclass for this case, need to define a proper in
 import argparse
 import numpy as np
 
-from spta.arima.forecast import ArimaForecastingAutoArima
+from spta.model.forecast import ForecastAnalysis
+from spta.arima.train import TrainerAutoArima
 
 from spta.region import Region
 from spta.model.error import error_functions
@@ -101,15 +102,22 @@ def process_request(args):
 
     # delegate model training to this implementation
     # no need for the actual models
-    arima_forecasting = ArimaForecastingAutoArima(auto_arima_params)
-    arima_forecasting.train_models(prediction_spt_region, test_len=forecast_len)
+    # arima_forecasting = ArimaForecastingAutoArima(auto_arima_params)
+    # arima_forecasting.train_models(prediction_spt_region, test_len=forecast_len)
+
+    # delegate model training to this implementation
+    # no need for the actual models
+    auto_arima_trainer = TrainerAutoArima(auto_arima_params, prediction_spt_region.x_len,
+                                          prediction_spt_region.y_len)
+    forecast_analysis = ForecastAnalysis(auto_arima_trainer, parallel_workers=None)
+    forecast_analysis.train_models(prediction_spt_region, test_len=forecast_len)
 
     # do in-sample forecasting with models at each point, evaluate error
     forecast_region_each, error_region_each, time_forecast = \
-        arima_forecasting.forecast_at_each_point(forecast_len, error_type)
+        forecast_analysis.forecast_at_each_point(forecast_len, error_type)
 
     # also need the test subregion for results
-    test_subregion = arima_forecasting.test_region
+    test_subregion = forecast_analysis.test_region
 
     # handle descaling here: we want to present descaled data to users
     if region_metadata.scaled:

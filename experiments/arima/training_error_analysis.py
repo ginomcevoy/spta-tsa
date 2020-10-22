@@ -7,9 +7,8 @@ from collections import namedtuple
 import csv
 import os
 
-from spta.arima.forecast import ArimaForecastingPDQ
-from spta.arima import analysis as arima_analysis
-
+from spta.arima.train import TrainerArimaPDQ
+from spta.model.forecast import ForecastAnalysis
 from spta.clustering.factory import ClusteringFactory
 from spta.distance.dtw import DistanceByDTW
 from spta.model.error import error_functions
@@ -176,17 +175,18 @@ def do_arima_error_analysis_for_clustering(spt_region, clustering_algorithm, ari
         for arima_params in arima_suite.arima_params_gen():
 
             # do the analysis with current ARIMA hyper-parameters
-            forecasting_pdq = ArimaForecastingPDQ(arima_params, parallel_workers=parallel_workers)
-            analysis_pdq = arima_analysis.ArimaErrorAnalysis(forecasting_pdq)
 
-            arima_forecasting, overall_errors, forecast_time, compute_time = \
-                analysis_pdq.evaluate_forecast_errors(cluster_i, error_type)
+            arima_trainer = TrainerArimaPDQ(arima_params, spt_region.x_len, spt_region.y_len)
+            forecast_analysis = ForecastAnalysis(arima_trainer, parallel_workers=parallel_workers)
+
+            overall_errors, forecast_time, compute_time = \
+                forecast_analysis.analyze_errors(cluster_i, error_type)
 
             # prepare to save experiment result
             t_forecast = '{:.3f}'.format(forecast_time)
             t_elapsed = '{:.3f}'.format(compute_time)
             (p, d, q) = arima_params
-            failed = arima_forecasting.arima_models.missing_count
+            failed = arima_trainer.missing_count
 
             # format all errors as nice strings
             error_each = '{:.3f}'.format(overall_errors.each)
@@ -213,8 +213,8 @@ def do_arima_error_analysis_for_clustering(spt_region, clustering_algorithm, ari
                 plot_name = plot_name_distances_vs_errors(clustering_algorithm, error_type,
                                                           cluster_i, arima_params, output_dir)
                 plot_desc = '{!r}'.format(clustering_algorithm)
-                arima_forecasting.plot_distances_vs_errors(centroid_i,
-                                                           arima_analysis.FORECAST_LENGTH,
+                forecast_analysis.plot_distances_vs_errors(centroid_i,
+                                                           forecast_analysis.DEFAULT_FORECAST_LENGTH,
                                                            error_type,
                                                            clustering_algorithm.distance_measure,
                                                            plot_name=plot_name,

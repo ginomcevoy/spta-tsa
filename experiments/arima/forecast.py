@@ -3,8 +3,8 @@ Execute this program to perform ARIMA forecasting and error evaluation on an ent
 '''
 import argparse
 
-from spta.arima.forecast import ArimaForecastingPDQ
-from spta.arima.analysis import ArimaErrorAnalysis
+from spta.arima.train import TrainerArimaPDQ
+from spta.model.forecast import ForecastAnalysis
 from spta.distance.dtw import DistanceByDTW
 from spta.util import log as log_util
 
@@ -40,6 +40,8 @@ def do_arima_forecast(args):
     spt_region_metadata = predefined_regions()[args.region]
     spt_region = spt_region_metadata.create_instance()
 
+    _, x_len, y_len = spt_region.shape
+
     # try to get a pre-calculated centroid, otherwise calculate it
     # TODO allow other distances
     spt_region.centroid = centroid_by_region_and_distance(args.region, DistanceByDTW())
@@ -55,9 +57,11 @@ def do_arima_forecast(args):
     for arima_params in arima_suite.arima_params_gen():
 
         # do the analysis with current ARIMA hyper-parameters, only save errors
-        forecasting_pdq = ArimaForecastingPDQ(arima_params, parallel_workers=parallel_workers)
-        analysis_pdq = ArimaErrorAnalysis(forecasting_pdq)
-        _, overall_errors, _, _ = analysis_pdq.evaluate_forecast_errors(spt_region, 'MASE')
+        # forecasting_pdq = ArimaForecastingPDQ(arima_params, parallel_workers=parallel_workers)
+
+        arima_trainer = TrainerArimaPDQ(arima_params, x_len, y_len)
+        forecast_analysis = ForecastAnalysis(arima_trainer, parallel_workers)
+        overall_errors, _, _ = forecast_analysis.analyze_errors(spt_region, 'MASE')
 
         # ArimaErrors = namedtuple('ArimaErrors', ('minimum', 'min_local', 'centroid', 'maximum'))
         arima_results[arima_params] = overall_errors

@@ -113,6 +113,20 @@ class ModelTrainer(FunctionRegionScalar):
         raise NotImplementedError
 
 
+class NoTrainer(ModelTrainer):
+    '''
+    A trainer that does not train anything. Instead, it already has the models.
+    '''
+
+    def __init__(self, trained_models):
+        super(ModelTrainer, self).__init__(model_params_region=trained_models)
+        self.trained_models = trained_models
+
+    def apply_to(self, training_region):
+        self.missing_count = 0
+        return self.trained_models
+
+
 class TrainAtRepresentatives(ModelTrainer):
     '''
     A decorator of ModelTrainer that only trains models at the specified points (representatives of the region).
@@ -146,10 +160,19 @@ class TrainAtRepresentatives(ModelTrainer):
 
             return function_that_returns_no_model
 
+    def apply_to(self, training_region):
+        # don't apply as the decorated! we need the modified function_at to work
+        return super(TrainAtRepresentatives, self).apply_to(training_region)
+
     def training_function(self, model_params, training_series):
+        # use the decorated training function
         return self.decorated.training_function(model_params, training_series)
 
     def create_model_region(self, numpy_model_array):
+        # create the region as the decorated mandates
+        # but before that, we need to recover self.missing count, because this
+        # decorator has it but the decorated does not
+        self.decorated.missing_count = self.missing_count
         return self.decorated.create_model_region(numpy_model_array)
 
 
