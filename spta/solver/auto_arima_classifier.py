@@ -1,6 +1,6 @@
 import numpy as np
 
-from spta.arima.forecast import ArimaModelRegion, ArimaForecastingExternal
+from spta.arima.forecast import ModelRegionArima, ArimaForecastingExternal
 from spta.clustering.kmedoids import KmedoidsClusteringMetadata
 from spta.region import TimeInterval
 from spta.region.scaling import SpatioTemporalScaled
@@ -93,7 +93,7 @@ class SolverFromClassifier(log_util.LoggerMixin):
 
         1. call the classifier interface to get the medoid labels for each point
         2. use AutoARIMASolverPickler to retrieve the medoid models from a trained solver
-        3. create an ArimaModelRegion for the prediction region with the medoid models
+        3. create an ModelRegionArima for the prediction region with the medoid models
         4. Follow a similar implementation of experiments.auto_arima.solver_each to create a
            PredictionQueryResult instance.
         '''
@@ -112,7 +112,7 @@ class SolverFromClassifier(log_util.LoggerMixin):
             solver_metadata = self.solver_metadata_for_classifier_label(classifier_label)
             models_by_point[point] = self.retrieve_model_for_solver(solver_metadata, classifier_label)
 
-        # ArimaModelRegion instance
+        # ModelRegionArima instance
         arima_model_region = self.build_arima_model_region_for_models(prediction_region, models_by_point)
 
         prediction_result = self.create_prediction_query_result(prediction_region=prediction_region,
@@ -188,11 +188,11 @@ class SolverFromClassifier(log_util.LoggerMixin):
 
     def build_arima_model_region_for_models(self, prediction_region, models_by_point):
         '''
-        Return an instance of ArimaModelRegion that matches the prediction region.
+        Return an instance of ModelRegionArima that matches the prediction region.
         For each point, it will contain the ARIMA model of the medoid corresponding to the
         classifier label for that point.
         '''
-        # the ArimaModelRegion needs to be created 'manually', by collecting each of the medoids
+        # the ModelRegionArima needs to be created 'manually', by collecting each of the medoids
         x_len = prediction_region.x2 - prediction_region.x1
         y_len = prediction_region.y2 - prediction_region.y1
         arima_models_numpy = np.empty((x_len, y_len), dtype=object)
@@ -206,7 +206,7 @@ class SolverFromClassifier(log_util.LoggerMixin):
             y_numpy = point.y - prediction_region.y1
             arima_models_numpy[x_numpy][y_numpy] = arima_model
 
-        return ArimaModelRegion(arima_models_numpy)
+        return ModelRegionArima(arima_models_numpy)
 
     def create_prediction_query_result(self, prediction_region, arima_model_region,
                                        classifier_labels_by_point, output_home):

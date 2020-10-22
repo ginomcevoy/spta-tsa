@@ -1,7 +1,7 @@
 '''
 Forecasting with ARIMA models. Contains:
 
-- ArimaModelRegion, a function region that holds a trained ARIMA model at each point. Can create
+- ModelRegionArima, a function region that holds a trained ARIMA model at each point. Can create
     a forecast region when called with an empty region.
 
 - ArimaForecasting, a class that orchestrates the training and forecasting of ARIMA models.
@@ -19,12 +19,11 @@ from spta.util import log as log_util
 from . import training
 
 
-class ArimaModelRegion(ModelRegion):
+class ModelRegionArima(ModelRegion):
     '''
-    A FunctionRegion that uses the arima_forecast function to create a forecast region using
-    ARIMA models.
+    A FunctionRegion that creates a forecast region using ARIMA models.
 
-    See ForecastModelRegion for more details.
+    See spta.model.base.ModelRegion for more details.
     '''
 
     def forecast_from_model(self, model_at_point, forecast_len, value_at_point, point):
@@ -291,20 +290,20 @@ class ArimaForecastingPDQ(ArimaForecasting):
     See ArimaForecasting for full implementation.
     '''
 
-    def train_models_impl(self, training_region, arima_hyperparams):
+    def train_models_impl(self, training_region, arima_pdq):
         '''
         Train ARIMA models where the same (p, d, q) hyperparameters are used over the entire
         training region.
         '''
-        self.logger.info('Using (p, d, q) = {}'.format(arima_hyperparams))
+        self.logger.info('Using (p, d, q) = {}'.format(arima_pdq))
 
         _, x_len, y_len = training_region.shape
 
         # a function region with produces trained models when applied to a training region
         # using p, d, q
-        arima_trainers = training.ArimaTrainer(arima_hyperparams, x_len, y_len)
+        arima_trainers = training.TrainerArimaPDQ(arima_pdq, x_len, y_len)
 
-        # train the models: this returns an instance of ArimaModelRegion, that has an instance of
+        # train the models: this returns an instance of ModelRegionArima, that has an instance of
         # statsmodels.tsa.arima.model.ARIMAResults at each point
         arima_models = arima_trainers.apply_to(training_region)
 
@@ -336,9 +335,9 @@ class ArimaForecastingAutoArima(ArimaForecasting):
 
         # a function region with produces trained models when applied to a training region
         # using auto_arima
-        arima_trainers = training.AutoArimaTrainer(auto_arima_params, x_len, y_len)
+        arima_trainers = training.TrainerAutoArima(auto_arima_params, x_len, y_len)
 
-        # train the models: this returns an instance of ArimaModelRegion, that has an instance of
+        # train the models: this returns an instance of ModelRegionArima, that has an instance of
         # statsmodels.tsa.arima.model.ARIMAResults at each point
         # this is because we used auto_arima to get (p, d, q) order and then trained
         # statsmodels.tsa.model.arima.ARIMA model with it

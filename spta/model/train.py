@@ -1,6 +1,156 @@
+import functools
+import numpy as np
+
 from spta.region import TimeInterval
+from spta.region.function import FunctionRegionScalar
 
 from spta.util import log as log_util
+
+
+class ModelTrainer(FunctionRegionScalar):
+    '''
+    A FunctionRegion which is meant to be applied to a training spatio-temporal region, in order to
+    produce an instance of a ModelRegion subclass.
+
+    Subclasses must provide the implementations of the methods train_function_by_point() and
+    create_model_region().
+
+    The method training_function() is used to provide the function that will be applied to the
+    training region at each point. This completes the construction of the internal numpy_dataset that
+    contains the function objects at each point. The FunctionRegion interface assumes that the only
+    parameter of the function is the value of the region at each point, so functools.partial is used
+    to pass the model parameters to the function and maintain the interface.
+    '''
+
+    def __init__(self, model_params_and_shape=None, model_params_region=None):
+        '''
+        To create an instance of ModelTrainer, either provide model_params_and_shape or model_params_region,
+        they are mutually exclusive.
+
+        model_params_and_shape:
+            A tuple (model_params, x_len, y_len). If this value is provided, then assume that the region
+            will have the shape (x_len, y_len), and that the model parameters are constant
+        '''
+
+        # sanity checks
+        if model_params_and_shape is None and model_params_region is None:
+            raise ValueError('Provide either model_params_and_shape or model_params_region')
+
+        if model_params_and_shape is not None and model_params_region is not None:
+            raise ValueError('Cannot provide both model_params_and_shape or model_params_region')
+
+        if model_params_and_shape is not None:
+
+            # use constant parameters: the shape needs to be provided
+            (model_params, x_len, y_len) = model_params_and_shape
+
+            numpy_function_array = np.empty((x_len, y_len), dtype=object)
+            for x in range(x_len):
+                for y in range(y_len):
+                    numpy_function_array[x][y] = functools.partial(self.training_function, model_params)
+
+        if model_params_region is not None:
+
+            numpy_function_array = np.empty((model_params_region.x_len, model_params_region.y_len),
+                                            dtype=object)
+
+            # use the iterator of the region: if the region is a cluster, a nested for
+            # will fail because value_at(point) raises ValueError if point is not a cluster member.
+            # if a point (x, y) is not iterated, the corresponding model_params will be None.
+            for point, model_params_for_point in model_params_region:
+                x, y = (point.x, point.y)
+                numpy_function_array[x][y] = functools.partial(self.training_function, model_params_for_point)
+
+        # use dtype=object to indicate that we are storing objects (functions)
+        super(ModelTrainer, self).__init__(numpy_function_array, dtype=object)
+
+        # useful for decorators
+        self.model_params_and_shape = model_params_and_shape
+        self.model_params_region = model_params_region
+
+    def apply_to(self, training_region):
+        '''
+        Override the parent behavior of FunctionRegionScalar: instead of returning a value for f_{(x,y)}(x,y),
+        we must return an instance of the trained model as returned by training_function() abstract method.
+
+        Also, the output of the parent behavior is a SpatialRegion, but we want to create a subclass of
+        ModelRegion instead. The parent SpatialRegion contains the trained model at training region,
+        so this method is decorated to achieve the effect.
+        '''
+        # get result from parent behavior
+        # this will already call the training function (see constructor!) and return trained models.
+        spatial_region_with_models = super(ModelTrainer, self).apply_to(training_region)
+
+        # count and log missing models, iterate to find them
+        self.missing_count = 0
+        for (point, trained_model) in spatial_region_with_models:
+
+            if trained_model is None:
+                self.missing_count += 1
+
+        if self.missing_count:
+            self.logger.warn('Missing models: {}'.format(self.missing_count))
+        else:
+            self.logger.info('Models trained in all points successfully.')
+
+        # decorate the output by returning the desired instance (subclasses define the correct instance)
+        return self.create_model_region(spatial_region_with_models.as_numpy)
+
+    def training_function(self, model_params, training_series):
+        '''
+        Here the training takes place at each point of the region. The model_params and training_series match
+        for some point P(x, y).
+
+        The output must be an object representing the trained model which can later be used to create a forecast.
+        If the model cannot be trained, then this method must return None.
+        '''
+        raise NotImplementedError
+
+    def create_model_region(self, numpy_model_array):
+        '''
+        Return an instance of ModelRegion (not checking here if the instance matches ModelRegion)
+        '''
+        raise NotImplementedError
+
+
+class TrainAtRepresentatives(ModelTrainer):
+    '''
+    A decorator of ModelTrainer that only trains models at the specified points (representatives of the region).
+    Other points will get a None model.
+    '''
+
+    def __init__(self, decorated, representatives):
+        '''
+        decorated:
+            Instance of a subclass of ModelTrainer.
+
+        representatives:
+            a list of points where the models will be computed, e.g. medoids of a cluster partition
+        '''
+        super(TrainAtRepresentatives, self).__init__(model_params_and_shape=decorated.model_params_and_shape,
+                                                     model_params_region=decorated.model_params_region)
+        self.decorated = decorated
+        self.representatives = representatives
+
+    def function_at(self, point):
+        '''
+        Here we decorate the behavior: models will be trained only at the representative points,
+        other points will return None (no model)
+        '''
+        if point in self.representatives:
+            return self.decorated.function_at(point)
+
+        else:
+            def function_that_returns_no_model(training_series):
+                return None
+
+            return function_that_returns_no_model
+
+    def training_function(self, model_params, training_series):
+        return self.decorated.training_function(model_params, training_series)
+
+    def create_model_region(self, numpy_model_array):
+        return self.decorated.create_model_region(numpy_model_array)
 
 
 class SplitTrainingAndTest(log_util.LoggerMixin):

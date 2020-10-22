@@ -4,17 +4,16 @@ Uses a clustering algorithm to define clusters and medoids, and uses auto ARIMA 
 '''
 import matplotlib.pyplot as plt
 
-import numpy as np
 import pickle
 import os
 
-from spta.arima.forecast import ArimaModelRegion
+from spta.arima.forecast import ModelRegionArima
 from spta.arima import training
 
 from spta.clustering.factory import ClusteringFactory
 
 from spta.model.error import MeasureForecastingError, get_error_func
-from spta.model.train import SplitTrainingAndTestLast
+from spta.model.train import SplitTrainingAndTestLast, TrainAtRepresentatives
 
 from spta.region.scaling import SpatioTemporalScaled
 
@@ -133,8 +132,8 @@ class AutoARIMATrainer(log_util.LoggerMixin):
         # full dataset (not the training subset, which uses a series subset)
         # Note that we must use arima_medoid_models_train instead of arima_replicated_models_train,
         # otherwise we would be re-training x_len * y_len models instead of just k!
-        arima_medoid_models_whole = training.refit_arima(arima_medoid_models_train,
-                                                         spt_region)
+        arima_refit_function = training.TrainerRefitArima(arima_medoid_models_train)
+        arima_medoid_models_whole = arima_refit_function.apply_to(spt_region)
 
         # replicate these refitted models, similar to step 2. above
         arima_replicated_models_whole = \
@@ -150,28 +149,13 @@ class AutoARIMATrainer(log_util.LoggerMixin):
 
     def train_auto_arima_at_medoids(self, training_region, medoids):
         '''
-        The ARIMA model region that will be used for forecasting has only k models; the model from
-        each medoid will be replicated throughout its cluster.
-
-        Here, wet rain auto ARIMA models at each medoid, and save the results in an ARIMA model
-        region backed by sparse numpy dataset that has no models (None) outside the medoids.
+        Train the ARIMA model region that will be used for forecasting has only k models.
+        The model from each medoid will be replicated throughout its cluster later.
         '''
         _, x_len, y_len = training_region.shape
-
-        # The sparse numpy array that will store the ARIMA models and has the region shape.
-        # The model at points other than the medoids will be None.
-        arima_medoids_numpy = np.full((x_len, y_len), None, dtype=object)
-
-        for medoid in medoids:
-
-            # train an ARIMA model and store it at the medoid coordinates
-            training_series_at_medoid = training_region.series_at(medoid)
-            arima_at_medoid = training.train_auto_arima(self.auto_arima_params,
-                                                        training_series_at_medoid)
-            arima_medoids_numpy[medoid.x, medoid.y] = arima_at_medoid
-
-        # wrap the dataset into a model region, which is also a spatial region
-        return ArimaModelRegion(arima_medoids_numpy)
+        trainer = TrainAtRepresentatives(training.TrainerAutoArima(self.auto_arima_params, x_len, y_len),
+                                         medoids)
+        return trainer.apply_to(training_region)
 
     def replicate_representative_models(self, arima_models_at_medoids, partition, medoids):
         '''
@@ -185,9 +169,9 @@ class AutoARIMATrainer(log_util.LoggerMixin):
         # Note that this is just a spatial region
         arima_spatial_region = partition.merge_with_representatives_2d(arima_clusters, medoids)
 
-        # We want an ArimaModelRegion that can be applied to produce forecasts, so we wrap
+        # We want an ModelRegionArima that can be applied to produce forecasts, so we wrap
         # the data with this instance
-        return ArimaModelRegion(arima_spatial_region.as_numpy)
+        return ModelRegionArima(arima_spatial_region.as_numpy)
 
     def calculate_errors(self, arima_model_region, training_region, test_region):
         '''
@@ -292,7 +276,7 @@ class AutoARIMASolver(log_util.LoggerMixin):
         # to do this, obtain a subset of the model region
         # TODO better support for this...
         arima_models_subset_np = arima_model_region.as_numpy[px1:px2, py1:py2]
-        arima_model_subset = ArimaModelRegion(arima_models_subset_np)
+        arima_model_subset = ModelRegionArima(arima_models_subset_np)
 
         # here we just need an empty region with the correct shape
         # and the error_subregion is right there... so use it

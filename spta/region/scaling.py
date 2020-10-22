@@ -121,7 +121,7 @@ class SpatioTemporalScaled(SpatioTemporalDecorator):
         '''
         Create a new scaled region with the provided dataset, keeping decorated behavior.
         '''
-        self.logger.debug('Called SpatioTemporalScaled.new_spatio_temporal_region()')
+        # self.logger.debug('Called SpatioTemporalScaled.new_spatio_temporal_region()')
         # We still want to keep the decorated behavior, so ask the decorated region to create a
         # new instance, and wrap it properly for a scaled region.
         new_decorated_region = self.decorated_region.new_spatio_temporal_region(numpy_dataset)
