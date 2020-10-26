@@ -121,6 +121,7 @@ class SolverFromClassifier(log_util.LoggerMixin):
         for point, classifier_label in classifier_labels_by_point.items():
             solver_metadata = self.solver_metadata_for_classifier_label(classifier_label)
             models_by_point[point] = self.retrieve_model_for_solver(solver_metadata, classifier_label)
+            self.logger.debug('Adding model {} at {}'.format(classifier_label, point))
 
         # ModelRegion instance
         model_region = self.build_model_region_for_models(prediction_region, models_by_point)
@@ -186,6 +187,8 @@ class SolverFromClassifier(log_util.LoggerMixin):
             solver = solver_pickler.load_solver()
             self.solvers[solver_repr] = solver
             self.logger.debug('Adding new solver:\n{}'.format(solver))
+            if hasattr(solver, 'partition'):
+                self.logger.debug('Partition: {} {}'.format(solver.partition, solver.partition.medoids))
 
         # get the cluster_index from the label:
         # 13-0-6 -> 6
@@ -209,12 +212,9 @@ class SolverFromClassifier(log_util.LoggerMixin):
         self.logger.debug('numpy_model_array shape: {}'.format(numpy_model_array.shape))
 
         # iterate each {point, model} key-value pair
-        # note that the point is relative to spt_region, but the numpy array is zero-based
+        # note that the points are relative to the prediction region, so they are already zero-based
         for point, model in models_by_point.items():
-            # get zero-based coords
-            x_numpy = point.x - prediction_region.x1
-            y_numpy = point.y - prediction_region.y1
-            numpy_model_array[x_numpy][y_numpy] = model
+            numpy_model_array[point.x][point.y] = model
 
         # the trainer knows how to create the correct region for the array of models
         return self.model_trainer.create_model_region(numpy_model_array)
