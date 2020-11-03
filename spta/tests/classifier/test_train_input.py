@@ -37,13 +37,40 @@ class TestMedoidsChoiceMinDistance(unittest.TestCase):
         }
         point = Point(5, 5)
 
+        # given no threshold
+        threshold = 0
+        medoid_histogram = {}
+
         # when
         instance = MedoidsChoiceMinDistance(region_metadata=self.region_metadata,
                                             distance_measure=self.distance_measure)
-        result = instance.choose_medoid(suite_result, point)
+        result = instance.choose_medoid(suite_result, point, threshold, medoid_histogram)
 
         # then
         self.assertEqual(result, ('kmedoids_k3_seed0_lite', 1, Point(48, 89)))
+
+    def test_choose_medoid_but_threshold_was_reached(self):
+
+        # given
+        suite_result = {
+            'kmedoids_k2_seed0_lite': [Point(45, 86), Point(47, 91)],
+            'kmedoids_k2_seed1_lite': [Point(45, 86), Point(47, 91)],
+            'kmedoids_k3_seed0_lite': [Point(45, 86), Point(48, 89), Point(45, 92)],
+            'kmedoids_k3_seed1_lite': [Point(45, 86), Point(45, 92), Point(48, 89)]
+        }
+        point = Point(5, 5)
+
+        # given that the threshold was reached for the medoid that would have been otherwise chosen
+        threshold = 1
+        medoid_histogram = {('kmedoids_k3_seed0_lite', 1): 1}
+
+        # when
+        instance = MedoidsChoiceMinDistance(region_metadata=self.region_metadata,
+                                            distance_measure=self.distance_measure)
+        result = instance.choose_medoid(suite_result, point, threshold, medoid_histogram)
+
+        # then
+        self.assertEqual(result, ('kmedoids_k3_seed1_lite', 2, Point(48, 89)))
 
     def test_csv_filepath(self):
 
@@ -59,11 +86,14 @@ class TestMedoidsChoiceMinDistance(unittest.TestCase):
                                             distance_measure=self.distance_measure)
 
         # when
-        result = instance.csv_filepath(output_home, kmedoids_suite, count, random_seed)
+        result = instance.csv_filepaths(output_home, kmedoids_suite, count, random_seed)
 
         # then
-        expected = 'outputs/nordeste_small_2015_2015_1spd/dtw/' \
-            'random_point_dist_medoid__kmedoids-quick_count10_seed0.csv'
+        expected = (
+            'outputs/nordeste_small_2015_2015_1spd/dtw/random_point_dist_medoid__kmedoids-quick_count10_seed0.csv',
+            'outputs/nordeste_small_2015_2015_1spd/dtw/hist_dist_medoid__kmedoids-quick_count10_seed0.csv'
+        )
+        self.maxDiff = None
         self.assertEqual(result, expected)
 
 
@@ -101,11 +131,14 @@ class TestMedoidsChoiceMinPredictionError(unittest.TestCase):
                                                    output_home=output_home)
 
         # when
-        result = instance.csv_filepath(output_home, kmedoids_suite, count, random_seed)
+        result = instance.csv_filepaths(output_home, kmedoids_suite, count, random_seed)
 
         # then
-        expected = 'outputs/nordeste_small_2015_2015_1spd/dtw/' \
-            'random_point_medoid_min_pred_error__auto-arima-start_p1-start_q1-max_p3-max_q3-dNone-stepwiseTrue__tp8__sMAPE__kmedoids-quick_count10_seed0.csv'
+        expected = (
+            'outputs/nordeste_small_2015_2015_1spd/dtw/random_point_medoid_min_pred_error__auto-arima-start_p1-start_q1-max_p3-max_q3-dNone-stepwiseTrue__tp8__sMAPE__kmedoids-quick_count10_seed0.csv',
+            'outputs/nordeste_small_2015_2015_1spd/dtw/hist_medoid_min_pred_error__auto-arima-start_p1-start_q1-max_p3-max_q3-dNone-stepwiseTrue__tp8__sMAPE__kmedoids-quick_count10_seed0.csv'
+        )
+        self.maxDiff = None
         self.assertEqual(result, expected)
 
     def test_build_solver_metadata(self):

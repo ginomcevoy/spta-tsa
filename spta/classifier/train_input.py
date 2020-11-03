@@ -62,8 +62,8 @@ class TrainDataWithRandomPoints(log_util.LoggerMixin):
         }
         return choice_strategies[criterion]
 
-    def evaluate_score_of_random_points(self, clustering_suite, count, random_seed, criterion, output_home,
-                                        **choice_args):
+    def evaluate_score_of_random_points(self, clustering_suite, count, random_seed, criterion, threshold,
+                                        output_home, **choice_args):
 
         # strategy that will calculate the medoid M given the point P
         choice_strategy = self.get_choice_strategy(criterion, output_home, **choice_args)
@@ -85,14 +85,17 @@ class TrainDataWithRandomPoints(log_util.LoggerMixin):
         random_points = self.get_random_points_different_to_medoids(count, random_seed, medoid_indices,
                                                                     x_len, y_len)
 
-        # prepare the output CSV for min_distance
-        csv_filepath = choice_strategy.csv_filepath(output_home=output_home,
-                                                    clustering_suite=clustering_suite,
-                                                    count=count,
-                                                    random_seed=random_seed)
+        # this histogram keeps track of which medoids have been chosen by the choice strategy
+        medoid_histogram = {}
 
-        # create the CSV
-        with open(csv_filepath, 'w', newline='') as csv_file:
+        # prepare the output CSV for min_distance
+        (choice_csv, hist_csv) = choice_strategy.csv_filepaths(output_home=output_home,
+                                                               clustering_suite=clustering_suite,
+                                                               count=count,
+                                                               random_seed=random_seed)
+
+        # create the CSV for the random points
+        with open(choice_csv, 'w', newline='') as csv_file:
             csv_writer = csv.writer(csv_file, delimiter=' ', quotechar='|',
                                     quoting=csv.QUOTE_MINIMAL)
 
@@ -104,7 +107,7 @@ class TrainDataWithRandomPoints(log_util.LoggerMixin):
             for random_point in random_points:
 
                 # find the medoid M for the point P
-                result = choice_strategy.choose_medoid(suite_result, random_point, **choice_args)
+                result = choice_strategy.choose_medoid(suite_result, random_point, threshold, medoid_histogram, **choice_args)
                 (global_min_clustering_repr, global_min_cluster_index, global_min_medoid) = result
 
                 # the row elements need to match the header:
@@ -130,8 +133,24 @@ class TrainDataWithRandomPoints(log_util.LoggerMixin):
 
                 csv_writer.writerow(row)
 
-        msg = 'Saved evaluate_medoid_distance_of_random_points at {}'
-        self.logger.info(msg.format(csv_filepath))
+        msg = 'Saved evaluate_score_of_random_points at {}'
+        self.logger.info(msg.format(choice_csv))
+
+        # create the CSV for the histogram
+        with open(hist_csv, 'w', newline='') as csv_file:
+            csv_writer = csv.writer(csv_file, delimiter=' ', quotechar='|',
+                                    quoting=csv.QUOTE_MINIMAL)
+
+            header = ('clustering_repr', 'cluster_index', 'count')
+            csv_writer.writerow(header)
+
+            for (key, count) in medoid_histogram.items():
+                (clustering_repr, cluster_index) = key
+                row = (clustering_repr, str(cluster_index), str(count))
+                csv_writer.writerow(row)
+
+        msg = 'Saved label histogram at {}'
+        self.logger.info(msg.format(hist_csv))
 
     def get_random_points_different_to_medoids(self, count, random_seed, medoid_indices, x_len, y_len):
 
@@ -178,16 +197,22 @@ class MedoidsChoiceStrategy(log_util.LoggerMixin):
         '''
         pass
 
-    def choose_medoid(self, suite_result, point, **choice_args):
+    def choose_medoid(self, suite_result, point, threshold, medoid_histogram, **choice_args):
         '''
         Given a point, explore the list of medoids from clustering_suite.retrieve_suite_result_csv()
         to find the medoid with the lowest penalization score.
 
+        suite_result
+            a result from retrieve_suite_result_csv
+
         point
             a Point instance, assumed to be located in the region indicated by the region metadata.
 
-        suite_result
-            a result from retrieve_suite_result_csv
+        threshold
+            if > 0, this value limits the number of times a tuple (clustering_repr, medoid_index) can be chosen
+
+        medoid_histogram
+            keeps track of how many times the tuple (clustering_repr, medoid_index) has been chosen
 
         Returns a tuple with the cluster representation, the index, and the actual medoid point:
         (clustering_repr, cluster_index, medoid)
@@ -210,6 +235,9 @@ class MedoidsChoiceStrategy(log_util.LoggerMixin):
             # subclasses will implement this
             scores = self.get_medoid_penalties(clustering_repr, medoids, point)
 
+            # activate the threshold if needed, this modifies scores
+            self.supress_medoids_that_reached_threshold(clustering_repr, medoids, scores, threshold, medoid_histogram)
+
             # find the medoid with minimum score in the current clustering_repr
             current_min_cluster_index = np.argmin(scores)
             current_min_score = scores[current_min_cluster_index]
@@ -227,17 +255,46 @@ class MedoidsChoiceStrategy(log_util.LoggerMixin):
                 global_min_medoid = current_min_medoid
                 global_min_score = current_min_score
 
+        # if the threshold is too low, there may not be enough medoids to assign to all the points
+        if np.isinf(global_min_score):
+            self.logger.error('Histogram: {}'.format(medoid_histogram))
+            raise ValueError('No medoids left to assign to point, threshold is too low!')
+
         # done iterating, we should have the minimum overall score
         msg_str = 'Found global minimum for {}: {} at index [{}] -> {:.2f}'
         msg = msg_str.format(global_min_clustering_repr, global_min_medoid,
                              global_min_cluster_index, global_min_score)
         self.logger.debug(msg)
 
+        # keep track of how many times the tuple (clustering_repr, cluster_index)
+        # has been chosen as having the best score: here we add 1 to the histogram column
+        medoid_histogram[(global_min_clustering_repr, global_min_cluster_index)] = \
+            medoid_histogram.get((global_min_clustering_repr, global_min_cluster_index), 0) + 1
+
         return (global_min_clustering_repr, global_min_cluster_index, global_min_medoid)
 
-    def csv_filepath(output_home, clustering_suite, count, random_seed):
+    def supress_medoids_that_reached_threshold(self, clustering_repr, medoids, scores, threshold, medoid_histogram):
+
+        # only affect scores if threshold > 0
+        if threshold:
+
+            # look for medoids that have reached the threshold
+            for cluster_index, medoid in enumerate(medoids):
+
+                # invariant of the threshold algorithm
+                assert medoid_histogram.get((clustering_repr, cluster_index), 0) <= threshold
+
+                if medoid_histogram.get((clustering_repr, cluster_index), 0) == threshold:
+
+                    # this medoid reached a threshold, mark its score as infinite so it is not chosen
+                    scores[cluster_index] = np.Inf
+                    self.logger.debug('Tuple ({}, {}) reached threshold, not choosing it'.format(clustering_repr, cluster_index))
+
+    def csv_filepaths(output_home, clustering_suite, count, random_seed):
         '''
-        Returns a proper output filename to store the output of applying this choosing strategy.
+        Returns proper output filenames to store:
+            - the output of applying this choosing strategy.
+            - the medoid histogram.
         '''
         pass
 
@@ -289,13 +346,15 @@ class MedoidsChoiceMinDistance(MedoidsChoiceStrategy):
         # the score of each medoid is its distance, we are done
         return distances
 
-    def csv_filepath(self, output_home, clustering_suite, count, random_seed):
+    def csv_filepaths(self, output_home, clustering_suite, count, random_seed):
         '''
-        Returns the CSV filename relevant to minimizing the distance.
+        Returns the CSV filenames relevant to minimizing the distance.
         '''
         csv_dir = clustering_suite.csv_dir(output_home, self.region_metadata, self.distance_measure)
-        filename = 'random_point_dist_medoid__{!r}_count{}_seed{}.csv'.format(clustering_suite, count, random_seed)
-        return os.path.join(csv_dir, filename)
+        filename_template = '{}_dist_medoid__{!r}_count{}_seed{}.csv'
+        choice_filename = filename_template.format('random_point', clustering_suite, count, random_seed)
+        hist_filename = filename_template.format('hist', clustering_suite, count, random_seed)
+        return (os.path.join(csv_dir, choice_filename), os.path.join(csv_dir, hist_filename))
 
 
 class MedoidsChoiceMinPredictionError(MedoidsChoiceStrategy):
@@ -380,15 +439,17 @@ class MedoidsChoiceMinPredictionError(MedoidsChoiceStrategy):
         penalties[cluster_index_of_representative] = forecast_error_at_representative
         return penalties
 
-    def csv_filepath(self, output_home, clustering_suite, count, random_seed):
+    def csv_filepaths(self, output_home, clustering_suite, count, random_seed):
         '''
-        Returns the CSV filename relevant to minimizing the prediction error of the model in the medoid.
+        Returns the CSV filenames relevant to minimizing the prediction error of the model in the medoid.
         '''
         csv_dir = clustering_suite.csv_dir(output_home, self.region_metadata, self.distance_measure)
-        filename_template = 'random_point_medoid_min_pred_error__{!r}__tp{}__{}__{!r}_count{}_seed{}.csv'
-        filename = filename_template.format(self.model_params, self.test_len, self.error_type,
-                                            clustering_suite, count, random_seed)
-        return os.path.join(csv_dir, filename)
+        filename_template = '{}_medoid_min_pred_error__{!r}__tp{}__{}__{!r}_count{}_seed{}.csv'
+        choice_filename = filename_template.format('random_point', self.model_params, self.test_len, self.error_type,
+                                                   clustering_suite, count, random_seed)
+        hist_filename = filename_template.format('hist', self.model_params, self.test_len, self.error_type,
+                                                 clustering_suite, count, random_seed)
+        return (os.path.join(csv_dir, choice_filename), os.path.join(csv_dir, hist_filename))
 
     def build_solver_metadata(self, clustering_repr):
         '''

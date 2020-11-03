@@ -23,7 +23,7 @@ def processRequest():
     desc = 'Extraction LSTM...'
 
     usage = '%(prog)s [-h] <region> [kmedoids|regular] <clustering_suite> <criterion> [--random=1000] ' \
-        '[--random-seed=0] [--log LOG]'
+        '[--random-seed=0] [--threshold=0] [--auto-arima=<auto_arima_id>] [--tp=8] [--error=sMAPE] [--log LOG]'
     parser = argparse.ArgumentParser(prog='cluster-extraction-lstm', description=desc,
                                      usage=usage)
 
@@ -49,6 +49,9 @@ def processRequest():
 
     help_msg = 'Random seed for extraction (default: %(default)s)'
     parser.add_argument('--random-seed', help=help_msg, default=0, type=int)
+
+    help_msg = 'Limit the choice of a medoid to a max count threshold (default: 0 for no threshold)'
+    parser.add_argument('--threshold', help=help_msg, default=0, type=int)
 
     # logging
     log_options = ('WARN', 'INFO', 'DEBUG')
@@ -103,6 +106,7 @@ def analyze_suite(args, logger):
                                                          count=args.random,
                                                          random_seed=args.random_seed,
                                                          criterion=args.criterion,
+                                                         threshold=args.threshold,
                                                          output_home=output_home,
                                                          **choice_args)
 
