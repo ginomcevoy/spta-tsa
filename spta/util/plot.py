@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from matplotlib.patches import Rectangle
+import seaborn as sns
 
 from sklearn.metrics import silhouette_samples, silhouette_score
 
@@ -49,8 +50,10 @@ def plot_discrete_spatial_region(spatial_region, title='', clusters=True, subplo
     '''
 
     fig = None
+    had_subplot = True
     if not subplot:
         fig, subplot = plt.subplots(1, 1)
+        had_subplot = False
 
     region_np_array = spatial_region.as_numpy
 
@@ -101,7 +104,7 @@ def plot_discrete_spatial_region(spatial_region, title='', clusters=True, subplo
     if title:
         subplot.set_title(title)
 
-    if not subplot:
+    if not had_subplot:
         plt.show()
 
     return fig
@@ -257,6 +260,44 @@ def plot_distances_vs_forecast_errors(distances_to_point, forecast_errors, dista
     plt.show()
 
 
+def plot_pandas_heatmap(df, x_col, y_col, value_col, scale=(0, 1), ax=None):
+    '''
+    Given a pandas DataFrame object representing values over a 2D region, build a heatmap that
+    conserves the shape of the region. This assumes that the region has been tiled in rectangles
+    of the same shape, so that each tuple of the dataframe contains the  (x, y) coordinates of a corner
+    of the rectangle for which the value applies.
+
+    df
+        pandas DataFrame
+
+    x_col
+        column name for the x coordinates of the tiles
+
+    y_col
+        column name for the y coordinates of the tiles
+
+    value_col
+        column name for the value at (x, y)
+
+    x_width
+        width of each rectangle (assumed constant)
+
+    y_height
+        height of each rectangle (assumed constant)
+
+    scale
+        tuple that delimits the range of the heatmap scale
+    '''
+
+    df_heatmap = df.pivot(index=x_col, columns=y_col, values=value_col)
+    if ax is not None:
+        sns.heatmap(df_heatmap, annot=True, vmin=scale[0], vmax=scale[1], ax=ax)
+    else:
+        ax = sns.heatmap(df_heatmap, annot=True, vmin=scale[0], vmax=scale[1])
+
+    return ax
+
+
 def check_palette_len(color_length):
     if color_length > len(PALETTE):
         raise ValueError('Need more colors in palette!')
@@ -265,6 +306,7 @@ def check_palette_len(color_length):
 if __name__ == '__main__':
 
     from spta.region.spatial import SpatialRegion
+    import pandas as pd
 
     x_len = 9
     y_len = 8
@@ -282,3 +324,15 @@ if __name__ == '__main__':
     print(region)
 
     plot_discrete_spatial_region(region)
+
+    # Index = ['aaa', 'bbb', 'ccc', 'ddd', 'eee']
+    # Cols = ['A', 'B', 'C', 'D']
+    # df = pd.DataFrame(abs(np.random.randn(5, 4)), index=Index, columns=Cols)
+
+    d = {'x': np.repeat(range(0, 50, 10), 4), 'y': np.tile(range(0, 40, 10), 5), 'v': np.random.randn(20)}
+    df = pd.DataFrame(data=d)
+    print(df)
+
+    ax = plot_pandas_heatmap(df, x_col='x', y_col='y', value_col='v', scale=(-2, 2))
+    ax.set_title('Hello')
+    plt.show()
