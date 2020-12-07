@@ -218,6 +218,20 @@ def regular_partitioning(x_len, y_len, k):
     return matrix
 
 
+def sliding_window(array, window_len, stride=1):
+    '''
+    Create a sliding window for a given 1-d array with the given stride. The stride is the amount of units
+    that the next window is displaced, relative the current one.
+    '''
+
+    windows = []
+    for i in range(0, len(array) - window_len + 1, stride):
+        window = array[i:(i + window_len)]
+        windows.append(window)
+
+    return np.array(windows)
+
+
 if __name__ == '__main__':
 
     x = (0, 1, 2, 3, 4)

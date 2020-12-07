@@ -9,6 +9,10 @@ class DistanceByRMSE(DistanceBetweenSeries):
     Use Root Mean Squared Error
     '''
 
+    def __init__(self):
+        super(DistanceByRMSE, self).__init__()
+        self.name = 'rmse'
+
     def measure(self, first_series, second_series):
         '''
         RMSE implementation

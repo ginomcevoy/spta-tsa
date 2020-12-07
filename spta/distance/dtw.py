@@ -12,6 +12,10 @@ class DistanceByDTW(DistanceBetweenSeries):
     Use Dynamic Time Warping
     '''
 
+    def __init__(self):
+        super(DistanceByDTW, self).__init__()
+        self.name = 'dtw'
+
     def measure(self, first_series, second_series):
         if np.isnan(first_series).any() or np.isnan(second_series).any():
             return np.nan

@@ -209,3 +209,76 @@ class TestSquarePartitioning(unittest.TestCase):
         self.assertEqual(matrix.shape, (90, 95))
         unique_values = np.unique(matrix.reshape((90 * 95, 1)), return_counts=False)
         self.assertEqual(len(unique_values), 23)
+
+
+class TestSlidingWIndow(unittest.TestCase):
+    '''
+    Unit tests for spta.util.arrays.sliding_window function.
+    '''
+
+    def setUp(self):
+        self.array = np.array([1, 2, 3, 4, 5, 6, 7, 8])
+
+    def test_sliding_window_simple(self):
+
+        # given
+        window_len = 1
+        stride = 1
+
+        # when
+        result = arrays_util.sliding_window(self.array, window_len, stride)
+
+        # then
+        expected = np.array([
+            np.array([1]),
+            np.array([2]),
+            np.array([3]),
+            np.array([4]),
+            np.array([5]),
+            np.array([6]),
+            np.array([7]),
+            np.array([8]),
+        ])
+        self.assertIsNone(np.testing.assert_array_equal(result, expected))
+
+    def test_sliding_window_size2(self):
+
+        # given
+        window_len = 2
+        stride = 1
+
+        # when
+        result = arrays_util.sliding_window(self.array, window_len, stride)
+        print(result)
+        print(result.shape)
+
+        # then
+        expected = np.array([
+            np.array([1, 2]),
+            np.array([2, 3]),
+            np.array([3, 4]),
+            np.array([4, 5]),
+            np.array([5, 6]),
+            np.array([6, 7]),
+            np.array([7, 8]),
+        ])
+        self.assertIsNone(np.testing.assert_array_equal(result, expected))
+
+    def test_sliding_window_size3_stride2(self):
+
+        # given
+        window_len = 3
+        stride = 2
+
+        # when
+        result = arrays_util.sliding_window(self.array, window_len, stride)
+        print(result)
+        print(result.shape)
+
+        # then
+        expected = np.array([
+            np.array([1, 2, 3]),
+            np.array([3, 4, 5]),
+            np.array([5, 6, 7]),
+        ])
+        self.assertIsNone(np.testing.assert_array_equal(result, expected))

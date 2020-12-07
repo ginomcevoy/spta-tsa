@@ -1,10 +1,9 @@
 '''
 Execute this program with the train subcommand to partition a spatio-temporal region using a
-clustering algorithm (e.g. k-medoids), and then train auto ARIMA models at the medoids of the
-resulting clusters.
+clustering algorithm (e.g. k-medoids), and then use the mean of the past values at the medoids
+of the resulting clusters.
 
-This will create a solver for forecast queries that can be used with this same command and the
-predict subcommand.
+This will create a baseline solver to be compared with more sophisticated approaches.
 '''
 
 import argparse

@@ -13,6 +13,7 @@ class DistanceByDTWParallel(DistanceByDTW):
     def __init__(self, num_proc):
         super(DistanceByDTWParallel, self).__init__()
         self.num_proc = num_proc
+        self.name = 'dtw_p{}'.format(num_proc)
 
     def compute_distance_matrix_sptr_old(self, spatio_temporal_region):
 
