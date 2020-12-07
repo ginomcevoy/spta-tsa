@@ -1,6 +1,5 @@
 '''
-Execute this program with the train subcommand to partition a spatio-temporal region using a
-clustering algorithm (e.g. k-medoids), and then, for each point in the region, k-NN algorithm
+Execute this program to use, for each point in the region, the k-NN algorithm
 to predict the future values of the series at each point.
 
 This will create a baseline solver to be compared with more sophisticated approaches.
@@ -8,9 +7,6 @@ This will create a baseline solver to be compared with more sophisticated approa
 
 import argparse
 import numpy as np
-
-from spta.clustering.kmedoids import KmedoidsClusteringMetadata
-from spta.clustering.regular import RegularClusteringMetadata
 
 from spta.distance.dtw import DistanceByDTW
 
@@ -21,8 +17,6 @@ from spta.model.error import error_functions
 from spta.region import Region
 from spta.region.scaling import SpatioTemporalScaled
 
-from spta.solver.model import SolverPickler
-from spta.solver.train import SolverTrainer
 from spta.solver.metadata import SolverMetadataBuilder
 from spta.solver.result import PredictionQueryResultBuilder
 
@@ -49,7 +43,7 @@ Finally, print the results and save as CSV.'''
     region_options = predefined_regions().keys()
     parser.add_argument('region', help='Name of the region metadata', choices=region_options)
 
-    parser.add_argument('k', help='Value of k for k-NN', type=int)
+    parser.add_argument('knn', help='Value of k for k-NN', type=int)
 
     # region is mandatory... as 4 coords for now
     parser.add_argument('lat1', help='First latitude index relative to region (north)')
@@ -177,7 +171,7 @@ def metadata_from_args(args):
     region_metadata = predefined_regions()[args.region]
 
     # the k-NN params is the value of k and the distance measure
-    knn_model_params = KNNParams(args.k, DistanceByDTW())
+    knn_model_params = KNNParams(args.knn, DistanceByDTW())
 
     return region_metadata, knn_model_params, args.error
 

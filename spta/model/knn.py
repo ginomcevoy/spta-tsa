@@ -12,9 +12,9 @@ from spta.util import arrays as arrays_util
 from spta.util import log as log_util
 
 
-class KNNParams(namedtuple('KNN', 'k distance_measure')):
+class KNNParams(namedtuple('KNNParams', 'k distance_measure')):
     '''
-    Parameters for MeanOfPast model
+    Parameters for KNN model
     '''
     __slots__ = ()
 
@@ -32,6 +32,28 @@ class KNNParams(namedtuple('KNN', 'k distance_measure')):
         return super(KNNParams, self).__repr__()
 
 
+class KNNModel(namedtuple('KNNModel', 'model_params, training_series')):
+    '''
+    A model for k-NN. Since we cannot do any useful computation during training (need the forecast length),
+    we store the input to compute the forecast during the prediction.
+
+    This is important because the solver expects a proper object (type=object) to be stored as the trained
+    model, the object will be an instance of this enum class.
+    '''
+
+    __slots__ = ()
+
+    def __repr__(self):
+        '''
+        Override the representation of KNNModel
+        # https://stackoverflow.com/a/7914212/3175179
+        '''
+        return repr(self.model_params)
+
+    def __str__(self):
+        return 'KNNModel(model_params={}, training_series=<{}>)'.format(self.model_params, len(self.training_series))
+
+
 class ModelRegionKNN(ModelRegion):
     '''
     A FunctionRegion that creates a forecast region obtained by applying the k-NN algorithm for
@@ -39,9 +61,8 @@ class ModelRegionKNN(ModelRegion):
     '''
 
     def forecast_from_model(self, model_at_point, forecast_len, value_at_point, point):
-        # assume that the "model" is the (model_params, training_series) tuple (see TrainerKNN),
-        # and perform the calculations here.
-        (model_params, training_series_at_point) = model_at_point
+        # see TrainerKNN for the k-NN model
+        (model_params, training_series_at_point) = model_at_point.model_params, model_at_point.training_series
         return predict_future_values_with_knn(time_series=training_series_at_point,
                                               k=model_params.k,
                                               forecast_len=forecast_len,
@@ -68,10 +89,10 @@ class TrainerKNN(ModelTrainer):
     def training_function(self, model_params, training_series):
         '''
         There is nothing to do here except save the inputs for the k-NN algorithm, that would be
-        the k-NN parameters (model_params) and the training series. These are packed in a tuple and
-        returned as the "model".
+        the k-NN parameters (model_params) and the training series. These are packed in an instance
+        of KNNModel and returned as the "model".
         '''
-        return (model_params, training_series)
+        return KNNModel(model_params, training_series)
 
     def create_model_region(self, numpy_model_array):
         return ModelRegionKNN(numpy_model_array)

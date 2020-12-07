@@ -23,7 +23,17 @@ def copy_value_as_matrix_elements(value, m, n):
 
     This allows us to create a SpatialRegion where all the values are the same as provided.
     '''
-    same_value_mn_times = np.repeat(value, repeats=(m * n))
+
+    # don't try to unpack a namedtuple object that contains a series...
+    if hasattr(value, '_fields'):
+        # the value is a namedtuple, we want to copy the whole instance instead of its elements
+        # hack based on https://stackoverflow.com/a/53577004
+        same_value_mn_times = [value for i in range(0, m * n)]
+        same_value_mn_times = np.array(same_value_mn_times + [None], object)[:-1]
+
+    else:
+        same_value_mn_times = np.repeat(value, repeats=(m * n))
+
     return same_value_mn_times.reshape(m, n)
 
 

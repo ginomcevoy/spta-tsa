@@ -149,7 +149,8 @@ class SolverTrainer(log_util.LoggerMixin):
 
         # decorate the trainer so that only the medoids are trained
         trainer_at_medoids = TrainAtRepresentatives(self.model_trainer, medoids)
-        return trainer_at_medoids.apply_to(training_region)
+        trained_models = trainer_at_medoids.apply_to(training_region)
+        return trained_models
 
     def replicate_representative_models(self, medoid_model_region, partition, medoids):
         '''
