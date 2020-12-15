@@ -7,7 +7,8 @@ import unittest
 from spta.region import Region, Point
 from spta.region.metadata import SpatioTemporalRegionMetadata
 from spta.distance.dtw import DistanceByDTW
-from spta.clustering.suite import ClusteringSuite
+from spta.clustering.suite import ClusteringSuite, OrganizeClusteringSuite, FindSuiteElbow
+from spta.clustering.kmedoids import KmedoidsClusteringMetadata
 
 from spta.tests.stub import stub_clustering
 
@@ -221,3 +222,197 @@ class ClusteringSuiteTest(unittest.TestCase):
         self.assertEqual(suite_result['kmedoids_k3_seed1_lite'][0], Point(45, 86))
         self.assertEqual(suite_result['kmedoids_k3_seed1_lite'][1], Point(45, 92))
         self.assertEqual(suite_result['kmedoids_k3_seed1_lite'][2], Point(48, 89))
+
+
+class TestOrganizeClusteringSuite(unittest.TestCase):
+    '''
+    Unit tests for spta.clustering.suite.OrganizeClusteringSuite
+    '''
+
+    def setUp(self):
+        self.organizer = OrganizeClusteringSuite()
+
+    def test_simple(self):
+        # given a kmedoids suite with one metadata
+        identifier = 'quick'
+        metadata_name = 'kmedoids'
+        parameter_combinations = {
+            'k': (2,),
+            'random_seed': (0,),
+            'mode': 'lite'
+        }
+        kmedoids_clustering_suite = ClusteringSuite(identifier, metadata_name, **parameter_combinations)
+
+        # when organizing it
+        result = self.organizer.organize_kmedoids_suite(kmedoids_clustering_suite)
+
+        # then there is only this one metadata
+        self.assertTrue(0 in result)
+        self.assertEqual(len(result[0]), 1)
+        self.assertEqual(result[0][0].k, 2)
+
+    def test_three_same_seed(self):
+        # given a kmedoids suite with three metadatas same seed
+        identifier = 'quick'
+        metadata_name = 'kmedoids'
+        parameter_combinations = {
+            'k': (3, 5, 2),
+            'random_seed': (1,),
+            'mode': 'lite'
+        }
+        kmedoids_clustering_suite = ClusteringSuite(identifier, metadata_name, **parameter_combinations)
+
+        # when organizing it
+        result = self.organizer.organize_kmedoids_suite(kmedoids_clustering_suite)
+
+        # then all metadatas are in the same seed
+        self.assertTrue(1 in result)
+        self.assertEqual(len(result[1]), 3)
+
+        # then metadatas are in order
+        self.assertEqual(result[1][0].k, 2)
+        self.assertEqual(result[1][1].k, 3)
+        self.assertEqual(result[1][2].k, 5)
+
+    def test_eight_in_two_seeds(self):
+
+        # given a kmedoids suite with 2 seeds and 4 k values for each seed
+        identifier = 'quick'
+        metadata_name = 'kmedoids'
+        parameter_combinations = {
+            'k': (3, 5, 2, 4),
+            'random_seed': (1, 2),
+            'mode': 'lite'
+        }
+        kmedoids_clustering_suite = ClusteringSuite(identifier, metadata_name, **parameter_combinations)
+
+        # when organizing it
+        result = self.organizer.organize_kmedoids_suite(kmedoids_clustering_suite)
+
+        # then metadatas are split in the two seeds
+        self.assertTrue(1 in result)
+        self.assertEqual(len(result[1]), 4)
+        self.assertTrue(2 in result)
+        self.assertEqual(len(result[2]), 4)
+
+        # then metadatas are in order
+        self.assertEqual(result[1][0].k, 2)
+        self.assertEqual(result[1][1].k, 3)
+        self.assertEqual(result[1][2].k, 4)
+        self.assertEqual(result[1][3].k, 5)
+        self.assertEqual(result[2][0].k, 2)
+        self.assertEqual(result[2][1].k, 3)
+        self.assertEqual(result[2][2].k, 4)
+        self.assertEqual(result[2][3].k, 5)
+
+
+class TestFindSuiteElbow(unittest.TestCase):
+    '''
+    Unit tests for spta.clustering.suite.FindSuiteElbow class.
+    '''
+
+    def setUp(self):
+        # stub version, only usable to find second derivative of inputs
+        self.finds_elbow = FindSuiteElbow(None, None, None)
+
+    def test_elbow_only_three_points_elbow_is_middle(self):
+
+        # given only three points
+        costs_by_metadata = {
+            KmedoidsClusteringMetadata(2): 7.0,
+            KmedoidsClusteringMetadata(3): 5.0,
+            KmedoidsClusteringMetadata(4): 4.0,
+        }
+        ordered_metadata_instances = [
+            KmedoidsClusteringMetadata(2),
+            KmedoidsClusteringMetadata(3),
+            KmedoidsClusteringMetadata(4)
+        ]
+
+        # when
+        result = self.finds_elbow.find_cost_elbow_given_order(costs_by_metadata, ordered_metadata_instances)
+
+        # then elbow metadata is the middle one
+        self.assertEqual(result.k, 3)
+
+    def test_elbow_cubic_function_elbow_is_second_to_last(self):
+
+        # given five points following k^3 (d2(k^3)/dk2 = 6k)
+        costs_by_metadata = {
+            KmedoidsClusteringMetadata(2): 8.0,
+            KmedoidsClusteringMetadata(3): 27.0,
+            KmedoidsClusteringMetadata(4): 64.0,
+            KmedoidsClusteringMetadata(5): 125.0,
+            KmedoidsClusteringMetadata(6): 216.0,
+        }
+        ordered_metadata_instances = [
+            KmedoidsClusteringMetadata(2),
+            KmedoidsClusteringMetadata(3),
+            KmedoidsClusteringMetadata(4),
+            KmedoidsClusteringMetadata(5),
+            KmedoidsClusteringMetadata(6)
+        ]
+
+        # when
+        result = self.finds_elbow.find_cost_elbow_given_order(costs_by_metadata, ordered_metadata_instances)
+
+        # then elbow metadata is k = 5 (d2(x^3)/dx2 = 6x, so last value is greatest)
+        self.assertEqual(result.k, 5)
+
+    def test_elbow_quadratic_function_elbow_evenly_spaced(self):
+
+        # given five points following f(k) = -2k^4 + 48k^3 + 156k^2 - 5000k + 20000
+        # d(f(k))/dk =  -8k^3 + 144k^2 + 312k - 5000
+        # d^2(f(k))/dk^2 = -24 * (k^2 - 12k - 13) = -24 * (k-13)(k+1), max for k = 6
+
+        costs_by_metadata = {
+            KmedoidsClusteringMetadata(2): 10976.0,  # d2 = 792
+            KmedoidsClusteringMetadata(3): 7538.0,  # d2 = 960
+            KmedoidsClusteringMetadata(4): 5056.0,  # d2 = 1080
+            KmedoidsClusteringMetadata(5): 3650.0,  # d2 = 1152
+            KmedoidsClusteringMetadata(6): 3392.0,  # d2 = 1176
+            KmedoidsClusteringMetadata(7): 4306.0,  # d2 = 1152
+            KmedoidsClusteringMetadata(8): 6368.0,  # d2 = 1080
+            KmedoidsClusteringMetadata(9): 9506.0,  # d2 = 960
+            KmedoidsClusteringMetadata(10): 13600.0,  # d2 = 792
+            KmedoidsClusteringMetadata(11): 18482.0,
+            KmedoidsClusteringMetadata(12): 23936.0,
+        }
+        ordered_metadata_instances = [
+            KmedoidsClusteringMetadata(k)
+            for k in range(2, 13)
+        ]
+
+        # when
+        result = self.finds_elbow.find_cost_elbow_given_order(costs_by_metadata, ordered_metadata_instances)
+
+        # then elbow metadata is k = 6 per equations above
+        self.assertEqual(result.k, 6)
+
+    def test_elbow_quadratic_function_elbow_unevenly_spaced(self):
+
+        # same as above but we don't have all points
+
+        costs_by_metadata = {
+            KmedoidsClusteringMetadata(2): 10976.0,  # d2 = 792
+            # KmedoidsClusteringMetadata(3): 7538.0,  # d2 = 960
+            KmedoidsClusteringMetadata(4): 5056.0,  # d2 = 1080
+            # KmedoidsClusteringMetadata(5): 3650.0,  # d2 = 1152
+            KmedoidsClusteringMetadata(6): 3392.0,  # d2 = 1176
+            KmedoidsClusteringMetadata(7): 4306.0,  # d2 = 1152
+            KmedoidsClusteringMetadata(8): 6368.0,  # d2 = 1080
+            KmedoidsClusteringMetadata(9): 9506.0,  # d2 = 960
+            # KmedoidsClusteringMetadata(10): 13600.0,  # d2 = 792
+            # KmedoidsClusteringMetadata(11): 18482.0,
+            KmedoidsClusteringMetadata(12): 23936.0,
+        }
+        ordered_metadata_instances = [
+            KmedoidsClusteringMetadata(k)
+            for k in (2, 4, 6, 7, 8, 9, 12)
+        ]
+
+        # when
+        result = self.finds_elbow.find_cost_elbow_given_order(costs_by_metadata, ordered_metadata_instances)
+
+        # then elbow metadata is k = 6 per equations above
+        self.assertEqual(result.k, 6)

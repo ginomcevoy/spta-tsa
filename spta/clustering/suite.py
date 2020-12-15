@@ -1,9 +1,12 @@
 import csv
+import numpy as np
+from operator import attrgetter
 import os
 
 from spta.region import Point
-from .factory import ClusteringMetadataFactory
+from .factory import ClusteringFactory, ClusteringMetadataFactory
 
+from spta.region.partition import intra_cluster_cost
 from spta.util import log as log_util
 
 
@@ -220,3 +223,178 @@ class ClusteringSuite(log_util.LoggerMixin):
 
     def __repr__(self):
         return '{}-{}'.format(self.metadata_name, self.identifier)
+
+
+class OrganizeClusteringSuite(log_util.LoggerMixin):
+    '''
+    Given a clustering suite, organizes it in some meaningful way.
+    For kmedoids clustering algorithms, the suite is separated into random seesds, and ordered by k.
+    '''
+
+    def organize_kmedoids_suite(self, kmedoids_clustering_suite):
+        '''
+        Returns a dictionary where the keys are the random seeds available in the suite, and the values
+        are lists of clustering metadata instances. For each seed, the list will contain instances for
+        that seed and will be ordered in values increasing by k.
+        '''
+
+        metadatas_by_seed = {}
+
+        # add metadata to correct keys
+        for kmedoids_metadata in kmedoids_clustering_suite:
+
+            random_seed = kmedoids_metadata.random_seed
+            if random_seed not in metadatas_by_seed:
+                metadatas_by_seed[random_seed] = []
+
+            metadatas_by_seed[random_seed].append(kmedoids_metadata)
+
+        # order each key
+        ordered_metadatas_by_seed = {}
+        for random_seed, metadatas_for_seed in metadatas_by_seed.items():
+            ordered_metadatas_by_seed[random_seed] = sorted(metadatas_for_seed, key=attrgetter('k'))
+            self.logger.debug('Metadatas for seed {} -> {}'.format(random_seed, ordered_metadatas_by_seed[random_seed]))
+
+        return ordered_metadatas_by_seed
+
+
+class FindSuiteElbow(log_util.LoggerMixin):
+    '''
+    Given a clustering suite, find the a single value of 'k' that represents the 'elbow' of the
+    intra-cluster distances.
+    '''
+
+    def __init__(self, clustering_suite, spt_region, distance_measure):
+        self.clustering_suite = clustering_suite
+        self.spt_region = spt_region
+        self.distance_measure = distance_measure
+        self.clustering_factory = ClusteringFactory(distance_measure)
+
+    def calculate_elbows_kmedoids(self, pickle_home):
+        '''
+        Use the methods below to find the elbows for the current suite.
+        There will be as many elbows as there are seeds in the suite: to find the elbow,
+        we assume that the cost is a function of k alone, and find the point with the largest
+        value of the estimated second derivative of the cost.
+        This assumes different values for k, so we separate by seed using OrganizeClusteringSuite.
+
+        Uses the other methods of this class!
+
+        Returns a dictionary (seed, elbow_metadata) is a kmedoids clustering metadata where the elbow happens
+        for that seed.
+        '''
+        partitions_by_metadata = self.get_all_partitions(pickle_home)
+        self.logger.debug('Metadatas in suite: {}'.format(partitions_by_metadata.keys()))
+
+        costs_by_metadata = self.get_all_intra_cluster_costs(partitions_by_metadata)
+        elbows_by_seed = self.find_cost_elbow_for_each_kmedoids_seed(costs_by_metadata)
+        return elbows_by_seed
+
+    def get_all_partitions(self, pickle_home):
+        '''
+        For each clustering algorithm in the suite, find its corresponding partition.
+        If the partition was saved, this should recover the partition to avoid recomputing the clustering.
+        Returns a dictionary where the keys are clustering_metadata instances and the values are the
+        corresponding partitions.
+        '''
+
+        partitions_by_metadata = {}
+
+        for clustering_metadata in self.clustering_suite:
+
+            # ask the clustering algorithm for its partition,
+            # will either calculate it or retrieved a saved one
+            clustering_algorithm = self.clustering_factory.instance(clustering_metadata)
+            partition = clustering_algorithm.partition(spt_region=self.spt_region,
+                                                       with_medoids=True,
+                                                       pickle_home=pickle_home)
+            partitions_by_metadata[clustering_metadata] = partition
+
+        return partitions_by_metadata
+
+    def get_all_intra_cluster_costs(self, partitions_by_metadata):
+        '''
+        Ask each partition to calculate its total intra cluster cost.
+        '''
+        costs_by_metadata = {}
+
+        for (clustering_metadata, partition) in partitions_by_metadata.items():
+            this_intra_cluster_cost = intra_cluster_cost(partition, self.spt_region, self.distance_measure)
+            costs_by_metadata[clustering_metadata] = this_intra_cluster_cost
+            self.logger.debug('Cost: {} -> {:.2f}'.format(clustering_metadata, this_intra_cluster_cost))
+
+        return costs_by_metadata
+
+    def find_cost_elbow_given_order(self, costs_by_metadata, ordered_metadata_instances):
+        '''
+        Given a particular order of metadata instances and the intra cluster cost of each metadata,
+        calculate the 'elbow' metadata, identified by the maximum value of an approximate second derivative
+        of the intra cluster cost, when ordered by order given by ordered_metadata_instances.
+
+        This implementation takes into account the possibility of uneven spacing of the values of k
+        Using this implementation of a discrete second derivative:
+        https://mathformeremortals.wordpress.com/2013/01/12/a-numerical-second-derivative-from-three-points
+
+        NOTE: for this to make sense with k-medoids, the data should only be about a single random_seed, and the
+        order should be by increasing values of k. See method below.
+        NOTE: if the value of k is repeated once, then the equation breaks!
+        '''
+        # sanity checks: same length, at least three points
+        assert len(costs_by_metadata.keys()) == len(ordered_metadata_instances)
+        assert len(costs_by_metadata.keys()) >= 3
+
+        # x in the formula
+        ordered_k = [metadata.k for metadata in ordered_metadata_instances]
+
+        # y in the formula
+        ordered_costs = [costs_by_metadata[metadata] for metadata in ordered_metadata_instances]
+
+        highest_second_derivative = -np.Inf
+        index_with_highest_second_derivative = -1
+
+        # iterate so that we have one value before and one value after
+        for i in range(1, len(ordered_k) - 1):
+            (x1, x2, x3) = ordered_k[i - 1:i + 2]
+            (y1, y2, y3) = ordered_costs[i - 1:i + 2]
+
+            # apply the second derivative
+            coef_y1 = 2.0 / ((x2 - x1) * (x3 - x1))
+            coef_y2 = -2.0 / ((x3 - x2) * (x2 - x1))
+            coef_y3 = 2.0 / ((x3 - x2) * (x3 - x1))
+
+            second_derivative = coef_y1 * y1 + coef_y2 * y2 + coef_y3 * y3
+
+            msg = 'd^2/dk^2 (k={}) -> {}'.format(x2, second_derivative)
+            print(msg)
+            self.logger.debug(msg)
+
+            if second_derivative > highest_second_derivative:
+                highest_second_derivative = second_derivative
+                index_with_highest_second_derivative = i
+
+        # return metadata with highest second derivative
+        return ordered_metadata_instances[index_with_highest_second_derivative]
+
+    def find_cost_elbow_for_each_kmedoids_seed(self, costs_by_metadata):
+        '''
+        Uses OrganizeClusteringSuite to organize the metadata instances in the clustering suite.
+        Uses find_cost_elbow_given_order method
+        Assumes k-medoids!
+        '''
+        organizer = OrganizeClusteringSuite()
+        ordered_metadatas_by_seed = organizer.organize_kmedoids_suite(self.clustering_suite)
+
+        # each seed has its own elbow
+        elbows_by_seed = {}
+
+        for (seed, ordered_metadata_instances) in ordered_metadatas_by_seed.items():
+
+            # need the corresponding costs for the current metadatas
+            costs_by_metadata_for_this_seed = {}
+            for metadata in ordered_metadata_instances:
+                costs_by_metadata_for_this_seed[metadata] = costs_by_metadata[metadata]
+
+            elbow_for_this_seed = self.find_cost_elbow_given_order(costs_by_metadata, ordered_metadata_instances)
+            elbows_by_seed[seed] = elbow_for_this_seed
+
+        return elbows_by_seed

@@ -123,8 +123,11 @@ class PartitionRegion(BaseRegion):
         Returns an instance of SpatialCluster for this partition and given index.
         '''
         # sanity checks
-        assert self.x_len == spatial_region.x_len
-        assert self.y_len == spatial_region.y_len
+        x_len_msg = 'Expected x_len: {}, partition got x_len: {}'.format(spatial_region.x_len, self.x_len)
+        assert self.x_len == spatial_region.x_len, x_len_msg
+
+        y_len_msg = 'Expected y_len: {}, partition got y_len: {}'.format(spatial_region.y_len, self.y_len)
+        assert self.y_len == spatial_region.y_len, y_len_msg
 
         return SpatialCluster(spatial_region, self, cluster_index)
 
@@ -145,8 +148,11 @@ class PartitionRegion(BaseRegion):
         Returns an instance of SpatioTemporalCluster for this partition and given index.
         '''
         # sanity checks
-        assert self.x_len == spt_region.x_len
-        assert self.y_len == spt_region.y_len
+        x_len_msg = 'Expected x_len: {}, partition got x_len: {}'.format(spt_region.x_len, self.x_len)
+        assert self.x_len == spt_region.x_len, x_len_msg
+
+        y_len_msg = 'Expected y_len: {}, partition got y_len: {}'.format(spt_region.y_len, self.y_len)
+        assert self.y_len == spt_region.y_len, y_len_msg
 
         return SpatioTemporalCluster(spt_region, self, cluster_index, spt_region.region_metadata)
 
@@ -418,3 +424,58 @@ class PartitionRegionFuzzy(PartitionRegion):
     # TODO
     # use this for threshold? https://stackoverflow.com/a/38532088/3175179
     pass
+
+
+def intra_cluster_cost(partition, spt_region, distance_measure):
+    '''
+    Given a cluster partition, calculate the total intra-cluster cost.
+    This is given by the sum of the distances of each member of a partition to its corresponding medoid.
+
+    Assumes that the medoids are available in the partition.
+    '''
+    sum_of_intra_cluster_cost = 0
+
+    medoids = partition.medoids
+
+    # work with clusters
+    clusters = partition.create_all_spt_clusters(spt_region, medoids=medoids)
+
+    for cluster_index, cluster in enumerate(clusters):
+
+        cluster_medoid = medoids[cluster_index]
+
+        # the distance measure requires point indices
+        cluster_points = [point for (point, _) in cluster]
+        cluster_point_indices = [
+            point.x * spt_region.y_len + point.y
+            for point in cluster_points
+        ]
+
+        # use the distance_measure to calculate all distances
+        intra_cluster_cost = distance_measure.distances_to_point(spt_region, cluster_medoid, cluster_point_indices)
+        sum_of_intra_cluster_cost += np.sum(intra_cluster_cost)
+
+    return sum_of_intra_cluster_cost
+
+
+if __name__ == '__main__':
+    logger = log_util.setup_log('DEBUG')
+
+    from spta.clustering.kmedoids import KmedoidsClusteringMetadata, KmedoidsClusteringAlgorithm
+    from spta.distance.dtw import DistanceByDTW
+
+    from spta.region import Region
+    from spta.region.metadata import SpatioTemporalRegionMetadata
+
+    region_metadata = SpatioTemporalRegionMetadata('nordeste_small', Region(43, 50, 85, 95),
+                                                   2015, 2015, 1, scaled=False)
+    spt_region = region_metadata.create_instance()
+    distance_measure = DistanceByDTW()
+
+    kmedoids_metadata = KmedoidsClusteringMetadata(k=4, random_seed=1)
+    kmedoids_algorithm = KmedoidsClusteringAlgorithm(kmedoids_metadata, distance_measure)
+    partition = kmedoids_algorithm.partition(spt_region, pickle_home='pickle')
+    logger.debug('Got partition: {} with medoids {}'.format(partition, partition.medoids))
+
+    cost = intra_cluster_cost(partition, spt_region, distance_measure)
+    logger.debug('Cost for {} -> {}'.format(kmedoids_metadata, cost))

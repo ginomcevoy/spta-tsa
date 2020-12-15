@@ -59,6 +59,12 @@ class ClusteringMetadata():
     def __str__(self):
         return '{}: k={}'.format(self.name.capitalize(), self.k)
 
+    def __eq__(self, other):
+        return self.name == other.name and self.k == other.k
+
+    def __hash__(self):
+        return hash((self.name, self.k))
+
 
 class ClusteringAlgorithm(log_util.LoggerMixin):
     '''
@@ -104,6 +110,8 @@ class ClusteringAlgorithm(log_util.LoggerMixin):
         if not loaded_from_pickle:
 
             # could not find previous partition, call the logic of a subclass to find the partition
+            # but first try to load the distance matrix if it is available
+            self.distance_measure.try_load_distance_matrix(spt_region)
             the_partition = self.partition_impl(spt_region, with_medoids)
 
         if save_csv_at is not None:

@@ -45,7 +45,11 @@ class DistanceBetweenSeries(log_util.LoggerMixin):
         '''
 
         # read from file
-        distance_matrix = np.load(filename)
+        try:
+            distance_matrix = np.load(filename)
+        except IOError:
+            self.logger.warn('Could not load file {}'.format(filename))
+            return None
 
         # check dimensions
         i_len, j_len = distance_matrix.shape
@@ -74,6 +78,16 @@ class DistanceBetweenSeries(log_util.LoggerMixin):
         '''
         return self.load_distance_matrix_2d(sptr_metadata.distances_filename,
                                             sptr_metadata.region)
+
+    def try_load_distance_matrix(self, spt_region):
+        '''
+        Given a spatio-temporal region, try to load its DTW pre-computed distance matrix.
+        Returns either the matrix or None if the matrix could not be loaded.
+        '''
+        if spt_region.region_metadata is not None:
+            return self.load_distance_matrix_md(spt_region.region_metadata)
+        else:
+            return None
 
     def distances_to_point(self, spt_region, point, all_point_indices, use_distance_matrix=True,
                            only_if_precalculated=True):
