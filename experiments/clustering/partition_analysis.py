@@ -32,7 +32,7 @@ def processRequest():
     desc = 'Run a suite of clustering algorithms, calculate intra-cluster costs and optionally ' \
         'create variance histograms'
 
-    usage = '%(prog)s [-h] <region> [kmedoids|regular] <clustering_suite> [--variance] ' \
+    usage = '%(prog)s [-h] <region> [kmedoids|regular] <clustering_suite> [--silhouette] [--variance] ' \
         '[--random] [--bins] [--log LOG]'
     parser = argparse.ArgumentParser(prog='cluster-partition-analysis', description=desc,
                                      usage=usage)
