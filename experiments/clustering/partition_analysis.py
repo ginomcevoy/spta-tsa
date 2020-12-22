@@ -18,6 +18,7 @@ from experiments.metadata.region import predefined_regions
 from experiments.metadata.clustering import get_suite, suite_options
 
 from spta.clustering.factory import ClusteringFactory
+from spta.clustering.silhouette import SilhouetteAnalysis
 from spta.distance.dtw import DistanceByDTW
 from spta.distance.variance import DistanceHistogramClusters
 
@@ -48,6 +49,10 @@ def processRequest():
     # required argument: clustering ID
     parser.add_argument('clustering_suite', help='ID of the clustering suite',
                         choices=suite_options())
+
+    # do silhouette analysis on the suite?
+    parser.add_argument('--silhouette', help='Perform silhouette analysis and save silhouette graphs',
+                        action='store_true')
 
     # variance analysis: --variance to create histograms, --random to add random points
     # bins to specify bins, default='auto'
@@ -90,6 +95,11 @@ def analyze_suite(args, logger):
 
     # this factory creates the instance of each clustering algorithm
     clustering_factory = ClusteringFactory(distance_measure)
+
+    # handle silhouette analysis at the suite level
+    if args.silhouette:
+        silhouette_analysis = SilhouetteAnalysis(region_metadata, distance_measure, clustering_suite)
+        silhouette_analysis.perform_analysis('outputs', 'pickle')
 
     # the suite knows where to store its CSV, prepare output
     analysis_csv_filepath = \

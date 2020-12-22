@@ -189,7 +189,7 @@ def plot_clustering_silhouette(distance_matrix, cluster_labels, subplot=None, sh
     silhouette_avg = silhouette_score(X=distance_matrix, labels=cluster_labels,
                                       metric="precomputed")
 
-    logger.info('The average silhouette_score for k={} is: {}'.format(k, silhouette_avg))
+    logger.debug('The average silhouette_score for k={} is: {}'.format(k, silhouette_avg))
 
     # Compute the silhouette scores for each sample
     # Since we are using DTW for distance, we need to precalculate the distances (UGH)
