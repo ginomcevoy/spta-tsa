@@ -77,9 +77,10 @@ class SolverFromClassifier(log_util.LoggerMixin):
         # cache solvers so that we don't reconstruct them every single time
         self.solvers = {}
 
-    def prepare(self):
+    def prepare(self, out_of_sample_region):
         '''
         Here we make sure that the classifier is loaded so that it can answer with a label.
+        The target_spt_region is used to extract the series used on the classifier to retrieve a label.
         '''
         # need actual code...
         # self.classifier = RandomClassifier()
@@ -88,13 +89,20 @@ class SolverFromClassifier(log_util.LoggerMixin):
 
         self.spt_region = self.region_metadata.create_instance()
 
+        if out_of_sample_region is None:
+            # no out-of-sample target specified, us the same region
+            self.target_spt_region = self.spt_region
+        else:
+            # use a different, 'out-of-sample' region
+            self.target_spt_region = out_of_sample_region.create_instance()
+
         metadata_builder = SolverMetadataBuilder(region_metadata=self.region_metadata,
                                                  model_params=self.model_params,
                                                  test_len=self.test_len,
                                                  error_type=self.error_type)
         self.solver_metadata = metadata_builder.for_suite(self.clustering_suite, self.distance_measure).build()
 
-    def predict(self, prediction_region, tp, output_home='outputs'):
+    def predict(self, prediction_region, tp, out_of_sample_region=None, output_home='outputs'):
         '''
         Ask the solver to create a forecast for the specified region using the specified number
         of past points as reference.
@@ -109,9 +117,9 @@ class SolverFromClassifier(log_util.LoggerMixin):
         '''
 
         if self.classifier is None:
-            self.prepare()
+            self.prepare(out_of_sample_region)
         assert self.classifier is not None
-        assert self.spt_region is not None
+        assert self.target_spt_region is not None
 
         # get d(point, medoid labels)
         classifier_labels_by_point = self.get_labels_from_classifier(prediction_region, tp)
@@ -136,9 +144,9 @@ class SolverFromClassifier(log_util.LoggerMixin):
 
         # extract subseries of length tp from our data, this will be the input for the classifier
         # data is from the last tp points
-        series_len, _, _ = self.spt_region.shape
+        series_len, _, _ = self.target_spt_region.shape
         ti = TimeInterval(series_len - tp, series_len)
-        region_of_interest = self.spt_region.subset(prediction_region, ti)
+        region_of_interest = self.target_spt_region.subset(prediction_region, ti)
 
         classifier_labels_by_point = {}
 

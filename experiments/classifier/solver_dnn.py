@@ -60,6 +60,10 @@ the most appropriate medoid. Use the auto ARIMA model at medoid M to create a fo
     parser.add_argument('long1', help='First longitude index relative to region (west)')
     parser.add_argument('long2', help='Second longitude index relative to region (east)')
 
+    # out-of-sample region is optional, defaults to the trained region_id
+    parser.add_argument('--out-of-sample', help='Name of the region metadata for out-of-sample prediction, defaults to same region',
+                        choices=region_options)
+
     # error type is optional and defaults to sMAPE
     error_options = error_functions().keys()
     error_help_msg = 'error type (default: %(default)s)'
@@ -83,7 +87,7 @@ def process_request(args):
     logger.debug(args)
 
     # parse to get metadata
-    region_metadata, clustering_suite, auto_arima_params, classifier_params, error_type = metadata_from_args(args)
+    region_metadata, clustering_suite, auto_arima_params, classifier_params, error_type, out_of_sample_region = metadata_from_args(args)
     forecast_len = args.tf
 
     distance_measure = DistanceByDTW()
@@ -105,7 +109,10 @@ def process_request(args):
                                   test_len=forecast_len,
                                   error_type=error_type)
 
-    prediction_result = solver.predict(prediction_region, tp=classifier_params.window_size, output_home='outputs')
+    prediction_result = solver.predict(prediction_region,
+                                       tp=classifier_params.window_size,
+                                       out_of_sample_region=out_of_sample_region,
+                                       output_home='outputs')
 
     # for printing forecast and error values
     np.set_printoptions(formatter={'float': '{: 0.3f}'.format})
@@ -123,7 +130,7 @@ def process_request(args):
 
 def metadata_from_args(args):
     '''
-    Metadata common to both train and predict.
+    Metadata from CLI for prediction
     '''
     # get the region metadata
     region_metadata = predefined_regions()[args.region]
@@ -137,7 +144,13 @@ def metadata_from_args(args):
     auto_arima_params = predefined_auto_arima()[experiment.auto_arima_id]
     classifier_params = classifier_experiments()[args.classifier]
 
-    return region_metadata, clustering_suite, auto_arima_params, classifier_params, args.error
+    # if this optional argument is missing, then None is returned
+    out_of_sample_region = None
+    if args.out_of_sample:
+        out_of_sample_region = predefined_regions()[args.out_of_sample]
+        print('Predicting for the out-of-sample region: {}'.format(out_of_sample_region))
+
+    return region_metadata, clustering_suite, auto_arima_params, classifier_params, args.error, out_of_sample_region
 
 
 if __name__ == '__main__':
