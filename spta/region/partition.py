@@ -429,7 +429,9 @@ class PartitionRegionFuzzy(PartitionRegion):
 def intra_cluster_cost(partition, spt_region, distance_measure):
     '''
     Given a cluster partition, calculate the total intra-cluster cost.
-    This is given by the sum of the distances of each member of a partition to its corresponding medoid.
+
+    This is calculated using the SSE (sum of squared errors), where the "error" is the distance of each member
+    of the partition to its corresponding medoid.
 
     Assumes that the medoids are available in the partition.
     '''
@@ -452,8 +454,9 @@ def intra_cluster_cost(partition, spt_region, distance_measure):
         ]
 
         # use the distance_measure to calculate all distances
-        intra_cluster_cost = distance_measure.distances_to_point(spt_region, cluster_medoid, cluster_point_indices)
-        sum_of_intra_cluster_cost += np.sum(intra_cluster_cost)
+        distances_to_medoid = distance_measure.distances_to_point(spt_region, cluster_medoid, cluster_point_indices)
+        # sum_of_intra_cluster_cost += np.sum(intra_cluster_cost)
+        sum_of_intra_cluster_cost += arrays_util.mean_squared(distances_to_medoid)
 
     return sum_of_intra_cluster_cost
 
