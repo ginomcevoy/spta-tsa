@@ -83,8 +83,12 @@ def maximum_value_and_index(numpy_dataset):
     return (maximum, tuple(index))
 
 
+def sum_squared(array):
+    return np.sum(np.array(array)**2)
+
+
 def root_sum_squared(array):
-    return np.sum(np.array(array)**2)**.5
+    return (sum_squared(array))**.5
 
 
 def mean_squared(array):
@@ -92,7 +96,7 @@ def mean_squared(array):
     Mean Squared calculation, ignores NaN values. This implementation does not let NaN
     values affect the weight of other values.
     '''
-    return np.nanmean(np.array(array)**2)
+    return np.nanmean(sum_squared(array))
 
 
 def root_mean_squared(array):

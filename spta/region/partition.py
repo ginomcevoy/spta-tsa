@@ -456,7 +456,7 @@ def intra_cluster_cost(partition, spt_region, distance_measure):
         # use the distance_measure to calculate all distances
         distances_to_medoid = distance_measure.distances_to_point(spt_region, cluster_medoid, cluster_point_indices)
         # sum_of_intra_cluster_cost += np.sum(intra_cluster_cost)
-        sum_of_intra_cluster_cost += arrays_util.mean_squared(distances_to_medoid)
+        sum_of_intra_cluster_cost += arrays_util.sum_squared(distances_to_medoid)
 
     return sum_of_intra_cluster_cost
 
