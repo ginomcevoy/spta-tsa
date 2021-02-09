@@ -400,9 +400,18 @@ class ResultWithPartition(PredictionQueryResult):
         '''
         Description of point, adds cluster information.
         '''
-        msg = 'Point: {} (cluster {})'
-        return msg.format(self.decorated.absolute_coordinates_of(domain_point),
-                          self.cluster_index_of(domain_point))
+
+        # determine which medoid is being used to predict this point
+        cluster_index = self.cluster_index_of(domain_point)
+        medoid_point = self.partition.medoids[cluster_index]
+        medoid_coords = self.decorated.absolute_coordinates_of(medoid_point)
+
+        # extract point info
+        point_coords = self.decorated.absolute_coordinates_of(domain_point)
+
+        # return text
+        text_intro = 'Point: {} (cluster {}, medoid {})'.format(point_coords, cluster_index, medoid_coords)
+        return text_intro
 
     def cluster_index_of(self, domain_point):
         '''
