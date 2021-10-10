@@ -74,6 +74,24 @@ def random_integers_with_blacklist(n, min_value, max_value, blacklist=[]):
     return np.random.choice(allowed, size=n, replace=False)
 
 
+def days_in_year_interval(year_start, year_end):
+    """
+    Calculates the number of days contained in a year interval. If both years are the same,
+    then it returns the number days in that year (not zero).
+
+    This takes leap years into account!
+
+    E.g. 1979, 1980 -> returns 365 + 366 = 731
+    """
+    # use Python calendar to take leap years into account
+    date_year_start = datetime(year_start, 1, 1)
+    date_year_end = datetime(year_end + 1, 1, 1)   # exact end of the end year
+
+    # calculate the number of days between the years
+    day_offset = (date_year_end - date_year_start).days
+    return day_offset
+
+
 def years_to_series_interval(year_start, year_end, first_year_in_sample, samples_per_day):
     '''
     Given a time series with samples_per_day (e.g. 1460 samples per non-leap year,
@@ -89,6 +107,9 @@ def years_to_series_interval(year_start, year_end, first_year_in_sample, samples
     year_end
         The last sample in the series interval must correspond to the end of this year.
         This means that year_start = 2014, year_end = 2014 will contain 1 year of data.
+
+    samples_per_day
+        number of samples per day in the dataset, needs to be an integer.
 
     First example:
         year_start = 1979
@@ -115,14 +136,14 @@ def years_to_series_interval(year_start, year_end, first_year_in_sample, samples
         Then we have (51136, 54056), 2920 samples, there are 9 leap years in between 1979 and 2014.
 
     '''
-    # use Python calendar to take leap years into account
-    date_first_year_in_sample = datetime(first_year_in_sample, 1, 1)
-    date_year_start = datetime(year_start, 1, 1)
-    date_year_end = datetime(year_end + 1, 1, 1)   # exact end of the end year
+    # only works for integers
+    assert isinstance(samples_per_day, int)
 
-    # calculate the number of days between the years
-    day_offset_for_year_start = (date_year_start - date_first_year_in_sample).days
-    day_offset_for_year_end = (date_year_end - date_first_year_in_sample).days
+    # find where year before year_start ends
+    day_offset_for_year_start = days_in_year_interval(first_year_in_sample, year_start - 1)
+
+    # find where year after year_end begins
+    day_offset_for_year_end = days_in_year_interval(first_year_in_sample, year_end)
 
     # apply number of samples
     return (day_offset_for_year_start * samples_per_day, day_offset_for_year_end * samples_per_day)
