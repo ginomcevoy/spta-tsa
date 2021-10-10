@@ -36,6 +36,27 @@ def numpy_3d_stub():
     return nd
 
 
+def numpy_3d_4spd_stub():
+    # manual dataset
+    series_0_0 = np.array((1, 2, 4, 5))
+    series_0_1 = np.array((6, 7, 9, 10))
+    series_0_2 = np.array((11, 12, 14, 15))
+    series_1_0 = np.array((16, 17, 19, 20))
+    series_1_1 = np.array((21, 22, 24, 25))
+    series_1_2 = np.array((26, 27, 29, 30))
+
+    # shape: x_len = 2, y_len = 3
+    nd = np.empty((4, 2, 3))
+    nd[:, 0, 0] = series_0_0
+    nd[:, 0, 1] = series_0_1
+    nd[:, 0, 2] = series_0_2
+    nd[:, 1, 0] = series_1_0
+    nd[:, 1, 1] = series_1_1
+    nd[:, 1, 2] = series_1_2
+
+    return nd
+
+
 def spatio_temporal_region_stub():
     numpy_dataset = numpy_3d_stub()
     return SpatioTemporalRegion(numpy_dataset)
@@ -73,3 +94,21 @@ def stub_reverse_function_series():
     ]
     reverse_function_np = np.array(reverse_function_list).reshape((2, 3))
     return FunctionRegionSeries(reverse_function_np)
+
+
+def verify_result_is_expected(test, result, expected):
+    (result_t, result_x, result_y) = result.shape
+    (expected_t, expected_x, expected_y) = expected.shape
+
+    test.assertEqual(result_t, expected_t)
+    test.assertEqual(result_x, expected_x)
+    test.assertEqual(result_y, expected_y)
+    # test.fail('{} {}'.format(result_t, expected_t))
+
+    for x in range(0, result_x):
+        for y in range(0, result_y):
+            result_x_y = result[:, x, y]
+            expected_x_y = expected[:, x, y]
+
+            # this idiom compares numpy arrays
+            test.assertIsNone(np.testing.assert_array_equal(result_x_y, expected_x_y))
