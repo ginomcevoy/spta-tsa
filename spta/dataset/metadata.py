@@ -1,6 +1,7 @@
 import numpy as np
 
 from spta.util import log as log_util
+from spta.util import maths as maths_util
 
 
 class TimeToSeries(log_util.LoggerMixin):
@@ -12,6 +13,9 @@ class TimeToSeries(log_util.LoggerMixin):
     def convert(self, raw_dataset, time_to_series):
         '''Convert a dataset to a different sample frequency, or another temporal conversion.'''
         raise NotImplementedError
+
+    def __str__(self):
+        return repr(self)
 
 
 class SamplesPerDay(TimeToSeries):
@@ -81,3 +85,67 @@ class AveragePentads(TimeToSeries):
 
     def __repr__(self):
         return 'avg_pentads'
+
+
+class TemporalMetadata(log_util.LoggerMixin):
+    '''
+    A metadata for raw datasets that deals with the temporal aspect.
+    This class can be used to represent the whole dataset, or with a temporal slice.
+
+    When applied to the whole dataset, it has a year of start of samples and a year
+    for end of samples. It also uses an instance of TimeToSeries to indicate how the
+    samples relate to real time.
+
+    An instance of this class can be created when asked to retrieve a temporal slice
+    of the whole dataset, in this case the sample frequency may be different.
+
+    A dataset can compare its own metadata with the metadata of a requested slice,
+    in order to produce the slice as a numpy_dataset.
+    '''
+
+    def __init__(self, year_start, year_end, time_to_series):
+        self.year_start = year_start
+        self.year_end = year_end
+        self.time_to_series = time_to_series
+
+    def years_to_series_interval(self, year_start_request, year_end_request):
+        '''
+        Converts a request of year interval to a series interval. To be able to do this,
+        we need to know how the temporal information in the dataset relates to real dates,
+        this is provided by the time_to_series of the dataset.
+
+        Currently, this is only possible to do for SamplesPerDay.
+        '''
+        # limitation for now
+        if not hasattr(self.time_to_series, 'samples_per_day'):
+            raise ValueError('time_to_series should be instance of SamplesPerDay')
+
+        # check boundaries and sanity
+        bad_request = year_start_request > year_end_request
+        bad_start_request = year_start_request < self.year_start
+        bad_end_request = year_end_request > self.year_end
+        if bad_request or bad_start_request or bad_end_request:
+            raise ValueError('Invalid year interval: {}-{}'.format(year_start_request, year_end_request))
+
+        # this transforms years to samples
+        (series_start, series_end) = \
+            maths_util.years_to_series_interval(year_start=year_start_request,
+                                                year_end=year_end_request,
+                                                first_year_in_sample=self.year_start,
+                                                samples_per_day=self.time_to_series.samples_per_day)
+
+        return (series_start, series_end)
+
+    def convert_time_to_series(self, numpy_dataset, time_to_series):
+        '''See TimeToSeries and its subclasses to which this is delegated.'''
+        return self.time_to_series.convert(numpy_dataset, time_to_series)
+
+    def __repr__(self):
+        '''
+        A representation of this temporal metadata, can be used to find files representing
+        temporal slices of a dataset.
+        '''
+        return '{}_{}_{!r}'.format(self.year_start, self.year_end, self.time_to_series)
+
+    def __str__(self):
+        return repr(self)

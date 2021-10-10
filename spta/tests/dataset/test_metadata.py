@@ -92,3 +92,42 @@ class TestAveragePentads(unittest.TestCase):
 
         # then
         self.assertEqual(result, 'avg_pentads')
+
+
+class TestTemporalMetadata(unittest.TestCase):
+    '''Unit tests for spta.dataset.samples.TemporalMetadata.'''
+
+    def test_bad_request(self):
+        # given a temporal md and an inconsistent request
+        temporal_md = metadata.TemporalMetadata(1979, 2015, metadata.SamplesPerDay(4))
+        (year_start_request, year_end_request) = (2002, 2000)
+
+        # when doing a bad request, then error
+        with self.assertRaises(ValueError):
+            temporal_md.years_to_series_interval(year_start_request, year_end_request)
+
+    def test_years_to_series_interval_last_two_years(self):
+        # given a temporal md with spd=4
+        samples_per_day = 4
+        temporal_md = metadata.TemporalMetadata(1979, 2015, metadata.SamplesPerDay(samples_per_day))
+
+        # when doing a request for last two years
+        (year_start_request, year_end_request) = (2014, 2015)
+        result = temporal_md.years_to_series_interval(year_start_request, year_end_request)
+
+        # then we have +36 days resulting from 9 leap years!
+        expected = (51136, 54056)
+        self.assertEqual(result, expected)
+
+    def test_repr(self):
+        # given a temporal md with spd=4
+        samples_per_day = 4
+        temporal_md = metadata.TemporalMetadata(1979, 2015, metadata.SamplesPerDay(samples_per_day))
+
+        # when asked for repr
+        result = repr(temporal_md)
+
+        # then
+        expected = '1979_2015_4spd'
+        self.assertEqual(result, expected)
+
