@@ -56,3 +56,39 @@ class TestSamplesPerDay(unittest.TestCase):
 
         # then
         self.assertEqual(result, '4spd')
+
+
+class TestAveragePentads(unittest.TestCase):
+    '''Unit tests for spta.dataset.samples.AveragePentads.'''
+
+    def setUp(self):
+        self.dataset_4spd = stub_region.numpy_3d_4spd_stub()
+
+    def test_convert_same(self):
+        # given a time_to_series that represents average pentads
+        time_to_series = metadata.AveragePentads()
+
+        # when asked to convert to average pentads
+        result = time_to_series.convert(self.dataset_4spd, metadata.AveragePentads())
+
+        # then the dataset is unchanged
+        expected = result
+        stub_region.verify_result_is_expected(self, result, expected)
+
+    def test_convert_different(self):
+        # given a time_to_series that represents average pentads
+        time_to_series = metadata.AveragePentads()
+
+        # given converting to something else then error
+        with self.assertRaises(AssertionError):
+            time_to_series.convert(self.dataset_4spd, metadata.SamplesPerDay(1))
+
+    def test_repr(self):
+        # given a time_to_series that represents average pentads
+        time_to_series = metadata.AveragePentads()
+
+        # when repr
+        result = repr(time_to_series)
+
+        # then
+        self.assertEqual(result, 'avg_pentads')

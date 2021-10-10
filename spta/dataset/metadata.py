@@ -63,3 +63,21 @@ class SamplesPerDay(TimeToSeries):
 
     def __repr__(self):
         return '{}spd'.format(self.samples_per_day)
+
+
+class AveragePentads(TimeToSeries):
+    '''A representation for series that indicates that the data has been processed into average pentads.'''
+
+    def convert(self, numpy_dataset, time_to_series):
+        '''
+        For now, we don't convert average pentads, we assume that the numpy_dataset has
+        already been processed externally.
+        '''
+        # only works on average pentads
+        assert time_to_series.__class__.__name__ == 'AveragePentads'
+
+        # do nothing
+        return numpy_dataset
+
+    def __repr__(self):
+        return 'avg_pentads'
