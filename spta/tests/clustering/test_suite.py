@@ -9,8 +9,9 @@ from spta.region.metadata import SpatioTemporalRegionMetadata
 from spta.distance.dtw import DistanceByDTW
 from spta.clustering.suite import ClusteringSuite, OrganizeClusteringSuite, FindSuiteElbow
 from spta.clustering.kmedoids import KmedoidsClusteringMetadata
+from spta.dataset.metadata import TemporalMetadata, SamplesPerDay
 
-from spta.tests.stub import stub_clustering
+from spta.tests.stub import stub_clustering, stub_region_metadata
 
 
 class ClusteringSuiteTest(unittest.TestCase):
@@ -20,9 +21,7 @@ class ClusteringSuiteTest(unittest.TestCase):
 
     def setUp(self):
         self.output_home = 'spta/tests/resources'
-        self.region_metadata = \
-            SpatioTemporalRegionMetadata('nordeste_small', Region(40, 50, 50, 60),
-                                         2015, 2015, 1, scaled=False)
+        self.region_metadata = stub_region_metadata.get_stub_region_md()
         self.distance_measure = DistanceByDTW()
 
     def test_regular_list_2(self):
@@ -160,26 +159,21 @@ class ClusteringSuiteTest(unittest.TestCase):
                                                       self.distance_measure)
 
         # then
-        expected = 'outputs/nordeste_small_2015_2015_1spd/dtw/clustering__kmedoids-quick.csv'
+        expected = 'outputs/test_sptr_2015_2015_1spd/dtw/clustering__kmedoids-quick.csv'
         self.assertEqual(result, expected)
 
     def test_medoid_series_csv_filepath(self):
 
         # given
         kmedoids_suite = stub_clustering.kmedoids_quick_stub()
-
-        # given a region metadata and a distance measure
-        region_metadata = SpatioTemporalRegionMetadata('nordeste_small', Region(40, 50, 50, 60),
-                                                       2015, 2015, 1, scaled=False)
-        distance_measure = DistanceByDTW()
         output_home = 'outputs'
 
         # when
-        result = kmedoids_suite.medoid_series_csv_filepath(output_home, region_metadata,
-                                                           distance_measure)
+        result = kmedoids_suite.medoid_series_csv_filepath(output_home, self.region_metadata,
+                                                           self.distance_measure)
 
         # then
-        expected = 'outputs/nordeste_small_2015_2015_1spd/dtw/' \
+        expected = 'outputs/test_sptr_2015_2015_1spd/dtw/' \
             'medoid_data__kmedoids-quick.csv'
         self.assertEqual(result, expected)
 
@@ -192,16 +186,26 @@ class ClusteringSuiteTest(unittest.TestCase):
         kmedoids_k2_seed1_lite 380.062 |(45,86) (47,91) |
         kmedoids_k3_seed0_lite 351.926 |(45,86) (48,89) (45,92) |
         kmedoids_k3_seed1_lite 351.926 |(45,86) (45,92) (48,89) |
+
+        NOTE: This test requires the analysis of the nordeste_small region of CSFR dataset!
         '''
 
-        # given
+        # given a real region that has been analyzed
         clustering_suite = ClusteringSuite('quick', 'kmedoids', k=range(2, 3),
                                            random_seed=range(0, 2))
+        dataset_class_name = 'spta.dataset.csfr.DatasetCSFR'
+        temporal_md = TemporalMetadata(2015, 2015, SamplesPerDay(1))
+        region_metadata = SpatioTemporalRegionMetadata(name='nordeste_small',
+                                                       region=Region(40, 50, 50, 60),
+                                                       temporal_md=temporal_md,
+                                                       dataset_class_name=dataset_class_name,
+                                                       scaled=False)
+        distance_measure = DistanceByDTW()
 
         # when
         suite_result = clustering_suite.retrieve_suite_result_csv(output_home=self.output_home,
-                                                                  region_metadata=self.region_metadata,
-                                                                  distance_measure=self.distance_measure)
+                                                                  region_metadata=region_metadata,
+                                                                  distance_measure=distance_measure)
         # then the results are retrieved
         self.assertTrue('kmedoids_k2_seed0_lite' in suite_result)
         self.assertTrue('kmedoids_k2_seed1_lite' in suite_result)

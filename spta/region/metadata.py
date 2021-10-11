@@ -3,7 +3,8 @@ import os
 from . import Point, Region
 from .temporal import SpatioTemporalRegion
 from .scaling import ScaleFunction
-from spta.dataset import temp_brazil
+# from spta.dataset import temp_brazil
+from spta.dataset import base as dataset_base
 
 from spta.util import log as log_util
 
@@ -16,19 +17,20 @@ class SpatioTemporalRegionMetadata(log_util.LoggerMixin):
             string that identifies the region instance (e.g sp_small)
         region
             an instance of Region with 4 coordinates
-        year_start
-            the starting year (always work with whole years)
-        year_end
-            the ending year, if it is the same as year_start then that year is used.
-        spd
-            the samples per day. By default we assume that the dataset has 4 samples per day
-            (current dataset being used).
-            TODO improve this representation when other datasets are used
+        temporal_md
+            the temporal metadata for the spatio-temporal region being represented, it can
+            indicate a temporal slice or some conversion of the original dataset (e.g. averaging samples)
+        dataset_class_name
+            a string representing the full path (package.module.class) of the class for
+            a dataset, it should be a subclass of spta.dataset.base.FileDataset.
         scaled
             boolean that indicates whether each time series should be scaled to fit in the range
             [0, 1] for each point.
         dataset_dir
             path where to load/store numpy files
+        **dataset_kwargs
+            optional arguments passed to the dataset constructor, for details see
+            spta.dataset.base.FileDataset.
 
     Examples of representation:
     sp_small_2014_2014_1spd_scaled
@@ -50,18 +52,29 @@ class SpatioTemporalRegionMetadata(log_util.LoggerMixin):
     TODO support other distance measures
     '''
 
-    def __init__(self, name, region, year_start, year_end, spd, centroid=None,
-                 scaled=True, dataset_dir='raw'):
+    def __init__(self, name, region, temporal_md, dataset_class_name, centroid=None,
+                 scaled=True, dataset_dir='raw', **dataset_kwargs):
         self.name = name
         self.region = region
-        self.year_start = year_start
-        self.year_end = year_end
-        self.spd = spd
+        self.temporal_md = temporal_md
+        self.centroid = centroid
         self.scaled = scaled
         self.dataset_dir = dataset_dir
 
         self.x_len = region.x2 - region.x1
         self.y_len = region.y2 - region.y1
+
+        # get the metadata early
+        self.initialize(dataset_class_name, dataset_kwargs)
+
+    def initialize(self, dataset_class_name, dataset_kwargs):
+        '''
+        Create an instance of a subclass of spta.dataset.base.FileDataset.
+        This should not read any data from the filesystem, this is done only
+        when requesting an instance of SpatioTemporalRegion.
+        '''
+        self.dataset = dataset_base.create_dataset_instance(dataset_class_name, **dataset_kwargs)
+        self.dataset_temporal_md = self.dataset.dataset_temporal_md
 
     @property
     def dataset_filename(self):
@@ -137,18 +150,15 @@ class SpatioTemporalRegionMetadata(log_util.LoggerMixin):
     def create_instance(self):
         '''
         Creates an instance of SpatioTemporalRegion using the current metadata.
-        Currently supports only 1y and 4y, 1spd and 4spd.
-
-        Assumes temp_brazil dataset!
-        Assumes spd = 1 or spd = 4!
+        In order to create the instance, we created an instance of the dataset object,
+        using the dataset_class_name string. Here, a temporal slice is retrieved from
+        the dataset, and region subset and scaling are performed if needed.
         '''
-        # big assumption
-        assert self.spd == 1 or self.spd == 4
 
-        # read the dataset according to the year interval and spd
-        numpy_dataset = temp_brazil.retrieve_dataset_interval(year_start=self.year_start,
-                                                              year_end=self.year_end,
-                                                              spd=self.spd)
+        # Example of temporal metadata:
+        # metadata.TemporalMetadata(2014, 2015, metadata.SamplesPerDay(4)
+        numpy_dataset = self.dataset.retrieve(self.temporal_md)
+
         # subset the data to work only with region
         spt_region = SpatioTemporalRegion(numpy_dataset).region_subset(self.region)
 
@@ -192,8 +202,7 @@ class SpatioTemporalRegionMetadata(log_util.LoggerMixin):
         if self.scaled:
             scaled_str = '_scaled'
 
-        return '{}_{}_{}_{}spd{}'.format(self.name, self.year_start, self.year_end, self.spd,
-                                         scaled_str)
+        return '{}_{!r}{}'.format(self.name, self.temporal_md, scaled_str)
 
     def __str__(self):
         return repr(self)

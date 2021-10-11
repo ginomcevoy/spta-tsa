@@ -8,6 +8,7 @@ from spta.region.metadata import SpatioTemporalRegionMetadata
 from spta.arima import AutoArimaParams
 from spta.classifier.train_input import MedoidsChoiceMinDistance, MedoidsChoiceMinPredictionError
 from spta.distance.dtw import DistanceByDTW
+from spta.dataset.metadata import TemporalMetadata, SamplesPerDay
 
 from spta.tests.stub import stub_clustering
 
@@ -20,8 +21,12 @@ class TestMedoidsChoiceMinDistance(unittest.TestCase):
     '''
 
     def setUp(self):
-        self.region_metadata = SpatioTemporalRegionMetadata('nordeste_small',
-                                                            Region(43, 50, 85, 95), 2015, 2015, 1,
+        dataset_class_name = 'spta.dataset.csfr.DatasetCSFR'
+        temporal_md = TemporalMetadata(2015, 2015, SamplesPerDay(1))
+        self.region_metadata = SpatioTemporalRegionMetadata(name='nordeste_small',
+                                                            region=Region(43, 50, 85, 95),
+                                                            temporal_md=temporal_md,
+                                                            dataset_class_name=dataset_class_name,
                                                             scaled=False)
         self.distance_measure = DistanceByDTW()
 
@@ -103,8 +108,12 @@ class TestMedoidsChoiceMinPredictionError(unittest.TestCase):
     '''
 
     def setUp(self):
-        self.region_metadata = SpatioTemporalRegionMetadata('nordeste_small',
-                                                            Region(43, 50, 85, 95), 2015, 2015, 1,
+        dataset_class_name = 'spta.dataset.csfr.DatasetCSFR'
+        temporal_md = TemporalMetadata(2015, 2015, SamplesPerDay(1))
+        self.region_metadata = SpatioTemporalRegionMetadata(name='nordeste_small',
+                                                            region=Region(40, 50, 50, 60),
+                                                            temporal_md=temporal_md,
+                                                            dataset_class_name=dataset_class_name,
                                                             scaled=False)
         self.distance_measure = DistanceByDTW()
 
