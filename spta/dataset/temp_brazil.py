@@ -1,3 +1,5 @@
+'''NOTE: This module is deprecated, use csfr module instead.'''
+
 import h5py
 import numpy as np
 import os
