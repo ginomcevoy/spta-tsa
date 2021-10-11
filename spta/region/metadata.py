@@ -171,6 +171,7 @@ class SpatioTemporalRegionMetadata(log_util.LoggerMixin):
             scale_function = ScaleFunction(x_len, y_len)
             spt_region = scale_function.apply_to(spt_region, series_len)
             self.logger.debug('Scaling data: {}'.format(spt_region.shape))
+            self.logger.debug('Metadata saved: {}'.format(spt_region.region_metadata))
 
         self.logger.info('Loaded spatio-temporal region {}: {}'.format(self, self.region))
         return spt_region

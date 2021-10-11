@@ -80,7 +80,14 @@ if __name__ == '__main__':
     logger = log_util.setup_log('DEBUG')
 
     from .metadata import SpatioTemporalRegionMetadata
-    nordeste_small_md = SpatioTemporalRegionMetadata('nordeste_small', Region(43, 50, 85, 95),
-                                                     series_len=365, ppd=1, last=True)
+    from spta.dataset.metadata import TemporalMetadata, SamplesPerDay
+
+    dataset_class_name = 'spta.dataset.csfr.DatasetCSFR'
+    temporal_md = TemporalMetadata(2015, 2015, SamplesPerDay(1))
+    nordeste_small_md = SpatioTemporalRegionMetadata(name='nordeste_small',
+                                                     region=Region(43, 50, 85, 95),
+                                                     temporal_md=temporal_md,
+                                                     dataset_class_name=dataset_class_name,
+                                                     scaled=True)
 
     CalculateCentroid.for_sptr_metadata(nordeste_small_md)  # (4, 6) 58.958 for nordeste_small norm

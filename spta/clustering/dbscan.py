@@ -105,6 +105,7 @@ class DbscanClusteringAlgorithm(ClusteringAlgorithm):
 
 if __name__ == '__main__':
 
+    from spta.dataset.metadata import TemporalMetadata, SamplesPerDay
     from spta.distance.dtw import DistanceByDTW, DistanceBySpatialDTW
     from spta.region import Region
     from spta.region.metadata import SpatioTemporalRegionMetadata
@@ -116,13 +117,22 @@ if __name__ == '__main__':
     # Run k=2 on sp_small dataset
     # region_metadata = SpatioTemporalRegionMetadata('nordeste_small', Region(43, 50, 85, 95),
     #                                                2015, 2015, 1)
-    region_metadata = SpatioTemporalRegionMetadata('whole_brazil', Region(20, 100, 15, 95),
-                                                   2015, 2015, 1, scaled=True)
+    # region_metadata = SpatioTemporalRegionMetadata('whole_brazil', Region(20, 100, 15, 95),
+    #                                                2015, 2015, 1, scaled=True)
+
+    dataset_class_name = 'spta.dataset.csfr.DatasetCSFR'
+    temporal_md = TemporalMetadata(2015, 2015, SamplesPerDay(1))
+    region_metadata = SpatioTemporalRegionMetadata(name='whole_brazil',
+                                                   region=Region(20, 100, 15, 95),
+                                                   temporal_md=temporal_md,
+                                                   dataset_class_name=dataset_class_name,
+                                                   scaled=False)
+
     spt_region = region_metadata.create_instance()
 
     # load pre-computed distances
     distance_dtw = DistanceByDTW()
-    # distance_dtw = DistanceBySpatialDTW(0.2)
+    distance_dtw = DistanceBySpatialDTW(0.2)
     distance_dtw.load_distance_matrix_2d(region_metadata.distances_filename,
                                          region_metadata.region)
 

@@ -304,16 +304,22 @@ class RandomClassifier(object):
 if __name__ == '__main__':
     from spta.arima import AutoArimaParams
     from spta.arima.train import TrainerAutoArima
+    from spta.dataset.metadata import TemporalMetadata, SamplesPerDay
     from spta.distance.dtw import DistanceByDTW
     from spta.region import Region
     from spta.region.metadata import SpatioTemporalRegionMetadata
     from spta.clustering.kmedoids import kmedoids_metadata_generator
     from spta.classifier.dnn import ClassifierDNNParams
 
-    log_util.setup_log('DEBUG')
+    logger = log_util.setup_log('DEBUG')
 
-    region_metadata = SpatioTemporalRegionMetadata('nordeste_small', Region(40, 50, 50, 60),
-                                                   2015, 2015, 1, scaled=False)
+    dataset_class_name = 'spta.dataset.csfr.DatasetCSFR'
+    temporal_md = TemporalMetadata(2015, 2015, SamplesPerDay(1))
+    region_metadata = SpatioTemporalRegionMetadata(name='nordeste_small',
+                                                   region=Region(40, 50, 50, 60),
+                                                   temporal_md=temporal_md,
+                                                   dataset_class_name=dataset_class_name,
+                                                   scaled=False)
 
     classifier_params = ClassifierDNNParams('lstm_wSW_label_k-seed-ci', 'lstm/model_lstm_wSW_label_k-seed-ci.h5', 'lstm/labels_k-seed-ci.csv', 15)
     model_params = AutoArimaParams(1, 1, 3, 3, None, True)
@@ -323,6 +329,9 @@ if __name__ == '__main__':
 
     clustering_suite = kmedoids_metadata_generator(k_values=range(2, 4), seed_values=range(0, 2))
     clustering_suite.identifier = 'quick'
+
+    for item in clustering_suite:
+        logger.debug(item)
 
     model_trainer = TrainerAutoArima(model_params, region_metadata.x_len, region_metadata.y_len)
     solver = SolverFromClassifier(region_metadata=region_metadata,

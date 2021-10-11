@@ -469,6 +469,9 @@ class SpatioTemporalCluster(SpatialCluster, SpatioTemporalDecorator):
 if __name__ == '__main__':
     import time
 
+    from spta.dataset.metadata import TemporalMetadata, SamplesPerDay
+    from .metadata import SpatioTemporalRegionMetadata
+
     t_start = time.time()
 
     log_level = logging.DEBUG
@@ -479,11 +482,16 @@ if __name__ == '__main__':
     # print('small: ', small.shape)
 
     # print('centroid %s' % str(small.centroid))
-    from .metadata import SpatioTemporalRegionMetadata
-    sp_small_md = SpatioTemporalRegionMetadata('sp_small', Region(40, 50, 50, 60), 2015, 2015, 4,
+    dataset_class_name = 'spta.dataset.csfr.DatasetCSFR'
+    temporal_md = TemporalMetadata(2015, 2015, SamplesPerDay(4))
+    sp_small_md = SpatioTemporalRegionMetadata(name='sp_small',
+                                               region=Region(40, 50, 50, 60),
+                                               temporal_md=temporal_md,
+                                               dataset_class_name=dataset_class_name,
                                                scaled=True)
     sp_small = sp_small_md.create_instance()
-    print('sp_small: ', sp_small.shape)
+    print('sp_small: {} {}'.format(sp_small.shape, sp_small.__class__.__name__))
+    print('metadata: {}'.format(sp_small.region_metadata))
 
     # save as npy
     sp_small.save()
@@ -492,7 +500,8 @@ if __name__ == '__main__':
     sp_small.pickle()
 
     # retrieve from pickle
-    sp_small_pkl = SpatioTemporalRegion.from_pickle('pickle/sp_small_1y_4ppd_first_norm.pickle')
+    filename = 'pickle/sp_small_2015_2015_4spd_scaled/sp_small_2015_2015_4spd_scaled.pickle'
+    sp_small_pkl = SpatioTemporalRegion.from_pickle(filename)
     assert sp_small.shape == sp_small_pkl.shape
 
     t_end = time.time()

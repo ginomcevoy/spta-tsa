@@ -99,6 +99,7 @@ class SilhouetteAnalysis(log_util.LoggerMixin):
 
 if __name__ == '__main__':
 
+    from spta.dataset.metadata import TemporalMetadata, SamplesPerDay
     from spta.clustering.kmedoids import kmedoids_metadata_generator
     from spta.distance.dtw import DistanceByDTW
     from spta.region import Region
@@ -107,8 +108,16 @@ if __name__ == '__main__':
 
     log_util.setup_log('DEBUG')
 
-    region_metadata = SpatioTemporalRegionMetadata('nordeste_small', Region(43, 50, 85, 95),
-                                                   2015, 2015, 1, scaled=False)
+    dataset_class_name = 'spta.dataset.csfr.DatasetCSFR'
+    temporal_md = TemporalMetadata(2015, 2015, SamplesPerDay(1))
+    region_metadata = SpatioTemporalRegionMetadata(name='nordeste_small',
+                                                   region=Region(43, 50, 85, 95),
+                                                   temporal_md=temporal_md,
+                                                   dataset_class_name=dataset_class_name,
+                                                   scaled=False)
+
+    # region_metadata = SpatioTemporalRegionMetadata('nordeste_small', Region(43, 50, 85, 95),
+    #                                                2015, 2015, 1, scaled=False)
     clustering_suite = kmedoids_metadata_generator(k_values=range(2, 4), seed_values=range(0, 2))
     clustering_suite.identifier = 'quick'
 

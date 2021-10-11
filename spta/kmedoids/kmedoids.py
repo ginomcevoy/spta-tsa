@@ -266,6 +266,7 @@ def kmedoids_suite_metadata(k_values, seed_values, distance_measure=DistanceByDT
 
 
 if __name__ == '__main__':
+    from spta.dataset.metadata import TemporalMetadata, SamplesPerDay
     from spta.region import Region
     from spta.region.metadata import SpatioTemporalRegionMetadata
     from spta.util import log as log_util
@@ -273,8 +274,13 @@ if __name__ == '__main__':
     log_util.setup_log('DEBUG')
 
     # Run k=2 on sp_small dataset
-    nordeste_small_md = SpatioTemporalRegionMetadata('nordeste_small', Region(43, 50, 85, 95),
-                                                     series_len=365, ppd=1, last=True)
+    dataset_class_name = 'spta.dataset.csfr.DatasetCSFR'
+    temporal_md = TemporalMetadata(2015, 2015, SamplesPerDay(1))
+    nordeste_small_md = SpatioTemporalRegionMetadata(name='nordeste_small',
+                                                     region=Region(43, 50, 85, 95),
+                                                     temporal_md=temporal_md,
+                                                     dataset_class_name=dataset_class_name,
+                                                     scaled=False)
     nordeste_small = nordeste_small_md.create_instance()
 
     # load pre-computed distances
