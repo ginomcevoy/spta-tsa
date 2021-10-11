@@ -77,6 +77,11 @@ class ScaleFunction(FunctionRegionSeriesSame):
         region_with_scaled_dataset = \
             super(ScaleFunction, self).apply_to(spt_region, output_len)
 
+        # save the original metadata if available
+        # TODO ensure that the metadata now says 'scaled', this requires more thought
+        # because we need another copy of the metadata
+        region_with_scaled_dataset.region_metadata = spt_region.region_metadata
+
         # now create an instance of SpatioTemporalScaled, which has data for scale
         scaled_region = SpatioTemporalScaled(region_with_scaled_dataset=region_with_scaled_dataset,
                                              scale_min=self.scale_min,
@@ -209,12 +214,12 @@ class SpatioTemporalScaled(SpatioTemporalDecorator):
         super(SpatioTemporalScaled, self).save()
 
         # save min
-        min_filename = self.region_metadata.scale_min_filename
+        min_filename = self.region_metadata.scaled_min_filename
         np.save(min_filename, self.scale_min.numpy_dataset)
         self.logger.info('Saved scale_min to {}'.format(min_filename))
 
         # save max
-        max_filename = self.region_metadata.scale_max_filename
+        max_filename = self.region_metadata.scaled_max_filename
         np.save(max_filename, self.scale_max.numpy_dataset)
         self.logger.info('Saved scale_max to {}'.format(max_filename))
 
