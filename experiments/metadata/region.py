@@ -11,14 +11,18 @@ def predefined_regions():
     The name is used by default to find the silhouette analysis
     '''
 
+    # CSFR dataset
     temp_md_2011_2015_1spd = TemporalMetadata(2011, 2015, SamplesPerDay(1))
     temp_md_2013_2013_1spd = TemporalMetadata(2013, 2013, SamplesPerDay(1))
     temp_md_2014_2014_1spd = TemporalMetadata(2014, 2014, SamplesPerDay(1))
     temp_md_2015_2015_1spd = TemporalMetadata(2015, 2015, SamplesPerDay(1))
     csfr = 'spta.dataset.csfr.DatasetCSFR'
 
+    # CHIRPS dataset
     temp_md_avg_pentads = TemporalMetadata(1981, 2019, AveragePentads())
-    rain = 'spta.dataset.rain.DatasetRain'
+    chirps = 'spta.dataset.chirps.DatasetCHIRPS'
+    # chirps_full_region = Region(0, 200, 0, 360) 
+    chirps_region_2D = Region(0, 23604, 0, 1)
 
     region_metadata = {
 
@@ -67,8 +71,11 @@ def predefined_regions():
         'whole_real_brazil_2011_2015_1spd_scaled': SpatioTemporalRegionMetadata(
             'whole_real_brazil', Region(5, 95, 15, 105), temp_md_2011_2015_1spd, csfr, scaled=True),
 
-        # 'rain_avg_pentads': SpatioTemporalRegionMetadata(
-        #     'rain', Region(0, 0, 0, 0), temp_md_avg_pentads, rain, scaled=False)
+        'chirps_2D_2010_2018_avg_pentads': SpatioTemporalRegionMetadata(
+            'chirps', chirps_region_2D, temp_md_avg_pentads, chirps, scaled=False),
+
+        'chirps_2D_2010_2018_avg_pentads_scaled': SpatioTemporalRegionMetadata(
+            'chirps', chirps_region_2D, temp_md_avg_pentads, chirps, scaled=True),
     }
 
     return region_metadata

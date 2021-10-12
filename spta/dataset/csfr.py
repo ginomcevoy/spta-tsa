@@ -13,7 +13,7 @@ class DatasetCSFR(FileDataset):
     '''Temperatures from South America from 1979 to 2019, 4 samples per day'''
 
     def __init__(self):
-        '''Initialize the parent FileDataset the metadata of this dataset.'''
+        '''Initialize the parent FileDataset with the metadata of this dataset.'''
         time_to_series = SamplesPerDay(4)
         dataset_temporal_md = TemporalMetadata(1979, 2015, time_to_series)
         super(DatasetCSFR, self).__init__(dataset_temporal_md)
@@ -42,9 +42,6 @@ class DatasetCSFR(FileDataset):
     def cache_filename(self, temporal_md):
         '''
         The path of a file containing a temporal slice as a numpy array.
-        Subclasses should resolve how to use the TemporalMetadata instance,
-        a good way is to use repr(temporal_md) and build the filename based on
-        that string.
         '''
         return CACHE_FORMAT.format(temporal_md)
 
