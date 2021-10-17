@@ -17,6 +17,12 @@ class TimeToSeries(log_util.LoggerMixin):
     def __str__(self):
         return repr(self)
 
+    def __eq__(self, other):
+        if not isinstance(other, TimeToSeries):
+            return False
+
+        return repr(self) == repr(other)
+
 
 class SamplesPerDay(TimeToSeries):
     '''A representation for series that indicates a frequency of samples per day.'''
@@ -149,3 +155,13 @@ class TemporalMetadata(log_util.LoggerMixin):
 
     def __str__(self):
         return repr(self)
+
+    def __eq__(self, other):
+        if not isinstance(other, TemporalMetadata):
+            return False
+
+        same_start = self.year_start == other.year_start
+        same_end = self.year_end == other.year_end
+        same_time_to_series = self.time_to_series == other.time_to_series
+
+        return same_start and same_end and same_time_to_series

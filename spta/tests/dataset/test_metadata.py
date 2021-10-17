@@ -131,3 +131,11 @@ class TestTemporalMetadata(unittest.TestCase):
         expected = '1979_2015_4spd'
         self.assertEqual(result, expected)
 
+    def test_temporal_metadata_equality(self):
+        # given two temporal md with spd=4
+        samples_per_day = 4
+        temporal_md1 = metadata.TemporalMetadata(1979, 2015, metadata.SamplesPerDay(samples_per_day))
+        temporal_md2 = metadata.TemporalMetadata(1979, 2015, metadata.SamplesPerDay(samples_per_day))
+
+        # when compared then are equal
+        self.assertEqual(temporal_md1, temporal_md2)
