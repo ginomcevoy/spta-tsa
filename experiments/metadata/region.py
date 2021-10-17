@@ -20,7 +20,7 @@ def predefined_regions():
 
     # CHIRPS dataset
     temp_md_avg_pentads = TemporalMetadata(1981, 2019, AveragePentads())
-    chirps = 'spta.dataset.chirps.DatasetCHIRPS'
+    chirps2D = 'spta.dataset.chirps.DatasetCHIRPS2D'
     # chirps_full_region = Region(0, 200, 0, 360) 
     chirps_region_2D = Region(0, 23604, 0, 1)
 
@@ -72,10 +72,10 @@ def predefined_regions():
             'whole_real_brazil', Region(5, 95, 15, 105), temp_md_2011_2015_1spd, csfr, scaled=True),
 
         'chirps_2D_2010_2018_avg_pentads': SpatioTemporalRegionMetadata(
-            'chirps', chirps_region_2D, temp_md_avg_pentads, chirps, scaled=False),
+            'chirps', chirps_region_2D, temp_md_avg_pentads, chirps2D, scaled=False),
 
         'chirps_2D_2010_2018_avg_pentads_scaled': SpatioTemporalRegionMetadata(
-            'chirps', chirps_region_2D, temp_md_avg_pentads, chirps, scaled=True),
+            'chirps', chirps_region_2D, temp_md_avg_pentads, chirps2D, scaled=True),
     }
 
     return region_metadata

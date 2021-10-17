@@ -3,23 +3,23 @@ from .base import FileDataset
 from .metadata import TemporalMetadata, AveragePentads
 
 
-CACHE_FORMAT = 'raw/chirps_{!r}.npy'
+CACHE_FORMAT_2D = 'raw/chirps2d_{!r}.npy'
 
 
-class DatasetCHIRPS(FileDataset):
-    '''CHIRPS dataset, TODO description'''
+class DatasetCHIRPS2D(FileDataset):
+    '''CHIRPS dataset, based on a numpy file that provides pentads in a 23604x1 region'''
 
     def __init__(self):
         '''Initialize the parent FileDataset with the metadata of this dataset.'''
         time_to_series = AveragePentads()
         dataset_temporal_md = TemporalMetadata(2010, 2018, time_to_series)
-        super(DatasetCHIRPS, self).__init__(dataset_temporal_md)
+        super(DatasetCHIRPS2D, self).__init__(dataset_temporal_md)
 
     def cache_filename(self, temporal_md):
         '''
         The path of a file containing a temporal slice as a numpy array.
         '''
-        return CACHE_FORMAT.format(temporal_md)
+        return CACHE_FORMAT_2D.format(temporal_md)
 
     def retrieve(self, temporal_md):
         '''
@@ -59,7 +59,7 @@ if __name__ == '__main__':
     if len(sys.argv) > 3:
         spd = 1
 
-    chirps_dataset = DatasetCHIRPS()
+    chirps_dataset = DatasetCHIRPS2D()
     temporal_md = TemporalMetadata(year_start, year_end, AveragePentads())
     chirps_dataset.retrieve(temporal_md)
 
