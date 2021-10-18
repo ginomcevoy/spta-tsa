@@ -65,7 +65,7 @@ def plot_discrete_spatial_region(spatial_region, title='', clusters=True, subplo
         # we want to pass (M, N, 4) array, where the values in (4) are obtained using nipy_spectral
 
         # get the label values between 0 and 1
-        k = np.max(region_np_array) + 1
+        k = np.nanmax(region_np_array) + 1
         label_np_array = region_np_array * 1.0 / k
 
         # apply cm.nipy_spectral over each point in the region
