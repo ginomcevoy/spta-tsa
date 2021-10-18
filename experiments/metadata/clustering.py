@@ -22,6 +22,7 @@ def kmedoids_suites():
         'quick': kmedoids_metadata_generator(k_values=range(2, 4), seed_values=range(0, 2)),
         'large': kmedoids_metadata_generator(k_values=range(12, 15), seed_values=range(0, 2)),
         'all': kmedoids_metadata_generator(k_values=range(2, 151), seed_values=range(0, 3)),
+        'k18': kmedoids_metadata_generator(k_values=range(18, 19), seed_values=range(0, 1)),
     }
 
 
