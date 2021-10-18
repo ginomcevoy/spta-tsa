@@ -251,8 +251,9 @@ class PartitionRegionCrisp(PartitionRegion):
         assert numpy_dataset.ndim == 2
 
         # sanity check on membership: should be k different labels present
-        k_dataset = int(np.max(numpy_dataset)) + 1
-        assert k == k_dataset
+        k_dataset = int(np.nanmax(numpy_dataset)) + 1
+        assert_msg = "Provided k={} as parameter, but dataset indicates k={}!"
+        assert k == k_dataset, assert_msg.format(k, k_dataset)
 
         super(PartitionRegionCrisp, self).__init__(numpy_dataset, k)
 

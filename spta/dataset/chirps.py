@@ -4,11 +4,17 @@ import numpy as np
 from .base import FileDataset
 from .metadata import TemporalMetadata, AveragePentads
 
+from spta.region.partition import PartitionRegionCrisp
+
 
 CACHE_FORMAT_2D = 'raw/chirps2d_{!r}.npy'
 CACHE_FORMAT_3D = 'raw/chirps3d_{!r}.npy'
 
 CSV_WITH_COORDS_AND_PENTADS = 'raw/data_cluster_distance_dtw_2010_2018.csv'
+
+# e.g. pickle/chirps3d_2010_2018_avg_pentads/dtw/kmedoids_k18_seed0_lite/partition_kmedoids_k18_seed0_lite.pkl
+# TODO parametrize this later
+PARTITION_PICKLE = 'pickle/chirps3d_{!r}/dtw/kmedoids_k18_seed0_lite/partition_kmedoids_k18_seed0_lite.pkl'
 
 
 class DatasetCHIRPS2D(FileDataset):
@@ -44,7 +50,10 @@ class DatasetCHIRPS2D(FileDataset):
 class DatasetCHIRPS3D(FileDataset):
     '''
     CHIRPS dataset, based on a CSV file that provides 23604 tuples for the pentads in the form
-    (lat, lon, pent_1, ..., pent_73.
+    (lat, lon, pent_1, ..., pent_73, cluster_id).
+
+    In addition to the dataset, this class will also create a PartitionRegionCrisp instance
+    and save it to a pickle file.
     '''
 
     def __init__(self):
@@ -55,15 +64,15 @@ class DatasetCHIRPS3D(FileDataset):
 
     def read_from_csv(self):
         '''
-        Returns the dataset as a numpy multi-dimensional array.
+        Returns the dataset as a numpy multi-dimensional array by reading a CSV file.
+        Also creates a pickle file for a PartitionRegionCrisp using the cluster data available in the CSV.
         '''
         clusters_df = pd.read_csv(CSV_WITH_COORDS_AND_PENTADS)
         self.logger.debug('Read CSV: {}'.format(CSV_WITH_COORDS_AND_PENTADS))
         self.logger.debug('\n{}'.format(clusters_df.head()))
 
-        # drop id, cluster not used here
+        # drop id not used here
         clusters_df.drop('id', axis='columns', inplace=True)
-        clusters_df.drop('cluster', axis='columns', inplace=True)
 
         # find all unique lat/lon values
         lat = clusters_df['lat'].to_numpy()
@@ -81,13 +90,19 @@ class DatasetCHIRPS3D(FileDataset):
 
         ndarray_by_coord_2d = clusters_df.values
 
-        np_dataset_3d = np.empty((lat_grid.shape[0], lon_grid.shape[0], 73), dtype=np.float64)
+        # spatio-temporal dataset for the pentads
+        np_dataset_3d = np.empty((73, lat_grid.shape[0], lon_grid.shape[0]), dtype=np.float64)
         np_dataset_3d[:] = np.NaN
 
+        # 2D dataset for the partition
+        np_partition_2d = np.empty((lat_grid.shape[0], lon_grid.shape[0]), dtype=np.float64)
+        np_partition_2d[:] = np.NaN
+
+        # iterate each tuple and fill the dataset one position at a time
         series_count = 0
         for row_index in range(ndarray_by_coord_2d.shape[0]):
             row = ndarray_by_coord_2d[row_index, :]
-            lat_value, lon_value, pentads = row[0], row[1], row[2:]
+            lat_value, lon_value, pentads, cluster = row[0], row[1], row[2:-1], row[-1]
 
             where_is_lat_value = np.where(lat_grid == lat_value)[0]
             where_is_lon_value = np.where(lon_grid == lon_value)[0]
@@ -95,8 +110,16 @@ class DatasetCHIRPS3D(FileDataset):
             assert where_is_lat_value.size > 0, "This latitude is not in the grid! {}".format(lat_value)
             assert where_is_lon_value.size > 0, "This longitude is not in the grid! {}".format(lon_value)
 
-            np_dataset_3d[where_is_lat_value[0], where_is_lon_value[0]] = pentads
+            np_dataset_3d[:, where_is_lat_value[0], where_is_lon_value[0]] = pentads
+            np_partition_2d[where_is_lat_value[0], where_is_lon_value[0]] = cluster
             series_count = series_count + 1
+
+        # save the partition as pickle
+        print(np_partition_2d)
+        pickle_full_path = PARTITION_PICKLE.format(self.dataset_temporal_md)
+        partition = PartitionRegionCrisp(np_partition_2d, k=18)
+        partition.medoids = None
+        partition.to_pickle(pickle_full_path)
 
         self.logger.info('Read CHIRPS 3D: {}'.format(np_dataset_3d.shape))
         self.logger.debug('Added {} elements'.format(series_count))
@@ -142,17 +165,16 @@ class DatasetCHIRPS3D(FileDataset):
 
 if __name__ == '__main__':
 
-    import logging
     import time
     import sys
+    from spta.util import log as log_util
+    from spta.util import plot as plot_util
 
     if len(sys.argv) < 2:
         print('Usage: {} [2D|3D]'.format(sys.argv[0]))
         sys.exit(1)
 
-    log_level = logging.DEBUG
-    logging.basicConfig(format='%(asctime)s - %(levelname)6s | %(message)s',
-                        level=log_level, datefmt='%d-%b-%y %H:%M:%S')
+    log_util.setup_log('DEBUG')
 
     t_start = time.time()
 
@@ -169,6 +191,10 @@ if __name__ == '__main__':
         chirps_dataset = DatasetCHIRPS3D()
         chirps_numpy = chirps_dataset.retrieve(temporal_md)
         # print(chirps_numpy[0:5, 0, :])
+
+        partition_pickle = PARTITION_PICKLE.format(chirps_dataset.dataset_temporal_md)
+        partition = PartitionRegionCrisp.from_pickle(partition_pickle)
+        plot_util.plot_partition(partition, 'chirps3D')
 
     t_end = time.time()
     elapsed = t_end - t_start
